@@ -7,7 +7,8 @@
 #   * block switching to an EXISTING branch (allow `-c/-b` new branch + file restore)
 #   * block direct push to a protected branch
 #   * block merging a PR into a protected branch, except the promotion hops develop→staging and
-#     staging→main as merge commits; block the GitHub API merge routes
+#     staging→main as merge commits, and, in a project that answered agent_merges, its own PR into
+#     develop as a squash pinned to a head whose every check has passed; block the API merge routes
 #   * block committing in the primary working tree / main checkout (any branch) — worktree workflow
 #   * block skipping the commit hooks: --no-verify, commit -n, SKIP=/HUSKY= env, core.hooksPath
 # Protected branches: develop, staging, main. Nothing lands on them without the owner.
@@ -21,6 +22,16 @@
 set -u
 
 COMMAND="$(jq -r '.tool_input.command // empty' 2>/dev/null || true)"
+
+# The project's agent_merges answer, from the agentic.conf beside .claude/hooks. Read line by line,
+# never sourced, so the guard runs no code but its own.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+AGENT_MERGES=false
+if [ -f "$HERE/../agentic.conf" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in AGENT_MERGES=*) AGENT_MERGES="${line#AGENT_MERGES=}" ;; esac
+  done <"$HERE/../agentic.conf"
+fi
 
 RE_PUSH='(^|[[:space:]&;|])git[[:space:]]+([^&|;]*[[:space:]])?push([[:space:]]|$)'
 RE_SWITCH='(^|[[:space:]&;|])git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(switch|checkout)([[:space:]]|$)'
@@ -46,6 +57,19 @@ RE_GH_API='(^|[[:space:]&;|])gh[[:space:]]+api([[:space:]]|$)'
 RE_API_REST_MERGE='pulls/[^[:space:]/]+/merge([^a-zA-Z_-]|$)'
 RE_API_PUT='(-X|--method)[[:space:]=]*(PUT|put)'
 RE_API_GRAPHQL_MERGE='mergePullRequest|enablePullRequestAutoMerge'
+RE_GH_URL='github\.com[:/]+([^/]+/[^/]+)$'
+
+# One PR lookup answers every merge question: "<base> <head> <head sha> <owner/name> <verdict>".
+# The verdict is green when every check on the head has passed (succeeded, or was neutral or
+# skipped) and gate succeeded among them. A CheckRun counts only once COMPLETED; a StatusContext
+# reads its state.
+JQ_PR='[.statusCheckRollup[]? | if .__typename == "StatusContext" then {n: .context, c: .state}
+    else {n: .name, c: (if .status == "COMPLETED" then .conclusion else "PENDING" end)} end] as $c
+  | (.url | capture("github\\.com/(?<r>[^/]+/[^/]+)/pull/").r | ascii_downcase) as $repo
+  | (if any($c[]; .n == "gate" and .c == "SUCCESS") | not then "no-passed-gate"
+     elif all($c[]; .c == "SUCCESS" or .c == "NEUTRAL" or .c == "SKIPPED") then "green"
+     else "a-check-not-passed" end) as $verdict
+  | [.baseRefName, .headRefName, .headRefOid, $repo, $verdict] | join(" ")'
 
 block() { echo "Blocked: $1" >&2; exit 2; }
 
@@ -77,12 +101,46 @@ segment_skips_hooks() {
   fi
 }
 
+# The owner/name this guard's own checkout pushes to, lowercased, from its origin URL; empty when
+# there is none.
+own_repo() {
+  local url
+  url="$(git -C "$HERE" remote get-url origin 2>/dev/null)" || return 0
+  url="${url%/}"
+  url="${url%.git}"
+  [[ "$url" =~ $RE_GH_URL ]] || return 0
+  printf '%s\n' "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]'
+}
+
+# In a project that answered agent_merges, may the agent merge this PR into develop? It reads the
+# caller's lookup and flags. Every condition must hold, else MERGE_WHY names the first that fails.
+agent_may_merge() {
+  local own
+  own="$(own_repo)"
+  if [ -z "$own" ] || [ "$prrepo" != "$own" ]; then
+    MERGE_WHY="merging a PR of '$prrepo' into develop. This project lets the agent merge only its own repository's PRs${own:+ ($own)}: leave this merge to the owner."
+  elif [ "$squash" = 0 ]; then
+    MERGE_WHY="merging into develop without --squash: develop takes squash merges."
+  elif [ "$auto" = 1 ] || [ "$admin" = 1 ]; then
+    MERGE_WHY="merging into develop with --auto or --admin, which merge without the checks the guard read. Wait for the checks, then merge with --squash --match-head-commit <sha>."
+  elif [ "$match" != "$oid" ]; then
+    MERGE_WHY="merging into develop without pinning the head the checks ran on: pass --match-head-commit $oid, the PR's head, so a later push cannot land unchecked."
+  elif [ "$verdict" != green ]; then
+    MERGE_WHY="merging into develop before every check on $oid has passed with gate among them ($verdict). Wait with 'gh pr checks <n> --watch', then merge."
+  else
+    return 0
+  fi
+  return 1
+}
+
 # Does ONE shell segment merge a PR into a protected branch? Only GitHub knows the base, so the
 # PR is looked up, and a failed lookup blocks. The words are read on `bare`, where a quoted value
 # is one `_` word, so a flag's value is never taken for the PR. A promotion passes only with
-# --merge: a squash or rebase gives the target commits the source never had.
+# --merge: a squash or rebase gives the target commits the source never had. With agent_merges,
+# agent_may_merge decides a PR into develop.
 segment_merges_protected() {
-  local bare="$1" i=0 pr="" repo="" merge=0 out base head
+  local bare="$1" i=0 pr="" repo="" merge=0 squash=0 auto=0 admin=0 match="" out
+  local base head oid prrepo verdict
   local -a words view
   [[ "$bare" =~ $RE_PR_MERGE ]] || return 1
   read -ra words <<<"${bare#*"${BASH_REMATCH[0]}"}"
@@ -90,11 +148,18 @@ segment_merges_protected() {
     case "${words[$i]}" in
       -R|--repo) i=$((i + 1)); repo="${words[$i]:-}" ;;
       --repo=*) repo="${words[$i]#--repo=}" ;;
-      -A|--author-email|-b|--body|-F|--body-file|--match-head-commit|-t|--subject) i=$((i + 1)) ;;
+      --match-head-commit) i=$((i + 1)); match="${words[$i]:-}" ;;
+      --match-head-commit=*) match="${words[$i]#--match-head-commit=}" ;;
+      -A|--author-email|-b|--body|-F|--body-file|-t|--subject) i=$((i + 1)) ;;
       --merge) merge=1 ;;
+      --squash) squash=1 ;;
+      --auto) auto=1 ;;
+      --admin) admin=1 ;;
       --*) ;;
-      -*m*) merge=1 ;;
-      -*) ;;
+      -*)
+        [[ "${words[$i]}" == *m* ]] && merge=1
+        [[ "${words[$i]}" == *s* ]] && squash=1
+        ;;
       *) [ -n "$pr" ] || pr="${words[$i]}" ;;
     esac
     i=$((i + 1))
@@ -102,10 +167,9 @@ segment_merges_protected() {
   view=(gh pr view)
   [ -z "$pr" ] || view+=("$pr")
   [ -z "$repo" ] || view+=(--repo "$repo")
-  out="$(cd "$DIR" 2>/dev/null && "${view[@]}" --json baseRefName,headRefName \
-    --jq '.baseRefName + " " + .headRefName' 2>/dev/null)" || out=""
-  base="${out%% *}"
-  head="${out#* }"
+  out="$(cd "$DIR" 2>/dev/null && "${view[@]}" --json baseRefName,headRefName,headRefOid,url,statusCheckRollup \
+    2>/dev/null | jq -r "$JQ_PR" 2>/dev/null)" || out=""
+  read -r base head oid prrepo verdict <<<"$out"
   if [ -z "$base" ]; then
     MERGE_WHY="merging a PR whose base branch could not be looked up; it may be develop, staging or main. Name the PR by number, or leave the merge to the owner."
     return 0
@@ -118,6 +182,10 @@ segment_merges_protected() {
       return 0
       ;;
   esac
+  if [ "$base" = develop ] && [ "$AGENT_MERGES" = true ]; then
+    agent_may_merge && return 1
+    return 0
+  fi
   MERGE_WHY="merging a PR into '$base'. Nothing lands on develop, staging or main without the owner: leave the merge to them."
 }
 
