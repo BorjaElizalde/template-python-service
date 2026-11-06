@@ -72,6 +72,23 @@ expect "typecheck applies the base's checking mode" make_with app/untyped.py "$U
 expect "typecheck applies the base's added errors" fails_with app/cast.py \
   'from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n' typecheck
 
+# The shared pre-commit hooks run the project's own tools, so they read the same base settings.
+git -C "$D" add -A
+expect "pre-commit passes on a new project" bash -c "cd '$D' && uv run pre-commit run --all-files"
+hook_with() {  # hook_with <file> <content> <hook>: runs one hook on the file while it holds the content
+  printf '%b' "$2" >"$D/$1"
+  (cd "$D" && uv run pre-commit run "$3" --files "$1") >/dev/null 2>&1
+  local status=$?
+  rm "$D/$1"
+  return "$status"
+}
+fails_hook() { ! hook_with "$@"; }
+# Each hook passes a clean file first: a hook id that names no hook fails too.
+expect "pre-commit's ruff passes a typed file" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' ruff-check
+expect "pre-commit's ruff applies the base's rules" fails_hook app/untyped.py "$UNTYPED" ruff-check
+expect "pre-commit passes a trimmed file" hook_with app/trimmed.py 'x = 1\n' trailing-whitespace
+expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   \n' trailing-whitespace
+
 # A first copy into a project that has its own Makefile and pyproject.toml keeps both.
 E="$OUT/existing"
 uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$E"
