@@ -69,8 +69,45 @@ UNTYPED='def f(x):\n    return x\n'
 expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED" lint-check
 # basedpyright's own default mode is stricter than the base's and rejects an unannotated parameter.
 expect "typecheck applies the base's checking mode" make_with app/untyped.py "$UNTYPED" typecheck
-expect "typecheck applies the base's added errors" fails_with app/cast.py \
-  'from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n' typecheck
+CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
+expect "typecheck applies the base's added errors" fails_with app/cast.py "$CAST" typecheck
+
+# CI's checks call each tool directly with CI's own copy of the shared settings, so a change that
+# relaxes the local gate, or the project's copies of the settings, can't relax them.
+CI="$D/.github/actions/stack-gate"
+expect "the CI action is a valid action" uvx --quiet check-jsonschema --builtin-schema vendor.github-actions "$CI/action.yaml"
+expect "CI's copies of the shared settings match the project's" bash -c "
+  cmp -s '$D/ruff.base.toml' '$CI/ruff.base.toml' && cmp -s '$D/basedpyright.base.json' '$CI/basedpyright.base.json'"
+ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds the content
+  printf '%b' "$2" >"$D/$1"
+  (cd "$D" && bash .github/actions/stack-gate/gate.sh) >/dev/null 2>&1
+  local status=$?
+  rm "$D/$1"
+  return "$status"
+}
+expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
+relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
+  local f="$D/$1" status
+  cp "$f" "$OUT/relaxed.bak"
+  awk -v a="$2" -v b="$3" '{ i = index($0, a); if (i) $0 = substr($0, 1, i - 1) b substr($0, i + length(a)); print }' \
+    "$OUT/relaxed.bak" >"$f"
+  "${@:4}"
+  status=$?
+  cp "$OUT/relaxed.bak" "$f"
+  return "$status"
+}
+local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's checks fail it
+  make_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
+}
+expect "a no-op typecheck target in python.mk relaxes make gate, not CI" \
+  relaxed python.mk 'uv run basedpyright' 'true' local_only gate app/cast.py "$CAST"
+expect "a rule dropped from the project's ruff.base.toml relaxes lint-check, not CI" \
+  relaxed ruff.base.toml '"ANN",' '' local_only lint-check app/untyped.py "$UNTYPED"
+expect "pyproject.toml that stops extending ruff's base relaxes lint-check, not CI" \
+  relaxed pyproject.toml 'extend = "ruff.base.toml"' '' local_only lint-check app/untyped.py "$UNTYPED"
+expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
+  relaxed pyproject.toml 'extends = "basedpyright.base.json"' 'extends = "basedpyright.base.json"\nreportUnnecessaryCast = false' \
+  local_only typecheck app/cast.py "$CAST"
 
 # The shared pre-commit hooks run the project's own tools, so they read the same base settings.
 git -C "$D" add -A

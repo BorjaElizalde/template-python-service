@@ -38,6 +38,7 @@ load, so they stay plain jq that the template's tests run directly.
 | `.claude/hooks/stack/format.sh` | `ruff format` on every edited Python file |
 | `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
 | `make gate` | `python.mk`: ruff, basedpyright, bandit and pytest over the package and `tests/` |
+| `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
 
 ## Shared tool settings
 
@@ -47,6 +48,7 @@ load, so they stay plain jq that the template's tests run directly.
 | `basedpyright.base.json` | template | The checking mode, the platform, and the strict `report*` settings |
 | `python.mk` | template | The `lint`, `lint-check`, `typecheck`, `security`, `test` and `gate` targets |
 | `.pre-commit-config.yaml` | template | The commit hooks: ruff, bandit (through `make security`) and the file checks, each running the project's own pinned tool through `uv run`, so the file holds no version |
+| `.github/actions/stack-gate/` | template | The checks a project's CI runs, and CI's own copy of `ruff.base.toml` and `basedpyright.base.json` |
 | `pyproject.toml` | project, seeded once | The project, its dependencies, and its own tool settings: it extends the two base files |
 | `Makefile` | project, seeded once | The project's own targets, after `include python.mk` |
 | `.gitignore` | project, seeded once | `.env` files, which hold secrets (`.env.example` stays tracked), and what the gate and the tools leave behind |
@@ -58,8 +60,19 @@ not in its copy. A project adds to the shared settings in its `pyproject.toml`:
   `extend-per-file-ignores` for its own exceptions, each with the reason `skipped-checks.md`
   asks for. Never `select`: ruff takes a `select` as the whole rule list and drops the base's.
 - basedpyright (`[tool.basedpyright] extends = "basedpyright.base.json"`): its `include`, and any
-  setting it overrides.
+  setting it overrides. Both apply to the local gate only: CI's basedpyright reads only CI's copy.
 - pytest and coverage have no way to extend a shared file, so their settings stay the project's.
+
+CI runs `.github/actions/stack-gate/gate.sh`, which the agentic `Gate` workflow calls on every PR.
+It never runs `make gate`, so a change that relaxes the local gate can't relax CI:
+
+- It fails when the project's `ruff.base.toml` or `basedpyright.base.json` differs from CI's copy,
+  or when `pyproject.toml` stops extending ruff's.
+- ruff reads `pyproject.toml`, so the project's own additions apply in CI as they do locally.
+- basedpyright reads only CI's copy, over the package and `tests/`.
+
+In this template, CI's copies are symlinks to the base files, so the two can't differ here; Copier
+writes them into the project as plain files.
 
 The `Makefile` is the project's own entry point, so updates never touch it; the shared targets
 reach it through `include python.mk`. A project adds a leg to the gate by naming it as one more
