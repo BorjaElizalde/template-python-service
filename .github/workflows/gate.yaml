@@ -2,7 +2,7 @@ name: Gate
 
 on:
   pull_request:
-    branches: [main]
+    branches: [develop, main]
 
 concurrency:
   group: gate-${{ github.head_ref || github.ref }}
@@ -14,16 +14,5 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      # The agentic template this one renders on top of, at its newest release tag. It is private,
-      # and GITHUB_TOKEN reads only this repository, so a read-only deploy key opens it.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          repository: ${{ github.repository_owner }}/template-agentic
-          path: .agentic
-          fetch-depth: 0
-          ssh-key: ${{ secrets.TEMPLATE_AGENTIC_DEPLOY_KEY }}
-      - run: mv .agentic "$RUNNER_TEMP/agentic"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       - run: make gate
-        env:
-          AGENTIC_SRC: ${{ runner.temp }}/agentic

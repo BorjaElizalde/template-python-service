@@ -45,8 +45,16 @@ Tests that call no boundary, because they check a contract or shipped data, live
 
 ## Develop
 
-`make gate` renders `template-agentic` (`AGENTIC_SRC`, a git URL or a local clone; its newest tag),
-renders this template on top, and runs the rendered suites: the agentic practices protocol and the
-Python practices. The `Gate` workflow runs it on every PR, and `Build` again on `main` before it
-tags; both check out `template-agentic` with the read-only deploy key in the
-`TEMPLATE_AGENTIC_DEPLOY_KEY` secret.
+This repository works on two branches: feature PRs go into `develop`, and `/release` promotes
+`develop` to `main` with a merge commit, where `Build` tags the next version. Its own
+`.claude/skills/` carries `/commit`, `/gate` and `/pull-request` as rendered copies of
+`template-agentic`'s skills, with its own issues as the issues repository, plus `/release` for that
+promotion. Commits use the GitHub noreply address set in the clone's git config.
+
+`make gate` renders `template-agentic` (`AGENTIC_SRC`, a git URL or a local clone, by default the
+`template-agentic` beside this repository's remote; its newest tag), renders this template on top,
+and runs the rendered suites: the agentic practices protocol and the Python practices. It also
+checks that the repository's own shared skills match a fresh render of `template-agentic`, so a
+release there that changes them fails here until the copies are rendered again. The `Gate`
+workflow runs the same target on every PR into `develop` or `main`, and `Build` runs it again on
+`main` before it tags.
