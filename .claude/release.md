@@ -16,5 +16,5 @@ check is a red.
 
 ## Deploy
 
-`Build`, on the merge into `main`: it runs `make gate` again, then pushes the next `YYYYMMDD.N`
+`Build`, on the merge into `main`: it runs the gate suite again, then pushes the next `YYYYMMDD.N`
 tag. It takes a few minutes.

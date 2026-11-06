@@ -1,5 +1,6 @@
 # From the python-service template: change the template, not this copy.
-# The Python gate, included by the project's Makefile. make gate is what /gate and CI run.
+# The local gate, included by the project's Makefile: /gate runs make gate. The project's CI runs
+# its checks itself, never through make, so relaxing a target here can't relax CI.
 PACKAGE := {{ package_name }}
 
 .PHONY: lint lint-check typecheck security test gate

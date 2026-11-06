@@ -16,8 +16,8 @@ uvx copier copy <this-template-url> .      # writes .copier-answers.python-servi
 uvx copier update -a .copier-answers.python-service.yaml
 ```
 
-Every merge to `main` is a release: `Build` re-runs `make gate` on the merged result, then tags the
-next `YYYYMMDD.N` version. Projects take both layers' releases as one Renovate update PR. The
+Every merge to `main` is a release: `Build` re-runs the gate suite on the merged result, then tags
+the next `YYYYMMDD.N` version. Projects take both layers' releases as one Renovate update PR. The
 template uses no unsafe Copier feature, so an update runs without `--trust`.
 
 ## Questions
@@ -58,12 +58,13 @@ the version. Renovate's Copier manager brings each new `template-agentic` releas
 `.claude/release.md` holds this repository's release facts. Once per clone, run
 `bash .claude/skills/task/scripts/task.sh point-memory`.
 
-`make gate` renders the `template-agentic` version the answers file records, renders this template
-on top, and runs the rendered suites: the agentic practices protocol and the Python practices.
-`AGENTIC_SRC` and `AGENTIC_REF` override that source and version, to test an unreleased agentic
-change from a local clone and its branch. It also checks that a fresh render of the repository's
-own answers reproduces every file `template-agentic` owns here. The `Gate`
-workflow runs the same target on every PR into `develop`, `staging` or `main`, after it checks
-where the PR comes from: `main` takes `staging`, and `staging` takes `develop` or a `bugfix/*` PR
-of one commit, from this repository's own branches. `Build` runs the gate again on `main` before
-it tags.
+`make gate` runs `tests/render-and-test.sh`: it renders the `template-agentic` version the answers
+file records, renders this template on top, and runs the rendered suites: the agentic practices
+protocol and the Python practices. `AGENTIC_SRC` and `AGENTIC_REF` override that source and
+version, to test an unreleased agentic change from a local clone and its branch. It also checks
+that a fresh render of the repository's own answers reproduces every file `template-agentic` owns
+here. The `Gate` workflow runs the same script on every PR into `develop`, `staging` or `main`,
+after it checks where the PR comes from: `main` takes `staging`, and `staging` takes `develop` or
+a `bugfix/*` PR of one commit, from this repository's own branches. `Build` runs it again on
+`main` before it tags. CI runs the script itself, never `make gate`, so a change that relaxes the
+local gate can't relax CI.
