@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Renders template-agentic, then this template on top, the way a project gets them, and runs the
-# rendered harness's suites. AGENTIC_SRC is the agentic template to render (a git URL or a local
-# clone; its newest tag is used). Needs uv, git and jq.
+# rendered harness's suites. Needs uv, git and jq.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# By default the sibling template-agentic beside this repository's own remote.
-AGENTIC_SRC="${AGENTIC_SRC:-$(git -C "$ROOT" remote get-url origin | sed 's#template-python-service#template-agentic#')}"
+# This repository applies template-agentic to itself, and every render here uses the source and
+# version its answers record, so a new agentic release reaches this gate through its update PR.
+# AGENTIC_SRC and AGENTIC_REF override them to test an unreleased change: a local clone and a branch.
+answer() { sed -n "s/^$1: '\{0,1\}\([^']*\)'\{0,1\}\$/\1/p" "$ROOT/.copier-answers.agentic.yaml"; }
+AGENTIC_SRC="${AGENTIC_SRC:-$(answer _src_path)}"
+AGENTIC_REF="${AGENTIC_REF:-$(answer _commit)}"
 # The real path: Copier compares the resolved answers path with the project path, so a project
 # reached through a symlink (macOS /var -> /private/var) reads its own answers as outside it.
 OUT="$(cd "$(mktemp -d)" && pwd -P)"
@@ -27,7 +30,7 @@ expect "refuses a project without the agentic layer" bash -c "
   grep -q 'Apply template-agentic first' '$OUT/alone.err'"
 
 D="$OUT/project"
-uvx --quiet copier copy --quiet --defaults --data issues_repo=acme/tasks "$AGENTIC_SRC" "$D"
+uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$D"
 uvx --quiet copier copy --quiet --defaults --data package_name=app --data 'test_boundaries=[release.run]' "$OUT/src" "$D"
 expect "stack.json carries the test boundaries" bash -c "[ \"\$(jq -c .boundaries '$D/.claude/hooks/practices/stack.json')\" = '[\"release.run\"]' ]"
 git -C "$D" init -q
@@ -47,11 +50,13 @@ expect "the reviewers and their roster are rendered" bash -c "for a in plan code
 expect "the roster names only agents that exist" bash -c "for a in \$(grep -o -E '\\\\b[a-z]+-(reviewer|problem-resolver)\\\\b' '$D/.claude/review-wave.md' | sort -u); do [ -f '$D/.claude/agents/'\$a.md ] || { echo \"FAIL missing \$a\"; exit 1; }; done"
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
 
-# This repository's own commit, gate, pull-request and release skills are rendered copies of
-# template-agentic's for itself: a render with its own answers must reproduce them exactly.
-SELF="$(git -C "$ROOT" remote get-url origin | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')"
-uvx --quiet copier copy --quiet --defaults --data "issues_repo=$SELF" "$AGENTIC_SRC" "$OUT/self"
-expect "this repository's shared skills match a fresh render of template-agentic" bash -c "for s in commit gate pull-request release; do diff -r '$OUT/self/.claude/skills/'\$s '$ROOT/.claude/skills/'\$s || exit 1; done"
+# A fresh render of this repository's own answers must reproduce every file template-agentic owns
+# here; the files it seeds once (_skip_if_exists) and the answers file are the project's.
+uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data "issues_repo=$(answer issues_repo)" \
+  --data "worktree_root=$(answer worktree_root)" "$AGENTIC_SRC" "$OUT/self"
+expect "this repository's harness matches a render of its agentic answers" bash -c "cd '$OUT/self' &&
+  find . -type f ! -name .copier-answers.agentic.yaml ! -path ./.claude/memory/MEMORY.md ! -path ./.claude/release.md |
+  while read -r f; do cmp -s \"\$f\" '$ROOT'/\"\$f\" || { echo \"FAIL \${f#./} differs from the render\"; exit 1; }; done"
 
 # The product names the template was extracted from; bracketed so this line never matches itself.
 expect "no product name in the template" bash -c "! grep -rIil -E 'fire[b]rain|monar[d]it|aer[i]s|truela[y]er|cloudwa[t]ch' --exclude-dir=.git --exclude=.git '$ROOT'"

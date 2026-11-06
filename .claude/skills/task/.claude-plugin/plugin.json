@@ -1,0 +1,4 @@
+{
+  "name": "task",
+  "description": "The task lifecycle: one issue, one worktree, one session. /task:start opens or resumes a task; /task:finish closes it and removes its worktree."
+}
