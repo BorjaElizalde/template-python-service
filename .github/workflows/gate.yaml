@@ -1,3 +1,4 @@
+# From the agentic template: change the template, not this copy.
 name: Gate
 
 on:
@@ -11,7 +12,7 @@ concurrency:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       # Rulesets can't limit a PR's source or size, so the gate does; a branch name can't hold a colon.
       - name: Check the PR's source and commits
@@ -32,5 +33,6 @@ jobs:
           [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ] ||
             { echo "::error::$BASE takes PRs from this repository's own branches, not from $HEAD_REPO."; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
-      - run: make gate
+      # The stack layer's checks, each tool called directly. A project's CI never runs make gate,
+      # so a change that relaxes the local gate can't relax CI.
+      - uses: ./.github/actions/stack-gate
