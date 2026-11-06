@@ -3,8 +3,10 @@
 # a reason in the form skipped-checks.md gives. An added line's reason sits in its comment or on the
 # comment lines above it; a removed line leaves no place, so the edit adds the reason as a comment.
 # Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
-# and a Makefile tool line only if no added line runs the same tool. CI workflows are not checked
-# here: the owner reviews CI changes in the PR, which only the owner merges.
+# and a Makefile tool line only if no added line runs the same tool. A select added to a ruff config
+# that extends another counts as switching checks off: ruff takes it as the whole rule list and
+# drops the extended one. CI workflows are not checked here: the owner reviews CI changes in the
+# PR, which only the owner merges.
 include "lib";
 include "python";
 
@@ -29,6 +31,17 @@ def kept($ctx; $re): [$ctx.new | annotate[] | select(.key | test($re)) | .line |
 
 def dropped($kept): [quoted[] | select($kept[.] | not)] | length > 0;
 
+def ruff_file: test("(^|/)\\.?ruff\\.toml$");
+
+def extends_ruff($ctx):
+  any($ctx.new | annotate[]; .key == "extend"
+    and ((.section | test("^\\s*\\[tool\\.ruff\\]")) or ($ctx.rel | ruff_file)));
+
+# The opening line of a select, the one place a ruff rule list starts.
+def opens_select($rel):
+  (.line | test("^\\s*select\\s*="))
+  and ((.section | test("^\\s*\\[(tool\\.ruff(\\.lint)?|lint)\\]\\s*$")) or (.section == "" and ($rel | ruff_file)));
+
 # Each finding is {text, at}: `at` is an added line's index in the new file, null for a removed line.
 def toml_findings($ctx):
   ($ctx.removed | line_set) as $removed
@@ -47,7 +60,12 @@ def toml_findings($ctx):
      | select(((.key | test("^(extend-)?select$")) and (.line | dropped($kept_rules)))
          or ((.key | test("^(include|testpaths)$")) and (.line | dropped($kept_paths)))
          or (.line | has("^\\s*report\\w+\\s*=\\s*(true|\"error\")|check-typed-exception\\s*=\\s*true")))
-     | {text: "removed `\(.line | short)`", at: null});
+     | {text: "removed `\(.line | short)`", at: null}),
+    (if extends_ruff($ctx) then
+       $ctx.added[] | .at as $at | $notes[$at] | select(opens_select($ctx.rel))
+       | {text: ("added `\(.line | short)`: in a config that extends another, select replaces its"
+           + " whole rule list; extend-select adds to it"), at: $at}
+     else empty end);
 
 def precommit_findings($ctx):
   ($ctx.added[]

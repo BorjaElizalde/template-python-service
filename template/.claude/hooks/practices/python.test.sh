@@ -322,6 +322,20 @@ edit_in R "select entry comment reworded (no stop, the comment reminds)" "$PY" "
 edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "standard"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
+
+echo "-- config: a select in a ruff config that extends another replaces that config's rule list"
+EXT=$'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nextend-select = ["B"]\n'
+edit_in 2 "select in a config that extends a base" "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = ["F"]'
+edit_in 2 "multi-line select there"       "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = [\n    "F",\n]'
+edit_in 2 "select under [tool.ruff] there" "$PY" "$EXT" 'extend = "ruff.base.toml"' $'extend = "ruff.base.toml"\nselect = ["F"]'
+edit_in 2 "select in a ruff.toml that extends a base" "$REPO/ruff.toml" $'extend = "ruff.base.toml"\n\n[lint]\n' '[lint]' $'[lint]\nselect = ["F"]'
+edit_in R "select there with a reason"    "$PY" "$EXT" 'extend-select = ["B"]' \
+  $'extend-select = ["B"]\n'"select = [\"F\"]  # F: this tool keeps only Pyflakes. $TRIED"
+edit_in 0 "extend-select there"           "$PY" "$EXT" 'extend-select = ["B"]' 'extend-select = ["B", "ANN"]'
+edit_in 0 "an item added to a select there" "$PY" $'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nselect = [\n    "F",\n]\n' \
+  '    "F",' $'    "F",\n    "E",'
+edit_in 0 "select in a config that extends nothing" "$PY" $'[tool.ruff.lint]\nignore = []\n' 'ignore = []' $'select = ["F"]\nignore = []'
+says yes "extend-select adds to it" "the stop names extend-select" "$PY" "$EXT" "$EXT"$'select = ["F"]\n'
 edit_in 2 "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
