@@ -1,47 +1,54 @@
 # From the python-service template: change the template, not this copy.
-# STOP: a skipped check (a suppression such as `# noqa`) without its reason next to it; the agent
-# adds the reason and retries. ASK: one with a reason goes to the owner, since only a person can
-# judge whether the reason says why the code is right here (skipped-checks.md).
-# In an unattended run the ask is a refusal. Reason forms were checked against each tool:
-# ruff, basedpyright and bandit honour text after the directive; `# fmt: skip` only behind a
-# second `#`; `# fmt: off` only standing alone, so its reason goes on the comment line above (same
-# for `# pyright:` file directives).
+# STOP: a skipped check (a suppression such as `# noqa`) without its rule code, or without a reason
+# in the form skipped-checks.md gives, after the directive or on the comment lines above it. The
+# hook checks the form; review judges whether the reason holds. Reason places were checked against
+# each tool: ruff, basedpyright and bandit honour text after the directive; `# fmt: skip` only
+# behind a second `#`; `# fmt: off` only standing alone, so its reason goes on the comment lines
+# above (same for `# pyright:` file directives).
 include "lib";
 include "python";
 
-def reason: "\\s+#?\\s*[a-z]";
-
+# The form to show for a line whose skipped check lacks its code or reason, or empty when it has
+# both. given($directive): the line holds $directive, and the text after it or the comment lines
+# above hold the reason.
 def missing_reason($above):
+  def given($directive):
+    (capture($directive + "(?<reason>.*)$"; "i").reason // null) as $after
+    | $after != null and (($after | reason_form) or ($above | reason_form));
   if has("#\\s*(ruff:\\s*)?noqa\\b") then
-    if has("#\\s*(ruff:\\s*)?noqa:\\s*[a-z]+[0-9]+(\\s*,\\s*[a-z]+[0-9]+)*" + reason) then empty
-    else "# noqa: BLE001 <why nothing better>" end
+    if given("#\\s*(ruff:\\s*)?noqa:\\s*[a-z]+[0-9]+(\\s*,\\s*[a-z]+[0-9]+)*") then empty
+    else "# noqa: BLE001 <reason>" end
   elif has("#\\s*type:\\s*ignore\\b") then
-    if has("type:\\s*ignore\\[[^\\]]+\\]" + reason) then empty
-    else "# type: ignore[assignment] <why nothing better>" end
+    if given("type:\\s*ignore\\[[^\\]]+\\]") then empty
+    else "# type: ignore[assignment] <reason>" end
   elif has("#\\s*pyright:\\s*ignore\\b") then
-    if has("pyright:\\s*ignore\\[[^\\]]+\\]" + reason) then empty
-    else "# pyright: ignore[reportAssignmentType] <why nothing better>" end
+    if given("pyright:\\s*ignore\\[[^\\]]+\\]") then empty
+    else "# pyright: ignore[reportAssignmentType] <reason>" end
   elif has("^\\s*#\\s*pyright:") then
-    if ($above | plain_comment) then empty
-    else "# <why nothing better>  (on the line above the # pyright: directive)" end
+    if $above | reason_form then empty
+    else "<reason> on the comment lines above the # pyright: directive" end
   elif has("#\\s*nosec\\b") then
-    if has("nosec\\s+b[0-9]+(\\s*,\\s*b[0-9]+)*" + reason) then empty
-    else "# nosec B506 <why nothing better>" end
+    if given("nosec\\s+b[0-9]+(\\s*,\\s*b[0-9]+)*") then empty
+    else "# nosec B506 <reason>" end
   elif has("#\\s*pragma:?\\s*no\\s*cover") then
-    if has("no\\s*cover" + reason) then empty
-    else "# pragma: no cover <why nothing better>" end
+    if given("no\\s*cover") then empty
+    else "# pragma: no cover <reason>" end
   elif has("#\\s*fmt:\\s*skip\\b") then
-    if has("fmt:\\s*skip\\s+#\\s*[a-z]") then empty
-    else "# fmt: skip  # <why nothing better>  (the second # is required)" end
+    if given("fmt:\\s*skip\\s*(#|$)") then empty
+    else "# fmt: skip  # <reason>  (the second # is required)" end
   elif has("#\\s*fmt:\\s*off\\b") then
-    if has("^\\s*#\\s*fmt:\\s*off\\s*$") and ($above | plain_comment) then empty
-    else "# <why nothing better>  (on the line above; # fmt: off must stand alone)" end
+    if has("^\\s*#\\s*fmt:\\s*off\\s*$") and ($above | reason_form) then empty
+    else "<reason> on the comment lines above; # fmt: off must stand alone" end
   elif has("pytest\\.mark\\.(skip|skipif|xfail)\\b") then
-    if has("reason\\s*=\\s*[rf]?[\"'][^\"']") then empty
-    else "reason=\"<the outside condition that makes this test impossible here>\"" end
+    if has("reason\\s*=\\s*[rf]?[\"'][^\"']") and given("pytest\\.mark\\.(skip|skipif|xfail)\\b")
+    then empty
+    else "reason=\"<the outside condition that makes this test impossible here>\", and the"
+      + " Tried sentences in a comment" end
   elif has("pytest\\.skip\\(") then
-    if has("pytest\\.skip\\(\\s*(reason\\s*=\\s*)?[rf]?[\"'][^\"']") then empty
-    else "pytest.skip(\"<the outside condition that makes this test impossible here>\")" end
+    if has("pytest\\.skip\\(\\s*(reason\\s*=\\s*)?[rf]?[\"'][^\"']") and given("pytest\\.skip\\(")
+    then empty
+    else "pytest.skip(\"<the outside condition that makes this test impossible here>\"), and"
+      + " the Tried sentences in a comment" end
   else empty end;
 
 def suppression:
@@ -49,26 +56,16 @@ def suppression:
   or has("#\\s*nosec\\b") or has("#\\s*pragma:?\\s*no\\s*cover") or has("#\\s*fmt:\\s*(skip|off)\\b")
   or has("pytest\\.mark\\.(skip|skipif|xfail)\\b") or has("pytest\\.skip\\(");
 
-# A standalone directive carries its reason on the comment line above, so the owner sees both.
-def shown: if .line | has("^\\s*#\\s*(fmt:\\s*off|pyright:)") then "\(.above | short) / \(.line | short)"
-  else .line | short end;
-
 def check($ctx):
-  [$ctx.added[] | select(.line | suppression)] as $found
-  | [$found[] | .above as $a | .line as $l | ($l | missing_reason($a)) as $form
-     | "- `\($l | short)`\n  Write it as: \($form)"] as $missing
-  | if ($missing | length) > 0 then
-      {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
-        + " (.claude/rules/skipped-checks.md). This edit skips a check without"
-        + " saying why:\n" + ($missing | join("\n"))
-        + "\nA skipped check is the last resort in this codebase: first narrow the construct,"
-        + " restructure, or use the idiom the rule points to. If it really must stay, give the rule"
-        + " code and, on the same line, a plain-English reason saying why the code is right here,"
-        + " not why the tool flags it. `# fmt: off` and `# pyright:` file directives must stand"
-        + " alone, so their reason goes on the comment line above.")}
-    elif ($found | length) > 0 then
-      {level: "ask", text: ("Practices hook, skipped-checks rule. This edit skips a lint or type"
-        + " check. Approve only if each reason says, in plain English, why the code is right here,"
-        + " not why the tool flags it:\n"
-        + ($found | map("- `\(shown)`") | join("\n")))}
-    else empty end;
+  [$ctx.added[] | select(.line | suppression)
+   | comment_above($ctx.new; .at) as $above | .line as $line
+   | ($line | missing_reason($above)) as $form
+   | "- `\($line | short)`\n  Write it as: \($form)"]
+  | select(length > 0)
+  | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
+      + " (.claude/rules/skipped-checks.md). This edit skips a check without a reason in the"
+      + " required form.\n" + reason_steps("skipping the check"; "the skipped check"; checkers)
+      + "The reason goes after the directive and its rule code, on the same line. When that line"
+      + " would pass 100 columns, it goes on the comment lines directly above, and the line keeps"
+      + " only the directive. `# fmt: off` and `# pyright:` file directives must stand alone, so"
+      + " their reason always goes above.\n" + join("\n"))};

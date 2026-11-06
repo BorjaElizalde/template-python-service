@@ -3,7 +3,7 @@
 # Table-driven regression suite for the python-service practices behind the agentic guard.sh (the
 # copies beside it). Run from any checkout: bash .claude/hooks/practices/python.test.sh
 # Each case writes the file's current content into a throwaway git repo, then feeds the guard the
-# edit. Expect 2 = stopped, A = asks the owner, R = goes on with a reminder, 0 = silent.
+# edit. Expect 2 = stopped, R = goes on with a reminder, 0 = silent.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"
@@ -29,10 +29,7 @@ check() {  # check <want> <desc> <payload>
   local out code got
   out="$(bash "$GUARD" <<<"$3" 2>/dev/null)"; code=$?
   got="$code"
-  if [ "$code" -eq 0 ]; then
-    [[ "$out" == *'"ask"'* ]] && got=A
-    [[ "$out" == *additionalContext* ]] && got=R
-  fi
+  [ "$code" -eq 0 ] && [[ "$out" == *additionalContext* ]] && got=R
   if [ "$got" = "$1" ]; then pass=$((pass+1)); echo "PASS ($got) $2"
   else fail=$((fail+1)); echo "FAIL (want $1, got $got) $2"; fi
 }
@@ -58,7 +55,10 @@ says() {  # says <yes|no> <phrase> <desc> <path> <old> <new>: whether the guard'
   else fail=$((fail+1)); echo "FAIL (want $1, got $got) $3"; fi
 }
 
-echo "-- skipped checks: no reason next to it (must stop)"
+# A reason in the form skipped-checks.md gives follows the why with one of these per alternative.
+TRIED='Tried the fix the rule gives, but it breaks the callers.'
+
+echo "-- skipped checks: no rule code, or no reason in the form (must stop)"
 edit 2 "bare noqa"                    "$APP" 'x = 1' 'x = 1  # noqa'
 edit 2 "noqa code, no reason"         "$APP" '    except ValueError:' '    except ValueError:  # noqa: S110'
 edit 2 "file-level ruff noqa"         "$APP" 'import x' $'# ruff: noqa: E501\nimport x'
@@ -68,8 +68,8 @@ edit 2 "pyright ignore, no reason"    "$APP" 'a = f()' 'a = f()  # pyright: igno
 edit 2 "pyright directive, no reason" "$APP" 'import x' $'# pyright: basic\nimport x'
 edit 2 "nosec code, no reason"        "$APP" 'y = load(f)' 'y = load(f)  # nosec B506'
 edit 2 "pragma no cover"              "$APP" 'def f():' 'def f():  # pragma: no cover'
-edit 2 "fmt skip, reason w/o 2nd #"   "$APP" 'x = [1]' 'x = [1]  # fmt: skip keep aligned'
-edit 2 "fmt off, trailing reason"     "$APP" 'x = [1]' $'# fmt: off  # aligned table\nx = [1]'
+edit 2 "fmt skip, reason w/o 2nd #"   "$APP" 'x = [1]' "x = [1]  # fmt: skip keep aligned. $TRIED"
+edit 2 "fmt off, trailing reason"     "$APP" 'x = [1]' "# fmt: off  # aligned table. $TRIED"$'\nx = [1]'
 edit 2 "fmt off, nothing above"       "$APP" 'x = [1]' $'# fmt: off\nx = [1]'
 edit 2 "mark.skip, no reason"         "$TEST" 'def test_x():' $'@pytest.mark.skip\ndef test_x():'
 edit 2 "skipif, no reason"            "$TEST" 'def test_x():' $'@pytest.mark.skipif(sys.platform == "win32")\ndef test_x():'
@@ -78,22 +78,38 @@ write 2 "Write: new file, bare noqa"  "$APP" '' $'import os  # noqa\n'
 printf '%s' $'a = 1\nb = 1' >"$APP"
 check 2 "MultiEdit: 2nd edit adds noqa" "$(jq -n --arg p "$APP" '{tool_input:{file_path:$p,
   edits:[{old_string:"a = 1", new_string:"a = 2"}, {old_string:"b = 1", new_string:"b = 1  # noqa"}]}}')"
+edit 2 "a why, no Tried sentence"     "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader'
+edit 2 "Tried with no but"            "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader. Tried importing it.'
+edit 2 "Tried with no why before it"  "$APP" 'x = c()' 'x = c()  # noqa: F821 Tried importing it, but the import cycles.'
+edit 2 "second Tried with no but"     "$APP" 'x = c()' "x = c()  # noqa: F821 defined by the plugin loader. $TRIED Tried a stub."
+edit 2 "reason above a bare noqa"     "$APP" 'x = c()' $'# Defined by the plugin loader.\n# '"$TRIED"$'\nx = c()  # noqa'
+edit 2 "reason above, code in between" "$APP" 'x = c()' "# Defined by the plugin loader. $TRIED"$'\ny = 1\nx = c()  # noqa: F821'
+edit 2 "skipif reason, no Tried"      "$TEST" 'def test_x():' $'@pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")\ndef test_x():'
+edit 2 "pytest.skip reason, no Tried" "$TEST" '    pass' '    pytest.skip(f"Lucide icon source unreachable: {exc}")'
+says yes "Read the current documentation" "the stop sends the agent to the docs first" "$APP" 'x = 1' 'x = 1  # noqa'
+says yes "Tried <alternative>, but <why it was discarded>" "the stop spells out the form" "$APP" 'x = 1' 'x = 1  # noqa'
 
-echo "-- skipped checks: reason next to it (asks the owner to judge the reason)"
-edit A "noqa code + reason"           "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader'
-edit A "noqa code + 2nd-hash reason"  "$APP" 'q = c == True' 'q = c == True  # noqa: E712  # SQLAlchemy needs =='
-edit A "type ignore code + reason"    "$APP" 'a = f()' 'a = f()  # type: ignore[assignment] stub is wrong upstream'
-edit A "pyright ignore + reason"      "$APP" 'a = f()' 'a = f()  # pyright: ignore[reportAssignmentType]  # stub bug'
-edit A "pyright directive + reason above" "$APP" 'import x' $'# Generated module; types come from the wire.\n# pyright: basic\nimport x'
-edit A "nosec code + reason"          "$APP" 'y = load(f)' 'y = load(f)  # nosec B506 config file is ours'
-edit A "fmt skip + 2nd-hash reason"   "$APP" 'x = [1]' 'x = [1]  # fmt: skip  # keep aligned'
-edit A "fmt off + reason above"       "$TEST" 'x = [1]' $'# One case per row reads as a spec.\n# fmt: off\nx = [1]'
-write A "fmt off, reason above already in file" "$TEST" $'# One case per row reads as a spec.\nx = [1]' \
-  $'# One case per row reads as a spec.\n# fmt: off\nx = [1]'
-edit A "skipif + reason"              "$TEST" 'def test_x():' $'@pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")\ndef test_x():'
-edit A "pytest.skip(f-string)"        "$TEST" '    pass' '    pytest.skip(f"Lucide icon source unreachable: {exc}")'
-edit A "reason reworded on an old noqa" "$APP" 'x = 1  # noqa: E501 long URL' 'x = 1  # noqa: E501 a long URL cannot wrap'
-edit 2 "stop wins over ask"           "$APP" $'a = 1\nb = 1' $'a = 1  # noqa: E501 a long URL cannot wrap\nb = 1  # noqa'
+echo "-- skipped checks: rule code and a reason in the form, on the line or above (goes on)"
+edit 0 "noqa code + reason"           "$APP" 'x = c()' "x = c()  # noqa: F821 defined by the plugin loader. $TRIED"
+edit 0 "noqa code + 2nd-hash reason"  "$APP" 'q = c == True' "q = c == True  # noqa: E712  # SQLAlchemy needs ==. $TRIED"
+edit 0 "type ignore code + reason"    "$APP" 'a = f()' "a = f()  # type: ignore[assignment] stub is wrong upstream. $TRIED"
+edit 0 "pyright ignore + reason"      "$APP" 'a = f()' "a = f()  # pyright: ignore[reportAssignmentType]  # stub bug. $TRIED"
+edit 0 "nosec code + reason"          "$APP" 'y = load(f)' "y = load(f)  # nosec B506 config file is ours. $TRIED"
+edit 0 "pragma no cover + reason"     "$APP" 'def f():' "def f():  # pragma: no cover runs only on the host. $TRIED"
+edit 0 "fmt skip + 2nd-hash reason"   "$APP" 'x = [1]' "x = [1]  # fmt: skip  # keep aligned. $TRIED"
+edit R "reason on the lines above"    "$APP" 'x = c()' $'# Defined by the plugin loader.\n# '"$TRIED"$'\nx = c()  # noqa: F821'
+edit R "a Tried sentence wrapped over two lines" "$APP" 'x = c()' \
+  $'# Defined by the plugin loader.\n# Tried importing it, but the import\n#   cycles back into this module.\nx = c()  # noqa: F821'
+edit R "pyright directive + reason above" "$APP" 'import x' $'# Generated module; types come from the wire.\n# '"$TRIED"$'\n# pyright: basic\nimport x'
+edit R "fmt off + reason above"       "$TEST" 'x = [1]' $'# One case per row reads as a spec.\n# '"$TRIED"$'\n# fmt: off\nx = [1]'
+write 0 "fmt off, reason above already in file" "$TEST" "# One case per row reads as a spec. $TRIED"$'\nx = [1]' \
+  "# One case per row reads as a spec. $TRIED"$'\n# fmt: off\nx = [1]'
+edit R "skipif + reason + Tried comment" "$TEST" 'def test_x():' \
+  $'@pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")  # '"$TRIED"$'\ndef test_x():'
+edit R "pytest.skip + reason above"   "$TEST" '    pass' \
+  $'    # The icon list lives only upstream.\n    # '"$TRIED"$'\n    pytest.skip(f"Lucide icon source unreachable: {exc}")'
+edit 0 "old reason rewritten into the form" "$APP" 'x = 1  # noqa: E501 long URL' "x = 1  # noqa: E501 a long URL cannot wrap. $TRIED"
+edit 2 "stop wins over a reminder"    "$APP" $'a = 1\nb = 1' $'# A comment.\na = 1\nb = 1  # noqa'
 edit 0 "edit next to an old bare noqa" "$APP" $'x = 1  # noqa\ny = 1' $'x = 1  # noqa\ny = 2'
 write 0 "Write keeping an old bare noqa" "$APP" $'import os  # noqa\nx = 1\n' $'import os  # noqa\nx = 2\n'
 edit 0 "not a .py file"               "$REPO/$PKG/case.md" 'x' 'x  # noqa'
@@ -107,8 +123,8 @@ edit R "reason on the line above"     "$APP" '    y = f()' $'    try:\n        y
 edit 2 "two new excepts, one without a reason" "$APP" '    y = f()' $'    try:\n        y = f()\n    except ValueError:  # the provider sends blanks\n        y = None\n    except KeyError:\n        y = 0'
 edit 0 "old comment moved onto an old except" "$APP" $'    # the provider sends blanks\n    except ValueError:' '    except ValueError:  # the provider sends blanks'
 edit 0 "old try/except re-indented"   "$APP" $'    try:\n        y = f()\n    except ValueError:\n        y = None' $'try:\n    y = f()\nexcept ValueError:\n    y = None'
-edit A "reason added to an old except" "$APP" '    except Exception:' '    except Exception:  # noqa: BLE001 any failure is unhealthy'
-edit A "new except with a reasoned noqa" "$APP" '    y = f()' $'    try:\n        y = f()\n    except Exception:  # noqa: BLE001 if one provider fails, carry on\n        y = None'
+edit 0 "reason added to an old except" "$APP" '    except Exception:' "    except Exception:  # noqa: BLE001 any failure is unhealthy. $TRIED"
+edit R "new except with a reasoned noqa" "$APP" '    y = f()' $'    try:\n        y = f()\n    except Exception:  # noqa: BLE001 if one provider fails, carry on. '"$TRIED"$'\n        y = None'
 edit 0 "new except in tests"          "$TEST" '    y = f()' $'    try:\n        y = f()\n    except ValueError:\n        y = None'
 edit 0 "old bare noqa re-indented"    "$APP" $'    try:\n        y = f()  # noqa' $'    y = f()  # noqa'
 edit 2 "a bare noqa still stops"      "$APP" '    y = f()' $'    try:\n        y = f()\n    except Exception:  # noqa: BLE001\n        y = None'
@@ -278,37 +294,54 @@ edit 0 "old write test edited"          "$UNIT" "$UNREAD" "${UNREAD/json=/data=}
 write 0 "write test in a contract check" "$REPO/tests/migrations/test_case.py" '' "$UNREAD"
 write 0 "write test in the email templates check" "$REPO/tests/contracts/test_emails.py" '' "$UNREAD"
 
-echo "-- config: switching a check off asks the owner"
+echo "-- config: switching a check off stops until a reason in the form sits next to it"
 PY="$REPO/pyproject.toml"
 BASE=$'[project]\ndependencies = ["fastapi"]\n\n[tool.ruff.lint]\nselect = [\n    "F",  # Pyflakes\n    "E",  # pycodestyle\n]\n\n[tool.basedpyright]\ntypeCheckingMode = "basic"\ninclude = ["app"]\n\n[tool.pytest.ini_options]\naddopts = "-v"\n'
-edit_in A "ruff ignore added"             "$PY" "$BASE" $'select = [' $'ignore = ["E501"]\nselect = ['
-edit_in A "per-file-ignores entry"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.per-file-ignores]\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
-edit_in A "item added to multi-line ignore" "$PY" $'[tool.ruff.lint]\nignore = [\n    "E501",\n]\n' '    "E501",' $'    "E501",\n    "E712",'
-edit_in A "rule removed from select"      "$PY" "$BASE" $'    "E",  # pycodestyle\n' ''
-edit_in A "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "basic"' $'typeCheckingMode = "basic"\nreportUnusedImport = false'
-edit_in A "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "off"'
-edit_in A "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'include = []'
-edit_in A "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
-edit_in A "typed except check off"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
+edit_in 2 "ruff ignore added"             "$PY" "$BASE" $'select = [' $'ignore = ["E501"]\nselect = ['
+edit_in 2 "per-file-ignores entry"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.per-file-ignores]\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
+edit_in 2 "item added to multi-line ignore" "$PY" $'[tool.ruff.lint]\nignore = [\n    "E501",\n]\n' '    "E501",' $'    "E501",\n    "E712",'
+edit_in 2 "rule removed from select"      "$PY" "$BASE" $'    "E",  # pycodestyle\n' ''
+edit_in 2 "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "basic"' $'typeCheckingMode = "basic"\nreportUnusedImport = false'
+edit_in 2 "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "off"'
+edit_in 2 "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'include = []'
+edit_in 2 "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
+edit_in 2 "typed except check off"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
+edit_in 2 "per-file-ignores reason with no Tried sentence" "$PY" "$BASE" $'[tool.basedpyright]' \
+  $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
+edit_in 2 "rule removed, its reason only in an old comment" "$PY" \
+  $'[tool.ruff.lint]\nselect = [\n    "F",\n    # E: ruff format owns layout. '"$TRIED"$'\n    "E",\n]\n' $'    "E",\n' ''
+says yes "Read the current documentation" "a config stop sends the agent to the docs first" "$PY" \
+  $'[tool.ruff.lint]\nignore = []' $'[tool.ruff.lint]\nignore = ["E501"]'
+edit_in R "per-file-ignores reason above the entry" "$PY" "$BASE" $'[tool.basedpyright]' \
+  $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n# '"$TRIED"$'\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
+edit_in R "ignore with the reason on its line" "$PY" "$BASE" $'select = [' "ignore = [\"E501\"]  # E501: long URLs. $TRIED"$'\nselect = ['
+edit_in R "rule removed from select, reason where it was" "$PY" "$BASE" $'    "E",  # pycodestyle\n' \
+  "    # E: ruff format owns layout. $TRIED"$'\n'
 edit_in 0 "rule added to select"          "$PY" "$BASE" $'    "E",  # pycodestyle\n' $'    "E",  # pycodestyle\n    "BLE001",\n'
-edit_in R "select entry comment reworded (no ask, the comment reminds)" "$PY" "$BASE" '    "E",  # pycodestyle' '    "E",  # pycodestyle errors'
+edit_in R "select entry comment reworded (no stop, the comment reminds)" "$PY" "$BASE" '    "E",  # pycodestyle' '    "E",  # pycodestyle errors'
 edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "standard"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
-edit_in A "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
+edit_in 2 "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
-edit_in A "pre-commit exclude added"      "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n        exclude: ^tests/'
-edit_in A "pre-commit hook removed"       "$PC" "$PCBASE" $'      - id: bandit\n' ''
-edit_in A "bandit skip arg"               "$PC" "$PCBASE" 'args: ["-ll"]' 'args: ["-ll", "--skip", "B101"]'
+edit_in 2 "pre-commit exclude added"      "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n        exclude: ^tests/'
+edit_in 2 "pre-commit hook removed"       "$PC" "$PCBASE" $'      - id: bandit\n' ''
+edit_in 2 "bandit skip arg"               "$PC" "$PCBASE" 'args: ["-ll"]' 'args: ["-ll", "--skip", "B101"]'
+edit_in R "pre-commit exclude, reason above" "$PC" "$PCBASE" '      - id: ruff' \
+  $'      - id: ruff\n        # The tests hold generated code.\n        # '"$TRIED"$'\n        exclude: ^tests/'
 edit_in 0 "pre-commit hook added"         "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n      - id: check-json'
 MK="$REPO/Makefile"
 MKBASE=$'lint-check:\n\tuv run ruff check app\n\tuv run ruff format --check app\n\ngate: lint-check typecheck security test\n\t@echo ok\n'
 edit_in 0 "lint widened to tests"         "$MK" "$MKBASE" $'\tuv run ruff check app\n' $'\tuv run ruff check app tests\n'
-edit_in A "gate leg dropped"              "$MK" "$MKBASE" 'gate: lint-check typecheck security test' 'gate: lint-check typecheck test'
+edit_in 2 "gate leg dropped"              "$MK" "$MKBASE" 'gate: lint-check typecheck security test' 'gate: lint-check typecheck test'
 edit_in 0 "gate leg added"                "$MK" "$MKBASE" 'gate: lint-check typecheck security test' 'gate: lint-check typecheck security test docs'
-edit_in A "lint line removed"             "$MK" "$MKBASE" $'\tuv run ruff check app\n\tuv run ruff format --check app\n' ''
-edit_in A "errors ignored"                "$MK" "$MKBASE" $'\tuv run ruff check app\n' $'\tuv run ruff check app || true\n'
+edit_in 2 "lint line removed"             "$MK" "$MKBASE" $'\tuv run ruff check app\n\tuv run ruff format --check app\n' ''
+edit_in 2 "errors ignored"                "$MK" "$MKBASE" $'\tuv run ruff check app\n' $'\tuv run ruff check app || true\n'
+edit_in R "gate leg dropped, reason above" "$MK" "$MKBASE" 'gate: lint-check typecheck security test' \
+  "# The gate runs bandit in CI only. $TRIED"$'\ngate: lint-check typecheck test'
+edit_in R "errors ignored, reason above"  "$MK" "$MKBASE" $'\tuv run ruff check app\n' \
+  "# Lint only warns here. $TRIED"$'\n\tuv run ruff check app || true\n'
 
 echo "-- config: CI workflows are not checked (the owner reviews them in the PR)"
 edit_in 0 "gate.yaml loosened"            "$REPO/.github/workflows/gate.yaml" $'      - run: uv run pytest tests/ --cov\n' 'uv run pytest tests/ --cov' 'uv run pytest tests/ --cov || true'

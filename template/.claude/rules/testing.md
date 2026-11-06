@@ -38,16 +38,15 @@ Loads when you read or edit tests. (`python-conventions.md`, `comments-and-docst
   (`client.post`, `put`, `patch` or `delete`) and does not use `db_session` after it. It reminds on
   the others
 - Tests must be synchronous (no async operations)
-- **Test data pattern**: Use `mock_*` high-level functions from `tests/helpers/data_factory/`. The `_create_*` row builders beside them are private to their module (the type check rejects one used outside it); a new one gets the leading underscore too. Create all test data in fixtures at the top, then reuse across test functions.
+- **Test data pattern**: Use `mock_*` high-level functions from `tests/helpers/data_factory/`. The `_create_*` row builders beside them are private to their module (the type check rejects one used outside it); a new one gets the leading underscore too. Create test data in fixtures at the top of the file and reuse the fixtures across test functions. Each test runs on its own copy of a database that holds only the schema and seed data, so keep data fixtures function-scoped: rows built by a wider-scoped fixture are gone after its first test.
 
 Three harness behaviours produce a green test for the wrong reason:
 - **Event loop.** The async sessionmaker resets between tests, not between phases of one test. Do
   not mix TestClient DB work with `asyncio.run` DB work, or make two `asyncio.run` DB calls in one
   test — the pooled asyncpg connection stays bound to the first loop. Split them into separate tests.
-- **Cookie jar.** The module-scoped TestClient keeps its jar across tests, and a cookie set via
-  `client.cookies.set` lands under a different domain entry from the server's `Set-Cookie`, so both
-  may be sent and the stale one can win. Delete the cookie before raw sets and at the start of login
-  helpers.
+- **Cookie jar.** A cookie set via `client.cookies.set` lands under a different domain entry from
+  the server's `Set-Cookie`, so within one test both may be sent and the stale one can win. Delete
+  the cookie before a raw set and at the start of login helpers.
 - **Identity.** Tokens identify the authentication subject (a user), so a login helper takes that
   id; never treat the id of what the subject belongs to (a tenant) as the authentication subject.
   Autoincrement can give a lone user the same numeric id as its tenant, so scoping and

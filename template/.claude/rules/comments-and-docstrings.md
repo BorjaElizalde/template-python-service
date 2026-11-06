@@ -33,7 +33,8 @@ These load when you read or edit Python, TOML, YAML or the Makefile.
 - Default is no comment. Write one only to say why the obvious approach is wrong here, an outside
   constraint (how a provider, library or platform behaves), a safety, security or data-integrity
   rule or a contract callers must respect that the code does not show, or the reason for a
-  suppression (on its line). One line; never restate code, history, the diff or a past bug
+  suppression (`skipped-checks.md` gives its form and place). One line, except that reason; never
+  restate code, history, the diff or a past bug
 - A docstring or comment must still hold, and still make sense, for a reader a year from now who
   never saw today's change: say what holds, not what changed (no version it moved from, no
   "now", "no longer", "since" or "used to"). The same bar covers comments in TOML, YAML and the

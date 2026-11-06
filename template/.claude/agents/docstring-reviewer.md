@@ -30,7 +30,8 @@ only explains hard-to-follow code is a finding about the code.
 
 Then ask whether a comment passes the rule's comment bar (why the obvious approach is wrong here, an
 outside constraint, a safety or data-integrity rule or caller contract the code does not show, or a
-suppression reason) in one line.
+suppression reason) in one line. A suppression reason takes the form and place `skipped-checks.md`
+gives, Tried sentences included.
 
 Delete or tighten text that:
 
