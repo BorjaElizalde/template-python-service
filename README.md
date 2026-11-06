@@ -45,16 +45,21 @@ Tests that call no boundary, because they check a contract or shipped data, live
 
 ## Develop
 
-This repository works on two branches: feature PRs go into `develop`, and `/release` promotes
-`develop` to `main` with a merge commit, where `Build` tags the next version. Its own
-`.claude/skills/` carries `/commit`, `/gate` and `/pull-request` as rendered copies of
-`template-agentic`'s skills, with its own issues as the issues repository, plus `/release` for that
-promotion. Commits use the GitHub noreply address set in the clone's git config.
+This repository works on the same three branches as every project. Feature PRs squash into
+`develop`; `/release` merges `develop` into `staging` and `staging` into `main`, where `Build`
+tags the next version; a `bugfix/` branch of one commit merges into `staging`. `develop` is the
+default branch, and rulesets hold each branch to PRs with a passing `gate`, `staging` and `main`
+to merge commits and `develop` to squashes. Its own `.claude/skills/` carries `/commit`, `/gate`,
+`/pull-request` and `/release` as rendered copies of `template-agentic`'s skills, with its own
+issues as the issues repository, and `.claude/release.md` holds its release facts. Commits use
+the GitHub noreply address set in the clone's git config.
 
 `make gate` renders `template-agentic` (`AGENTIC_SRC`, a git URL or a local clone, by default the
 `template-agentic` beside this repository's remote; its newest tag), renders this template on top,
 and runs the rendered suites: the agentic practices protocol and the Python practices. It also
 checks that the repository's own shared skills match a fresh render of `template-agentic`, so a
 release there that changes them fails here until the copies are rendered again. The `Gate`
-workflow runs the same target on every PR into `develop` or `main`, and `Build` runs it again on
-`main` before it tags.
+workflow runs the same target on every PR into `develop`, `staging` or `main`, after it checks
+where the PR comes from: `main` takes `staging`, and `staging` takes `develop` or a `bugfix/*` PR
+of one commit, from this repository's own branches. `Build` runs the gate again on `main` before
+it tags.
