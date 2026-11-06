@@ -89,14 +89,23 @@ expect "pre-commit's ruff applies the base's rules" fails_hook app/untyped.py "$
 expect "pre-commit passes a trimmed file" hook_with app/trimmed.py 'x = 1\n' trailing-whitespace
 expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   \n' trailing-whitespace
 
-# A first copy into a project that has its own Makefile and pyproject.toml keeps both.
+# The seeded .gitignore keeps secrets and the gate's output out of git; the gate above left both.
+expect "git ignores .env files and what the gate leaves" bash -c "cd '$D' &&
+  for p in .env .env.local .coverage app/__pycache__/core.pyc; do git check-ignore -q \"\$p\" || { echo \"FAIL \$p is not ignored\"; exit 1; }; done"
+expect "git still tracks .env.example" bash -c "cd '$D' && ! git check-ignore -q .env.example"
+expect "git add -A staged none of what the gate left" bash -c "cd '$D' && [ -f .coverage ] && [ -d app/__pycache__ ] &&
+  ! git status --porcelain --untracked-files=all | grep -E '__pycache__|\\.py[cod]\$|\\.coverage\$'"
+
+# A first copy into a project that has its own Makefile, pyproject.toml and .gitignore keeps them.
 E="$OUT/existing"
 uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$E"
 printf 'run:\n\t@echo run\n' >"$E/Makefile"
 printf '[project]\nname = "svc"\n' >"$E/pyproject.toml"
+printf '.idea/\n' >"$E/.gitignore"
 uvx --quiet copier copy --quiet --defaults --data package_name=svc "$OUT/src" "$E"
-expect "a first copy keeps the project's Makefile and pyproject.toml" bash -c "
+expect "a first copy keeps the project's Makefile, pyproject.toml and .gitignore" bash -c "
   [ \"\$(cat '$E/Makefile')\" = \"\$(printf 'run:\n\t@echo run')\" ] && [ \"\$(cat '$E/pyproject.toml')\" = \"\$(printf '[project]\nname = \"svc\"')\" ] &&
+  [ \"\$(cat '$E/.gitignore')\" = .idea/ ] &&
   [ -f '$E/python.mk' ] && [ -f '$E/ruff.base.toml' ] && [ -f '$E/basedpyright.base.json' ]"
 
 # A fresh render of this repository's own answers must reproduce every file template-agentic owns

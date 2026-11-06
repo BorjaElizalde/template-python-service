@@ -49,6 +49,7 @@ load, so they stay plain jq that the template's tests run directly.
 | `.pre-commit-config.yaml` | template | The commit hooks: ruff, bandit (through `make security`) and the file checks, each running the project's own pinned tool through `uv run`, so the file holds no version |
 | `pyproject.toml` | project, seeded once | The project, its dependencies, and its own tool settings: it extends the two base files |
 | `Makefile` | project, seeded once | The project's own targets, after `include python.mk` |
+| `.gitignore` | project, seeded once | `.env` files, which hold secrets (`.env.example` stays tracked), and what the gate and the tools leave behind |
 
 Every update rewrites the template's files; a project changes a shared setting in the template,
 not in its copy. A project adds to the shared settings in its `pyproject.toml`:
