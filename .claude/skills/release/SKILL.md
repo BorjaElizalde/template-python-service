@@ -13,8 +13,9 @@ allowed-tools: Bash(bash:*), Bash(git fetch:*), Bash(git log:*), Bash(git diff:*
 - `staging` → `main` pending: !`git fetch origin staging main --quiet 2>/dev/null; git --no-pager log origin/main..origin/staging --first-parent --oneline`
 - `staging` → `main` open PR: !`gh pr list --base main --head staging --state open --json url --jq '.[].url'`
 
-Read `.claude/release.md` first: it says which checks each promotion PR carries, whether a missing
-check is ever correct, and which deploy run to wait for after the last merge.
+Every promotion PR carries one check, `gate`: it checks the PR comes from the branch below its
+base (`develop` into `staging`, `staging` into `main`), then runs `make gate` on the merge result.
+The rulesets require it, so a promotion PR with no check is a red.
 
 Run every leg unattended for as long as everything is green: never pause to confirm a green step.
 **Stop at the first red** — a failed or cancelled check, a merge that will not apply, a failed
@@ -37,17 +38,16 @@ promotion PR for a leg → adopt it rather than opening a second.
    earlier release stopped there.
 2. `gh pr create --head <src> --base <dst>`, title at most 72 characters in the form
    `Release: <themes> to <dst>`, body with `Summary`, `Included changes`, `Validation` and
-   `Merge strategy` sections. `Validation` states what `.claude/release.md` says this leg's checks
-   prove.
+   `Merge strategy` sections. `Validation` states what `gate` proves for this leg.
 3. Run `bash "${CLAUDE_SKILL_DIR}/scripts/await-checks.sh" <pr>` in the background. Exit 3 (no
-   check ever registered) is a red unless `.claude/release.md` says this leg carries none.
+   check ever registered) is a red.
 4. Merge. After the last leg, read the merge commit:
    `gh pr view <pr> --json mergeCommit --jq .mergeCommit.oid`.
 
 ## 3. Deploy
 
-When `.claude/release.md` names a deploy workflow, run
-`bash "${CLAUDE_SKILL_DIR}/scripts/await-run.sh" <workflow> <last-merge-sha>` in the background.
+The merge into `main` starts `Build`. Run
+`bash "${CLAUDE_SKILL_DIR}/scripts/await-run.sh" Build <last-merge-sha>` in the background.
 
 Either wait script may be cut short before it reaches a verdict; both resume, so start it again
 rather than reading the truncated output as a result. Close with every PR URL, the check results,

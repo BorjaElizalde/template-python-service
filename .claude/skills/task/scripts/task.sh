@@ -73,7 +73,7 @@ point_memory() {
 open_session() {
 	# exec: claude replaces the window's shell, so Terminal can close the window when claude exits.
 	osascript - "$1" "$2" "${3:-}" \
-		"$MAIN/.claude/subagent-session-settings.json" "$MAIN/.claude/subagent-session-prompt.md" >/dev/null <<'APPLESCRIPT'
+		"$MAIN/.claude/skills/task/session/settings.json" "$MAIN/.claude/skills/task/session/prompt.md" >/dev/null <<'APPLESCRIPT'
 on run {worktree, sessionName, resumeFlag, settingsFile, promptFile}
 	tell application "Terminal"
 		do script "cd " & quoted form of worktree & " && exec claude " & resumeFlag & " --settings " & quoted form of settingsFile & " --append-system-prompt-file " & quoted form of promptFile & " --disallowed-tools AskUserQuestion -n " & quoted form of sessionName

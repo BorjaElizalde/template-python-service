@@ -80,8 +80,9 @@ clone's git config.
 
 The repository applies `template-agentic` to itself, as a project does, with its own issues as the
 issues repository: `.claude/` holds the whole harness, and `.copier-answers.agentic.yaml` records
-the version. Renovate's Copier manager brings each new `template-agentic` release as an update PR.
-`.claude/release.md` holds this repository's release facts. Once per clone, run
+the version and the answers, `Build` as the deploy workflow among them. Renovate's Copier manager
+brings each new `template-agentic` release as an update PR; an update that adds a question takes
+its default, so check the new answer in the PR. Once per clone, run
 `bash .claude/skills/task/scripts/task.sh point-memory`.
 
 `make gate` renders the `template-agentic` version the answers file records, renders this template

@@ -100,11 +100,13 @@ expect "a first copy keeps the project's Makefile and pyproject.toml" bash -c "
   [ -f '$E/python.mk' ] && [ -f '$E/ruff.base.toml' ] && [ -f '$E/basedpyright.base.json' ]"
 
 # A fresh render of this repository's own answers must reproduce every file template-agentic owns
-# here; the files it seeds once (_skip_if_exists) and the answers file are the project's.
-uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data "issues_repo=$(answer issues_repo)" \
-  --data "worktree_root=$(answer worktree_root)" "$AGENTIC_SRC" "$OUT/self"
+# here; the files it seeds once (_skip_if_exists) and the answers file are the project's. Every
+# answer the file records goes in, so a question a release adds renders as answered, not default.
+grep -v '^_' "$ROOT/.copier-answers.agentic.yaml" >"$OUT/self-answers.yaml"
+uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data-file "$OUT/self-answers.yaml" \
+  "$AGENTIC_SRC" "$OUT/self"
 expect "this repository's harness matches a render of its agentic answers" bash -c "cd '$OUT/self' &&
-  find . -type f ! -name .copier-answers.agentic.yaml ! -path ./.claude/memory/MEMORY.md ! -path ./.claude/release.md |
+  find . -type f ! -name .copier-answers.agentic.yaml ! -path ./.claude/memory/MEMORY.md |
   while read -r f; do cmp -s \"\$f\" '$ROOT'/\"\$f\" || { echo \"FAIL \${f#./} differs from the render\"; exit 1; }; done"
 
 # The product names the template was extracted from; bracketed so this line never matches itself.
