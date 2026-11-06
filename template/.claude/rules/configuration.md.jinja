@@ -1,0 +1,37 @@
+---
+paths:
+  - "configs/**"
+  - "{{ package_name }}/config.py"
+---
+
+# Configuration placement
+
+Loads when you touch config code or environment YAML. These are bright lines, not
+preferences — the plan reviewer treats violations as Must Change.
+
+## The ordered test for any new setting
+
+1. **Does the app need it to behave correctly?** Then it lives in this repo: a typed field
+   on the feature's Pydantic config model (`{{ package_name }}/config.py`) plus wiring in the
+   composition root. NEVER on the deployment surface (compose `environment:`, Dockerfile
+   CMD flags, reverse-proxy labels, CI variables): deploy-surface settings die with the
+   infrastructure choice, and the behavior silently regresses on the next infra change
+   with no failing test. The deployment surface carries only secrets and identity
+   (hosts, keys), injected via `<< ENV_VAR >>`.
+2. **Is the value the same in every environment?** Then it goes in `configs/default`
+   ONCE. Environment overlays (`configs/<env>/`) carry only true deltas — hosts, secrets,
+   env-specific allowlists. Identical blocks in two env files is a defect.
+3. **Defaults:** safe-empty on the model; `configs/default` documents the real value with
+   a "why" comment. Env files DEEP-MERGE over default per key (`{{ package_name }}/utils/config.py`
+   `merge()`), so a sparse overlay is correct — but a new REQUIRED key must have a safe
+   value in `default`, or every env silently inherits an unsafe one.
+
+Feature settings — including protocol-ish values like OAuth scopes or trusted proxy
+ranges — belong on the feature's config model, not in constants modules and not on launch
+commands. Config is this repo's only environment-branching mechanism.
+
+## Inherited prescriptions
+
+When a fix or design arrives pre-shaped from outside (another team, a blog post, upstream
+docs, an incident writeup), the plan must re-derive the *placement* decision against this
+file — verify the frame, not just the facts inside it.

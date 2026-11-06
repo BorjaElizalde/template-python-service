@@ -1,0 +1,18 @@
+// From the python-service template: change the template, not this copy.
+// The basedpyright settings every service shares, read as JSON with comments. The project's
+// pyproject.toml extends this file and sets its own include.
+{
+  "typeCheckingMode": "standard",
+  "pythonPlatform": "Linux",
+  "reportPrivateUsage": "error",
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnreachable": "error",
+  "reportUnnecessaryComparison": "error",
+  "reportUnnecessaryIsInstance": "error",
+  "reportUnnecessaryCast": "error",
+  "reportIgnoreCommentWithoutRule": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error"
+}

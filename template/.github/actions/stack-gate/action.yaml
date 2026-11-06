@@ -1,0 +1,11 @@
+# From the python-service template: change the template, not this copy.
+name: Python checks
+description: The checks a project's CI runs, each tool called directly, never through make
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      with:
+        enable-cache: true
+    - run: bash "$GITHUB_ACTION_PATH/gate.sh"
+      shell: bash

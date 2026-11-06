@@ -1,0 +1,15 @@
+# Seeded once by the python-service template; the project owns it from here.
+# Secrets stay local: task.sh copies .env files into each worktree, and none is committed.
+.env
+.env.*
+!.env.example
+
+# What the gate and the tools leave behind.
+__pycache__/
+*.py[cod]
+.venv/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
