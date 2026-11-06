@@ -1,0 +1,25 @@
+# From the python-service template: change the template, not this copy.
+# The Python gate, included by the project's Makefile. make gate is what /gate and CI run.
+PACKAGE := {{ package_name }}
+
+.PHONY: lint lint-check typecheck security test gate
+
+lint:
+	uv run ruff check $(PACKAGE) tests --fix
+	uv run ruff format $(PACKAGE) tests
+
+lint-check:
+	uv run ruff check $(PACKAGE) tests
+	uv run ruff format --check $(PACKAGE) tests
+
+typecheck:
+	uv run basedpyright
+
+security:
+	uv run bandit -r $(PACKAGE) -ll -ii
+
+test:
+	uv run pytest tests/ -v --cov
+
+gate: lint-check typecheck security test
+	@echo "All CI gate checks passed!"

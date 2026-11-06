@@ -1,0 +1,75 @@
+---
+paths:
+  - "{{ package_name }}/**/*.py"
+  - "tests/**/*.py"
+---
+
+# Backend Python conventions
+These load when you read or edit backend or test Python, and expand on the simplicity principle
+in the Design Philosophy (`.claude/rules/agentic.md`).
+
+## Error Handling
+- Let exceptions propagate naturally - catch at boundaries only (API handlers, batch tasks)
+- Raise `APIException.X(**context)` for structured errors — `APIException` is the enum of every wire
+  code and the only place one is spelled; calling a member builds a fresh `APIError`, and the context
+  keywords (ids, a reason) are what the refusal log line says beyond the code; never a shared
+  instance or a free-form message
+- OpenAPI error responses are derived from the raise statements (`{{ package_name }}/api/openapi_errors.py`),
+  never declared on a route. The derivation follows bare-name calls between module-level functions
+  under `{{ package_name }}.api`; a raise reached any other way — a method, `module.func()`, another package
+  — reaches no operation, and a gate test fails naming the function
+- A try earns its keep only when the failure can really happen (bad user input, a provider or
+  network error, a race) and the handler does better than letting it reach the boundary (a clearer
+  API error, one item failing without stopping the rest, a fallback that is the intended
+  behaviour). Never guard what our own code guarantees: input a model has validated, a value the
+  database forbids, data another of our services always produces. The same goes for an `if` that
+  checks for such a case, like a zero or an empty dataframe our own code never passes
+- Every except under `{{ package_name }}/` says why it earns its keep in a one-line comment, on the except
+  line or directly above or below it: the failure that can really happen there and why handling
+  it beats the boundary. If no such sentence holds, remove the except
+
+## Logging
+- Boundary-only logging: log at API handlers, batch task entry/exit, and exception handlers. Not inside business logic, utilities, or hot paths
+- Use async log methods (`await log.ainfo()`, `await log.aerror()`) in async code, sync methods in sync code
+- Success is silent — don't log successful bulk operations or happy-path completions
+- A log line fires per event an operator would act on (a request's outcome, a batch run, a
+  failure), never per data item, and never for an outcome already saved in the database or
+  returned to the caller
+- Batch tasks log nothing about their own run: `batch/main.py` logs start, finish and failure, and
+  a task's returned dict of counts rides on the finish line
+
+## Code Style
+- Adapt to existing code style (structure, naming, idiom): before extending a module — and
+  especially before creating a new file — read similar files in that module and match their
+  structure and standards. Comment density is NOT style to match: `comments-and-docstrings.md`
+  governs comments, even when neighboring files are denser
+- Type hints on all functions - signatures are contracts
+- Strategic abstractions at infrastructure (DB, ORM, queries), direct business logic
+- Same code paths for batch and API work - no duplication
+- Before adding a shared symbol, check its established owner: business operations in
+  `{{ package_name }}/services.py`, technical helpers in `{{ package_name }}/utils/`, reusable database access in
+  `{{ package_name }}/queries/`, API responses in `{{ package_name }}/api/v1/responses.py`, API-facing types in
+  `{{ package_name }}/api/v1/types.py`, structured errors in `{{ package_name }}/api/errors.py`, and
+  persistence/domain types in `{{ package_name }}/models/types.py`. Extend the owner instead of creating a
+  parallel definition.
+
+## Module Imports
+- Importing a module must not execute work: modules define and export, nothing runs
+- Runtime assembly (building apps/servers, wiring middleware) goes in `build_*()` factories
+  that only the composition roots (`api/main.py`, `batch/main.py`) call
+- Declarative registration stays module-level: `APIRouter()` + route decorators, Pydantic
+  models, tool registries. The `config`/`services.py` singletons are the sanctioned exception
+
+## Database
+- ORM-first with SQLAlchemy, no raw SQL (except views)
+- Bulk operations (`bulk_insert`, `bulk_upsert`) for performance-critical paths
+- Load relationships explicitly: pass `resources=[...]` to the `CustomBase` helpers
+  (`{{ package_name }}/database.py`), which load a collection with `selectinload` and a single object with
+  `joinedload`. Declare every relationship `lazy="raise"`, so reading one you did not load fails
+  and names it. SQLAlchemy's default `select` raises an opaque `MissingGreenlet` under async, and
+  `noload` (deprecated in 2.1) silently returns `None`. A response that carries a relationship
+  loads it on every path (for example, an `ITEM_RESPONSE_RESOURCES` list in `api/v1/core/items.py`)
+- Guard `df.empty` before boolean masking or date arithmetic on a query result frame. Zero-row frames
+  from `query_to_pandas_async` have object-typed columns, so a boolean mask can be read as column
+  selection and return a zero-column frame, and date arithmetic can degrade the dtype and break a
+  later merge. Cast around the symptom and the bug moves rather than goes
