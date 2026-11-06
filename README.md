@@ -103,8 +103,9 @@ its default, so check the new answer in the PR. Once per clone, run
 on top, and runs the rendered suites: the agentic practices protocol and the Python practices.
 `AGENTIC_SRC` and `AGENTIC_REF` override that source and version, to test an unreleased agentic
 change from a local clone and its branch. It also checks that a fresh render of the repository's
-own answers reproduces every file `template-agentic` owns here. The `Gate`
-workflow runs the same target on every PR into `develop`, `staging` or `main`, after it checks
-where the PR comes from: `main` takes `staging`, and `staging` takes `develop` or a `bugfix/*` PR
-of one commit, from this repository's own branches. `Build` runs the gate again on `main` before
-it tags.
+own answers reproduces every file `template-agentic` owns here. The `Gate` workflow comes from
+`template-agentic`, as in every project: on every PR into `develop`, `staging` or `main` it checks
+where the PR comes from (`main` takes `staging`, and `staging` takes `develop` or a `bugfix/*` PR
+of one commit, from this repository's own branches), then runs this repository's own
+`.github/actions/stack-gate`, which runs `make gate`: a template repository's CI may. `Build` runs
+the gate again on `main` before it tags.
