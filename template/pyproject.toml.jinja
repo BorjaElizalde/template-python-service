@@ -1,0 +1,32 @@
+[project]
+name = "{{ package_name }}"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "bandit",
+    "basedpyright",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+# The shared settings come from the template's base files. Add rules with extend-select, not
+# select, which would replace the shared rule list.
+[tool.ruff]
+extend = "ruff.base.toml"
+
+[tool.basedpyright]
+extends = "basedpyright.base.json"
+include = ["{{ package_name }}", "tests"]
+
+[tool.coverage.run]
+relative_files = true
+source = ["{{ package_name }}"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["error"]

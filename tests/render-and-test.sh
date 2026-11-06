@@ -50,6 +50,38 @@ expect "the reviewers and their roster are rendered" bash -c "for a in plan code
 expect "the roster names only agents that exist" bash -c "for a in \$(grep -o -E '\\\\b[a-z]+-(reviewer|problem-resolver)\\\\b' '$D/.claude/review-wave.md' | sort -u); do [ -f '$D/.claude/agents/'\$a.md ] || { echo \"FAIL missing \$a\"; exit 1; }; done"
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
 
+# The seeded pyproject.toml extends the template's base files, so a new project's package and test
+# pass the whole gate, and each shared setting reaches the project through it.
+mkdir -p "$D/app" "$D/tests"
+: >"$D/app/__init__.py"
+printf 'def double(x: int) -> int:\n    return x * 2\n' >"$D/app/core.py"
+printf 'from app.core import double\n\n\ndef test_double():\n    assert double(2) == 4\n' >"$D/tests/test_core.py"
+expect "a new project passes make gate, its untyped test exempt from ANN" make -s -C "$D" gate
+make_with() {  # make_with <file> <content> <target>: runs the target while the file holds the content
+  printf '%b' "$2" >"$D/$1"
+  make -s -C "$D" "$3" >/dev/null 2>&1
+  local status=$?
+  rm "$D/$1"
+  return "$status"
+}
+fails_with() { ! make_with "$@"; }
+UNTYPED='def f(x):\n    return x\n'
+expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED" lint-check
+# basedpyright's own default mode is stricter than the base's and rejects an unannotated parameter.
+expect "typecheck applies the base's checking mode" make_with app/untyped.py "$UNTYPED" typecheck
+expect "typecheck applies the base's added errors" fails_with app/cast.py \
+  'from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n' typecheck
+
+# A first copy into a project that has its own Makefile and pyproject.toml keeps both.
+E="$OUT/existing"
+uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$E"
+printf 'run:\n\t@echo run\n' >"$E/Makefile"
+printf '[project]\nname = "svc"\n' >"$E/pyproject.toml"
+uvx --quiet copier copy --quiet --defaults --data package_name=svc "$OUT/src" "$E"
+expect "a first copy keeps the project's Makefile and pyproject.toml" bash -c "
+  [ \"\$(cat '$E/Makefile')\" = \"\$(printf 'run:\n\t@echo run')\" ] && [ \"\$(cat '$E/pyproject.toml')\" = \"\$(printf '[project]\nname = \"svc\"')\" ] &&
+  [ -f '$E/python.mk' ] && [ -f '$E/ruff.base.toml' ] && [ -f '$E/basedpyright.base.json' ]"
+
 # A fresh render of this repository's own answers must reproduce every file template-agentic owns
 # here; the files it seeds once (_skip_if_exists) and the answers file are the project's.
 uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data "issues_repo=$(answer issues_repo)" \
