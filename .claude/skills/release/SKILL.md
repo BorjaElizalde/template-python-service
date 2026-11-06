@@ -46,7 +46,9 @@ promotion PR for a leg → adopt it rather than opening a second.
 
 ## 3. Deploy
 
-This project has no deploy: the release ends at the merge into `main`.
+The merge into `main` starts `Build`. Run
+`bash "${CLAUDE_SKILL_DIR}/scripts/await-run.sh" Build <last-merge-sha>` in the background.
 
-The wait script may be cut short before it reaches a verdict; it resumes, so start it again rather
-than reading the truncated output as a result. Close with every PR URL and the check results.
+Either wait script may be cut short before it reaches a verdict; both resume, so start it again
+rather than reading the truncated output as a result. Close with every PR URL, the check results,
+and the deploy conclusion and URL.
