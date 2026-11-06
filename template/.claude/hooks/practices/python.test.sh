@@ -88,6 +88,13 @@ edit 2 "skipif reason, no Tried"      "$TEST" 'def test_x():' $'@pytest.mark.ski
 edit 2 "pytest.skip reason, no Tried" "$TEST" '    pass' '    pytest.skip(f"Lucide icon source unreachable: {exc}")'
 says yes "Read the current documentation" "the stop sends the agent to the docs first" "$APP" 'x = 1' 'x = 1  # noqa'
 says yes "Tried <alternative>, but <why it was discarded>" "the stop spells out the form" "$APP" 'x = 1' 'x = 1  # noqa'
+# The form holds a placeholder for the code, so it never reads as advice to change the code skipped.
+says yes "Write it in this form: # pyright: ignore[<rule name>] <reason>" "the pyright form shows a placeholder for the rule" \
+  "$APP" 'a = f()' 'a = f()  # pyright: ignore[reportOptionalMemberAccess]'
+says no "reportAssignmentType" "the form names no rule the line didn't skip" \
+  "$APP" 'a = f()' 'a = f()  # pyright: ignore[reportOptionalMemberAccess]'
+says yes "Write it in this form: # noqa: <rule code> <reason>" "the noqa form shows a placeholder for the code" "$APP" 'x = 1' 'x = 1  # noqa: E501'
+says no "BLE001" "the noqa form names no code the line didn't skip" "$APP" 'x = 1' 'x = 1  # noqa: E501'
 
 echo "-- skipped checks: rule code and a reason in the form, on the line or above (goes on)"
 edit 0 "noqa code + reason"           "$APP" 'x = c()' "x = c()  # noqa: F821 defined by the plugin loader. $TRIED"
