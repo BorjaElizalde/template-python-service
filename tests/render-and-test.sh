@@ -47,11 +47,11 @@ expect "the reviewers and their roster are rendered" bash -c "for a in plan code
 expect "the roster names only agents that exist" bash -c "for a in \$(grep -o -E '\\\\b[a-z]+-(reviewer|problem-resolver)\\\\b' '$D/.claude/review-wave.md' | sort -u); do [ -f '$D/.claude/agents/'\$a.md ] || { echo \"FAIL missing \$a\"; exit 1; }; done"
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
 
-# This repository's own commit, gate and pull-request skills are rendered copies of
+# This repository's own commit, gate, pull-request and release skills are rendered copies of
 # template-agentic's for itself: a render with its own answers must reproduce them exactly.
 SELF="$(git -C "$ROOT" remote get-url origin | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')"
 uvx --quiet copier copy --quiet --defaults --data "issues_repo=$SELF" "$AGENTIC_SRC" "$OUT/self"
-expect "this repository's shared skills match a fresh render of template-agentic" bash -c "for s in commit gate pull-request; do diff -r '$OUT/self/.claude/skills/'\$s '$ROOT/.claude/skills/'\$s || exit 1; done"
+expect "this repository's shared skills match a fresh render of template-agentic" bash -c "for s in commit gate pull-request release; do diff -r '$OUT/self/.claude/skills/'\$s '$ROOT/.claude/skills/'\$s || exit 1; done"
 
 # The product names the template was extracted from; bracketed so this line never matches itself.
 expect "no product name in the template" bash -c "! grep -rIil -E 'fire[b]rain|monar[d]it|aer[i]s|truela[y]er|cloudwa[t]ch' --exclude-dir=.git --exclude=.git '$ROOT'"
