@@ -9,6 +9,7 @@ _external_data:
 
 # Seeded once, then project-owned: updates skip them, and a first copy keeps an existing file.
 _skip_if_exists:
+  - .gitignore
   - Makefile
   - pyproject.toml
 
