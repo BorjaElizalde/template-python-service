@@ -5,27 +5,77 @@
 # Exit 2 = guard blocked, 0 = guard allowed. Every case documents a policy decision or a class
 # that once regressed or bypassed.
 set -u
-GUARD="$(cd "$(dirname "$0")" && pwd)/bash-guard.sh"
+SRC="$(cd "$(dirname "$0")" && pwd)/bash-guard.sh"
 pass=0; fail=0
 
-# A stub gh answers the guard's PR lookup: `gh pr view [<pr>]` prints "<base> <head>".
+# A stub gh answers the guard's PR lookup, `gh pr view [<pr>] [--repo <r>] --json ...`, with the
+# PR's JSON in the shape gh prints. The PR's repository is the --repo it names, else the origin of
+# the folder gh runs in, else acme/app. Every PR's head is $H.
 STUB="$(mktemp -d)"
 trap 'rm -rf "$STUB"' EXIT
-cat >"$STUB/gh" <<'EOF'
-#!/usr/bin/env bash
+H=1111111111111111111111111111111111111111
+printf '#!/usr/bin/env bash\nH=%s\n' "$H" >"$STUB/gh"
+cat >>"$STUB/gh" <<'EOF'
 [ "$1 $2" = "pr view" ] || exit 1
-case "${3:-}" in
-  11) echo "develop feat/x" ;;
-  12) echo "staging develop" ;;
-  13) echo "main staging" ;;
-  14) echo "feat/x fix/y" ;;
-  15) echo "main feat/x" ;;
-  --*|"") echo "feat/x fix/y" ;;
+shift 2
+pr="" repo=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -R|--repo) repo="$2"; shift ;;
+    --json|--jq) shift ;;
+    -*) ;;
+    *) [ -n "$pr" ] || pr="$1" ;;
+  esac
+  shift
+done
+if [ -z "$repo" ]; then
+  url="$(git remote get-url origin 2>/dev/null)" && repo="${url#https://github.com/}" && repo="${repo%.git}"
+fi
+run() { printf '{"__typename":"CheckRun","name":"%s","status":"%s","conclusion":"%s"}' "$1" "$2" "$3"; }
+ctx() { printf '{"__typename":"StatusContext","context":"%s","state":"%s"}' "$1" "$2"; }
+GATE="$(run gate COMPLETED SUCCESS)"
+pr_json() {  # pr_json <base> <head> <checks>
+  printf '{"baseRefName":"%s","headRefName":"%s","headRefOid":"%s","url":"https://github.com/%s/pull/%s","statusCheckRollup":[%s]}\n' \
+    "$1" "$2" "$H" "${repo:-acme/app}" "${pr:-1}" "$3"
+}
+case "$pr" in
+  11) pr_json develop feat/x "$GATE" ;;
+  12) pr_json staging develop "$GATE" ;;
+  13) pr_json main staging "$GATE" ;;
+  14) pr_json feat/x fix/y "$GATE" ;;
+  15) pr_json main feat/x "$GATE" ;;
+  16) pr_json staging bugfix/x "$GATE" ;;
+  "") pr_json feat/x fix/y "$GATE" ;;
+  # The opt-in cases' PRs into develop, each with its checks.
+  21) pr_json develop feat/x "$GATE,$(run docs COMPLETED SKIPPED),$(ctx legacy/ci SUCCESS)" ;;
+  22) pr_json develop feat/x "$(run gate IN_PROGRESS '')" ;;
+  23) pr_json develop feat/x "$(run lint COMPLETED SUCCESS)" ;;
+  24) pr_json develop feat/x "$GATE,$(run test COMPLETED FAILURE)" ;;
+  25) pr_json develop feat/x "$GATE,$(ctx legacy/ci PENDING)" ;;
+  26) pr_json develop feat/x "" ;;
   *) exit 1 ;;
 esac
 EOF
 chmod +x "$STUB/gh"
 export PATH="$STUB:$PATH"
+
+# The guard reads agent_merges from the agentic.conf beside its folder, and its own repository from
+# its checkout's origin. Each copy below runs beside a fixture answer, so the cases never depend on
+# the answers this project was rendered with.
+fixture() {  # fixture <dir> <agent_merges> [<origin>]
+  mkdir -p "$1/.claude/hooks"
+  cp "$SRC" "$1/.claude/hooks/bash-guard.sh"
+  printf 'AGENT_MERGES=%s\n' "$2" >"$1/.claude/agentic.conf"
+  git init -q "$1"
+  [ -z "${3:-}" ] || git -C "$1" remote add origin "$3"
+}
+fixture "$STUB/off" false https://github.com/Acme/App.git
+fixture "$STUB/on" true https://github.com/Acme/App.git
+fixture "$STUB/on-ssh" true git@github.com:acme/app.git
+fixture "$STUB/on-no-origin" true
+git init -q "$STUB/other"
+git -C "$STUB/other" remote add origin https://github.com/other/app.git
+GUARD="$STUB/off/.claude/hooks/bash-guard.sh"
 
 # The guard blocks a commit in a main checkout, so the folder a case runs in decides its verdict.
 # Every case runs in $STUB, which is no repo; the main-checkout cases name their repo with cd.
@@ -33,12 +83,20 @@ git init -q "$STUB/repo"
 git -C "$STUB/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
 git -C "$STUB/repo" worktree add -q --detach "$STUB/worktree"
 
-t() {
-  local exp="$1" desc="$2" cmd="$3" got
-  (cd "$STUB" && jq -n --arg c "$cmd" '{tool_input:{command:$c}}' | bash "$GUARD" >/dev/null 2>&1)
+guard_case() {  # guard_case <guard> <want> <desc> <command>
+  local guard="$1" exp="$2" desc="$3" cmd="$4" got
+  (cd "$STUB" && jq -n --arg c "$cmd" '{tool_input:{command:$c}}' | bash "$guard" >/dev/null 2>&1)
   got=$?
   if [ "$got" -eq "$exp" ]; then pass=$((pass+1)); echo "PASS ($got) $desc"
   else fail=$((fail+1)); echo "FAIL (want $exp, got $got) $desc :: $cmd"; fi
+}
+t() { guard_case "$GUARD" "$@"; }
+t_on() { guard_case "$STUB/on/.claude/hooks/bash-guard.sh" "$@"; }
+says() {  # says <phrase> <desc> <command>: the opt-in guard blocks, naming <phrase>
+  local out
+  out="$(cd "$STUB" && jq -n --arg c "$3" '{tool_input:{command:$c}}' | bash "$STUB/on/.claude/hooks/bash-guard.sh" 2>&1)"
+  if [[ "$out" == *"$1"* ]]; then pass=$((pass+1)); echo "PASS (says) $2"
+  else fail=$((fail+1)); echo "FAIL (want '$1') $2 :: $out"; fi
 }
 
 echo "-- protected pushes (must block)"
@@ -90,6 +148,38 @@ t 0 "PR lookup only"                   'gh pr view 11'
 t 0 "REST read of merge state"         'gh api repos/o/r/pulls/11/merge'
 t 0 "msg mentions a merge"             'git commit -m "gh pr merge 11"'
 t 0 "local merge into a feature branch" 'git merge origin/develop'
+t 2 "without agent_merges, a green pinned squash is still the owner's" "gh pr merge 21 --squash --match-head-commit $H"
+
+echo "-- agent_merges: the agent's own PR into develop, squashed, pinned to a head whose every check"
+echo "   passed with gate among them (PR 21 green; 22 gate running; 23 no gate; 24 a check failed;"
+echo "   25 a status pending; 26 no checks; 16 bugfix→staging)"
+t_on 0 "own green PR, squash, pinned head"   "gh pr merge 21 --squash --match-head-commit $H"
+t_on 0 "pin given with ="                    "gh pr merge 21 --squash --match-head-commit=$H"
+t_on 0 "short -s in a cluster with -d"       "gh pr merge 21 -sd --match-head-commit $H"
+t_on 0 "own repo named with -R, any case"    "gh pr merge 21 -R Acme/App --squash --match-head-commit $H"
+t_on 0 "promotion still passes"              'gh pr merge 12 --merge'
+t_on 2 "no pin"                              'gh pr merge 21 --squash'
+t_on 2 "pin to another commit"               'gh pr merge 21 --squash --match-head-commit 2222222222222222222222222222222222222222'
+t_on 2 "a merge commit into develop"         "gh pr merge 21 --merge --match-head-commit $H"
+t_on 2 "a rebase into develop"               "gh pr merge 21 --rebase --match-head-commit $H"
+t_on 2 "--auto"                              "gh pr merge 21 --squash --auto --match-head-commit $H"
+t_on 2 "--admin"                             "gh pr merge 21 --squash --admin --match-head-commit $H"
+t_on 2 "gate still running"                  "gh pr merge 22 --squash --match-head-commit $H"
+t_on 2 "no gate among the checks"            "gh pr merge 23 --squash --match-head-commit $H"
+t_on 2 "a check failed"                      "gh pr merge 24 --squash --match-head-commit $H"
+t_on 2 "a status still pending"              "gh pr merge 25 --squash --match-head-commit $H"
+t_on 2 "no checks at all"                    "gh pr merge 26 --squash --match-head-commit $H"
+t_on 2 "another repository named with -R"    "gh pr merge 21 -R other/app --squash --match-head-commit $H"
+t_on 2 "another repository after cd"         "cd $STUB/other && gh pr merge 21 --squash --match-head-commit $H"
+t_on 2 "bugfix into staging stays the owner's" "gh pr merge 16 --squash --match-head-commit $H"
+t_on 2 "feature into main stays the owner's" "gh pr merge 15 --squash --match-head-commit $H"
+t_on 2 "a squashed promotion still blocks"   "gh pr merge 12 --squash --match-head-commit $H"
+t_on 2 "REST merge route still blocks"       'gh api -X PUT repos/acme/app/pulls/21/merge'
+guard_case "$STUB/on-ssh/.claude/hooks/bash-guard.sh" 0 "own repo from an ssh origin" "gh pr merge 21 --squash --match-head-commit $H"
+guard_case "$STUB/on-no-origin/.claude/hooks/bash-guard.sh" 2 "no origin, so no own repository" "gh pr merge 21 --squash --match-head-commit $H"
+says "--match-head-commit $H" "a missing pin names the head to pin" 'gh pr merge 21 --squash'
+says "a-check-not-passed" "a failed check is named in the verdict" "gh pr merge 24 --squash --match-head-commit $H"
+says "only its own repository" "another repository is named as not this project's" "gh pr merge 21 -R other/app --squash --match-head-commit $H"
 
 echo "-- skipping the commit hooks (must block)"
 t 2 "commit --no-verify"               'git commit --no-verify -m "x"'
