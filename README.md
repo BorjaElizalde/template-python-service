@@ -3,7 +3,8 @@
 A [Copier](https://copier.readthedocs.io/) template for the Python half of an agentic coding setup,
 layered on `template-agentic`. It fills the agentic layer's plug-in points for a Python service:
 the practice checks and their registry, the ruff formatter hook, the Python rules and reviewer
-agents, the review wave, and `make gate`.
+agents, the review wave, and `make gate`. It also owns the tool settings every Python service
+shares, so a project extends them instead of copying them.
 
 ## Apply and update
 
@@ -38,7 +39,31 @@ load, so they stay plain jq that the template's tests run directly.
 | `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
 | `make gate` | `python.mk`: ruff, basedpyright, bandit and pytest over the package and `tests/` |
 
-The project owns its `Makefile`, seeded once with `include python.mk`.
+## Shared tool settings
+
+| File | Owner | Holds |
+|---|---|---|
+| `ruff.base.toml` | template | Line length, the preview setup, the rule selection, the reasoned ignores, the typed-exception check |
+| `basedpyright.base.json` | template | The checking mode, the platform, and the strict `report*` settings |
+| `python.mk` | template | The `lint`, `lint-check`, `typecheck`, `security`, `test` and `gate` targets |
+| `pyproject.toml` | project, seeded once | The project, its dependencies, and its own tool settings: it extends the two base files |
+| `Makefile` | project, seeded once | The project's own targets, after `include python.mk` |
+
+Every update rewrites the template's files; a project changes a shared setting in the template,
+not in its copy. A project adds to the shared settings in its `pyproject.toml`:
+
+- ruff (`[tool.ruff] extend = "ruff.base.toml"`): `extend-select` for more rules, `ignore` and
+  `extend-per-file-ignores` for its own exceptions, each with the reason `skipped-checks.md`
+  asks for. Never `select`: ruff takes a `select` as the whole rule list and drops the base's.
+- basedpyright (`[tool.basedpyright] extends = "basedpyright.base.json"`): its `include`, and any
+  setting it overrides.
+- pytest and coverage have no way to extend a shared file, so their settings stay the project's.
+
+The `Makefile` is the project's own entry point, so updates never touch it; the shared targets
+reach it through `include python.mk`. A project adds a leg to the gate by naming it as one more
+prerequisite, `gate: my-check`, without redefining the target. A project that already has a
+`Makefile` and a `pyproject.toml` keeps both: it adds the `include` line and the two `extend`
+lines, then deletes the targets and settings the template's files now hold.
 
 Tests that call no boundary, because they check a contract or shipped data, live in
 `tests/contracts/`, `tests/migrations/` or `tests/config_integrity/`.
