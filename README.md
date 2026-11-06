@@ -46,6 +46,7 @@ load, so they stay plain jq that the template's tests run directly.
 | `ruff.base.toml` | template | Line length, the preview setup, the rule selection, the reasoned ignores, the typed-exception check |
 | `basedpyright.base.json` | template | The checking mode, the platform, and the strict `report*` settings |
 | `python.mk` | template | The `lint`, `lint-check`, `typecheck`, `security`, `test` and `gate` targets |
+| `.pre-commit-config.yaml` | template | The commit hooks: ruff, bandit (through `make security`) and the file checks, each running the project's own pinned tool through `uv run`, so the file holds no version |
 | `pyproject.toml` | project, seeded once | The project, its dependencies, and its own tool settings: it extends the two base files |
 | `Makefile` | project, seeded once | The project's own targets, after `include python.mk` |
 
