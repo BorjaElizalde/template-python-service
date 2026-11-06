@@ -322,6 +322,39 @@ edit_in R "select entry comment reworded (no stop, the comment reminds)" "$PY" "
 edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "standard"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
+
+echo "-- config: a select in a ruff config that extends another replaces that config's rule list"
+EXT=$'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nextend-select = ["B"]\n'
+edit_in 2 "select in a config that extends a base" "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = ["F"]'
+edit_in 2 "multi-line select there"       "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = [\n    "F",\n]'
+edit_in 2 "select under [tool.ruff] there" "$PY" "$EXT" 'extend = "ruff.base.toml"' $'extend = "ruff.base.toml"\nselect = ["F"]'
+edit_in 2 "select in a ruff.toml that extends a base" "$REPO/ruff.toml" $'extend = "ruff.base.toml"\n\n[lint]\n' '[lint]' $'[lint]\nselect = ["F"]'
+edit_in R "select there with a reason"    "$PY" "$EXT" 'extend-select = ["B"]' \
+  $'extend-select = ["B"]\n'"select = [\"F\"]  # F: this tool keeps only Pyflakes. $TRIED"
+edit_in 0 "extend-select there"           "$PY" "$EXT" 'extend-select = ["B"]' 'extend-select = ["B", "ANN"]'
+edit_in 0 "an item added to a select there" "$PY" $'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nselect = [\n    "F",\n]\n' \
+  '    "F",' $'    "F",\n    "E",'
+edit_in 0 "select in a config that extends nothing" "$PY" $'[tool.ruff.lint]\nignore = []\n' 'ignore = []' $'select = ["F"]\nignore = []'
+says yes "extend-select adds to it" "the stop names extend-select" "$PY" "$EXT" "$EXT"$'select = ["F"]\n'
+edit_in 2 "ruff extend removed"           "$PY" "$EXT" $'extend = "ruff.base.toml"\n' ''
+edit_in 2 "ruff extend pointed elsewhere" "$PY" "$EXT" 'extend = "ruff.base.toml"' 'extend = "lax.toml"'
+EXTS=$'[tool.basedpyright]\nextends = "basedpyright.base.json"\ninclude = ["app"]\n'
+edit_in 2 "basedpyright extends removed"  "$PY" "$EXTS" $'extends = "basedpyright.base.json"\n' ''
+edit_in R "ruff extend removed, reason where it was" "$PY" "$EXT" $'extend = "ruff.base.toml"\n' \
+  "# This tool keeps its own rule list. $TRIED"$'\n'
+edit_in 0 "ruff extend kept as its section grows" "$PY" "$EXT" $'[tool.ruff]\nextend = "ruff.base.toml"' \
+  $'[tool.ruff]\nline-length = 100\nextend = "ruff.base.toml"'
+
+echo "-- config: the shared base files stop every edit, reason or not: each update rewrites them"
+RB="$REPO/ruff.base.toml"
+edit_in 2 "a rule dropped from ruff.base.toml" "$RB" $'[lint]\nselect = ["F", "E"]\n' 'select = ["F", "E"]' 'select = ["F"]'
+edit_in 2 "a rule added to ruff.base.toml" "$RB" $'[lint]\nselect = ["F"]\n' 'select = ["F"]' 'select = ["F", "E"]'
+edit_in 2 "a ruff.base.toml change with a reason" "$RB" $'[lint]\nignore = []\n' 'ignore = []' \
+  "ignore = [\"E501\"]  # E501: long URLs. $TRIED"
+write 2 "basedpyright.base.json rewritten" "$REPO/basedpyright.base.json" $'{\n  "reportUnreachable": "error"\n}\n' \
+  $'{\n  "reportUnreachable": false\n}\n'
+says yes "Change the template instead" "the base-file stop sends the change to the template" "$RB" \
+  $'[lint]\nselect = ["F"]\n' $'[lint]\nselect = []\n'
 edit_in 2 "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
