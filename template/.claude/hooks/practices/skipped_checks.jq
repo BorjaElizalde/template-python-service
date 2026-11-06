@@ -17,19 +17,19 @@ def missing_reason($above):
     | $after != null and (($after | reason_form) or ($above | reason_form));
   if has("#\\s*(ruff:\\s*)?noqa\\b") then
     if given("#\\s*(ruff:\\s*)?noqa:\\s*[a-z]+[0-9]+(\\s*,\\s*[a-z]+[0-9]+)*") then empty
-    else "# noqa: BLE001 <reason>" end
+    else "# noqa: <rule code> <reason>" end
   elif has("#\\s*type:\\s*ignore\\b") then
     if given("type:\\s*ignore\\[[^\\]]+\\]") then empty
-    else "# type: ignore[assignment] <reason>" end
+    else "# type: ignore[<error code>] <reason>" end
   elif has("#\\s*pyright:\\s*ignore\\b") then
     if given("pyright:\\s*ignore\\[[^\\]]+\\]") then empty
-    else "# pyright: ignore[reportAssignmentType] <reason>" end
+    else "# pyright: ignore[<rule name>] <reason>" end
   elif has("^\\s*#\\s*pyright:") then
     if $above | reason_form then empty
     else "<reason> on the comment lines above the # pyright: directive" end
   elif has("#\\s*nosec\\b") then
     if given("nosec\\s+b[0-9]+(\\s*,\\s*b[0-9]+)*") then empty
-    else "# nosec B506 <reason>" end
+    else "# nosec <test ID> <reason>" end
   elif has("#\\s*pragma:?\\s*no\\s*cover") then
     if given("no\\s*cover") then empty
     else "# pragma: no cover <reason>" end
@@ -60,7 +60,7 @@ def check($ctx):
   [$ctx.added[] | select(.line | suppression)
    | comment_above($ctx.new; .at) as $above | .line as $line
    | ($line | missing_reason($above)) as $form
-   | "- `\($line | short)`\n  Write it as: \($form)"]
+   | "- `\($line | short)`\n  Write it in this form: \($form)"]
   | select(length > 0)
   | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
       + " (.claude/rules/skipped-checks.md). This edit skips a check without a reason in the"

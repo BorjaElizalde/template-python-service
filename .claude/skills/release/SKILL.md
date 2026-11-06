@@ -14,7 +14,8 @@ allowed-tools: Bash(bash:*), Bash(git fetch:*), Bash(git log:*), Bash(git diff:*
 - `staging` → `main` open PR: !`gh pr list --base main --head staging --state open --json url --jq '.[].url'`
 
 Every promotion PR carries one check, `gate`: it checks the PR comes from the branch below its
-base (`develop` into `staging`, `staging` into `main`), then runs `make gate` on the merge result.
+base (`develop` into `staging`, `staging` into `main`), then runs the project's checks on the merge
+result.
 The rulesets require it, so a promotion PR with no check is a red.
 
 Run every leg unattended for as long as everything is green: never pause to confirm a green step.
