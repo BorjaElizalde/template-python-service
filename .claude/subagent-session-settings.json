@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PermissionRequest\", \"decision\": {\"behavior\": \"deny\", \"message\": \"Nobody answers permission prompts in a subagent session. Reach the goal within your permissions, or stop and report what is blocked.\"}}}'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "A Claude Code subagent session is about to end its turn. It must never wait for a person's answer. Hook input: $ARGUMENTS\n\nIf stop_hook_active is true, respond {\"ok\": true}: the session was already sent back once. Otherwise read last_assistant_message. If it asks the user to answer a question, choose an option, confirm or approve something, or supply information before work can go on, respond {\"ok\": false, \"reason\": \"Nobody will answer. Take the option you would recommend, judged against the Judgment Guidelines, state it and why, and continue. Think another turn or spawn research subagents first if you need to.\"}. Otherwise respond {\"ok\": true}: the work is done, the message reports results, or it reports a blocker that only the owner can lift, such as an action on production data."
+          }
+        ]
+      }
+    ]
+  }
+}
