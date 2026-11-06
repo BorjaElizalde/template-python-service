@@ -336,6 +336,25 @@ edit_in 0 "an item added to a select there" "$PY" $'[tool.ruff]\nextend = "ruff.
   '    "F",' $'    "F",\n    "E",'
 edit_in 0 "select in a config that extends nothing" "$PY" $'[tool.ruff.lint]\nignore = []\n' 'ignore = []' $'select = ["F"]\nignore = []'
 says yes "extend-select adds to it" "the stop names extend-select" "$PY" "$EXT" "$EXT"$'select = ["F"]\n'
+edit_in 2 "ruff extend removed"           "$PY" "$EXT" $'extend = "ruff.base.toml"\n' ''
+edit_in 2 "ruff extend pointed elsewhere" "$PY" "$EXT" 'extend = "ruff.base.toml"' 'extend = "lax.toml"'
+EXTS=$'[tool.basedpyright]\nextends = "basedpyright.base.json"\ninclude = ["app"]\n'
+edit_in 2 "basedpyright extends removed"  "$PY" "$EXTS" $'extends = "basedpyright.base.json"\n' ''
+edit_in R "ruff extend removed, reason where it was" "$PY" "$EXT" $'extend = "ruff.base.toml"\n' \
+  "# This tool keeps its own rule list. $TRIED"$'\n'
+edit_in 0 "ruff extend kept as its section grows" "$PY" "$EXT" $'[tool.ruff]\nextend = "ruff.base.toml"' \
+  $'[tool.ruff]\nline-length = 100\nextend = "ruff.base.toml"'
+
+echo "-- config: the shared base files stop every edit, reason or not: each update rewrites them"
+RB="$REPO/ruff.base.toml"
+edit_in 2 "a rule dropped from ruff.base.toml" "$RB" $'[lint]\nselect = ["F", "E"]\n' 'select = ["F", "E"]' 'select = ["F"]'
+edit_in 2 "a rule added to ruff.base.toml" "$RB" $'[lint]\nselect = ["F"]\n' 'select = ["F"]' 'select = ["F", "E"]'
+edit_in 2 "a ruff.base.toml change with a reason" "$RB" $'[lint]\nignore = []\n' 'ignore = []' \
+  "ignore = [\"E501\"]  # E501: long URLs. $TRIED"
+write 2 "basedpyright.base.json rewritten" "$REPO/basedpyright.base.json" $'{\n  "reportUnreachable": "error"\n}\n' \
+  $'{\n  "reportUnreachable": false\n}\n'
+says yes "Change the template instead" "the base-file stop sends the change to the template" "$RB" \
+  $'[lint]\nselect = ["F"]\n' $'[lint]\nselect = []\n'
 edit_in 2 "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
