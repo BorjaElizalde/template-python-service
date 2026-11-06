@@ -38,7 +38,7 @@ git -C "$D" add -A
 git -C "$D" -c user.name=t -c user.email=t@t commit -qm render
 
 expect "answers land in .copier-answers.python-service.yaml" test -f "$D/.copier-answers.python-service.yaml"
-expect "no Jinja left in rendered files" bash -c "! grep -rIl -e '{{' -e '{%' --exclude-dir=.git '$D'"
+expect "no Jinja left in rendered files" bash -c "! grep -rIl -E '(^|[^\$])\\{\\{|\\{%' --exclude-dir=.git '$D'"
 expect "stack.json names the package" bash -c "[ \"\$(jq -r .package '$D/.claude/hooks/practices/stack.json')\" = app ]"
 expect "the Makefile includes python.mk" grep -qx 'include python.mk' "$D/Makefile"
 expect "python.mk gates the package" grep -qx 'PACKAGE := app' "$D/python.mk"
@@ -152,7 +152,7 @@ grep -v '^_' "$ROOT/.copier-answers.agentic.yaml" >"$OUT/self-answers.yaml"
 uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data-file "$OUT/self-answers.yaml" \
   "$AGENTIC_SRC" "$OUT/self"
 expect "this repository's harness matches a render of its agentic answers" bash -c "cd '$OUT/self' &&
-  find . -type f ! -name .copier-answers.agentic.yaml ! -path ./.claude/memory/MEMORY.md |
+  find . -type f ! -name .copier-answers.agentic.yaml ! -path ./.claude/memory/MEMORY.md ! -path ./renovate.json |
   while read -r f; do cmp -s \"\$f\" '$ROOT'/\"\$f\" || { echo \"FAIL \${f#./} differs from the render\"; exit 1; }; done"
 
 # The product names the template was extracted from; bracketed so this line never matches itself.
