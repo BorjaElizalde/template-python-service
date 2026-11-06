@@ -1,0 +1,57 @@
+# From the python-service template: change the template, not this copy.
+# The ruff settings every service shares. The project's pyproject.toml extends this file and adds
+# its own through extend-select, ignore and extend-per-file-ignores; a select there would replace
+# the whole rule list below.
+line-length = 100
+
+[lint]
+# Preview rules run only when named in `select`; PLC2701 is the one named.
+preview = true
+explicit-preview-rules = true
+select = [
+    "F",  # Pyflakes
+    "E",  # pycodestyle
+    "W",  # pycodestyle
+    "I",  # isort
+    "N",  # pep8-naming
+    "Q",  # flake8-quotes
+    "ERA",  # eradicate (commented-out code)
+    "BLE001",  # blind except
+    "S110",  # try-except-pass
+    "S112",  # try-except-continue
+    "RUF100",  # unused noqa
+    "G004",  # f-string in a log call
+    "PLC2701",  # private name imported from another module
+    "B",  # flake8-bugbear
+    "UP",  # pyupgrade
+    "FAST",  # FastAPI
+    "ASYNC",  # flake8-async
+    "DTZ",  # flake8-datetimez
+    "PGH003",  # blanket type: ignore
+    "PGH004",  # blanket noqa
+    "RUF006",  # dangling asyncio task
+    "ANN",  # flake8-annotations
+]
+# ANN401: Any is the honest type where a signature takes or returns whatever a file, a request or
+# a library hands over: JSON and YAML loaders, pydantic before-validators, framework internals that
+# publish no type, and **kwargs forwarded to APIs that take Any themselves.
+# Tried a narrower type, the rule's documented fix, but `object` from a loader needs a cast at
+# every caller, and a framework internal with no published type has nothing narrower to name.
+# Tried allow-star-arg-any, but it clears only the **kwargs hits.
+# Tried per-file-ignores for the files that hold an honest Any, but every new loader or validator
+# would need its own entry.
+ignore = ["ANN401"]
+
+[lint.per-file-ignores]
+# ANN: in tests the rule asks mostly for `-> None` on test functions and for types on fixture
+# parameters, which pytest injects by name: noise on every test for little checking.
+# Tried annotating the tests, but suppress-none-returning, which drops the `-> None` hits, would
+# stop requiring `-> None` in the package too, and every fixture parameter would still need a type.
+# Tried listing only the ANN codes tests hit, but they hit nearly every code, so the list would be
+# a longer ANN.
+# Tried ignore-fully-untyped, but it leaves most test hits and exempts untyped package code.
+# Tried mypy-init-return, suppress-dummy-args and allow-star-arg-any, but they clear no test hit.
+"tests/**" = ["ANN"]
+
+[lint.flake8-bandit]
+check-typed-exception = true
