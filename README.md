@@ -8,8 +8,9 @@ shares, so a project extends them instead of copying them.
 
 ## Apply and update
 
-`template-agentic` goes first: this template reads its answers file and refuses to render without
-it.
+`template-agentic` goes first: this template fills its plug-in points. The template can't check
+that the agentic layer is there, because Copier renders every update's old and new versions into
+empty folders, where no other layer's files exist.
 
 ```bash
 uvx copier copy <agentic-template-url> .   # writes .copier-answers.agentic.yaml

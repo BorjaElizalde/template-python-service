@@ -25,9 +25,29 @@ expect() {  # expect <desc> <command...>; a failure prints the command's own lin
   else echo "FAIL $1"; { grep -E 'FAIL|rror' <<<"$out" || tail -n 3 <<<"$out"; } | head -20 | sed 's/^/    /'; fail=1; fi
 }
 
-expect "refuses a project without the agentic layer" bash -c "
-  ! uvx --quiet copier copy --quiet --defaults --data package_name=app '$OUT/src' '$OUT/alone' 2>'$OUT/alone.err' &&
-  grep -q 'Apply template-agentic first' '$OUT/alone.err'"
+# A project takes the next release with copier update. Copier renders the old version and the new
+# one into empty folders, so a question that reads another layer's files fails the update.
+V="$OUT/versions"
+U="$OUT/updated"
+mkdir -p "$V"
+(cd "$OUT/src" && tar -cf - .) | tar -xf - -C "$V"
+git -C "$V" init -q
+git -C "$V" add -A
+git -C "$V" -c user.name=t -c user.email=t@t commit -qm v1
+git -C "$V" tag v1
+printf 'probe\n' >"$V/template/update-probe.txt"
+git -C "$V" add -A
+git -C "$V" -c user.name=t -c user.email=t@t commit -qm v2
+git -C "$V" tag v2
+uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$U"
+uvx --quiet copier copy --quiet --defaults --vcs-ref v1 --data package_name=app "$V" "$U"
+git -C "$U" init -q
+git -C "$U" add -A
+git -C "$U" -c user.name=t -c user.email=t@t commit -qm copy
+expect "a project takes the next release with copier update" bash -c "cd '$U' &&
+  GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
+    uvx --quiet copier update --quiet --skip-answered --defaults -a .copier-answers.python-service.yaml --vcs-ref v2 &&
+  [ -f update-probe.txt ] && grep -qx '_commit: v2' .copier-answers.python-service.yaml"
 
 D="$OUT/project"
 uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$D"
