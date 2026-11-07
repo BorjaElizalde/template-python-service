@@ -61,11 +61,10 @@ expect "answers land in .copier-answers.python-service.yaml" test -f "$D/.copier
 expect "no Jinja left in rendered files" bash -c "! grep -rIl -E '(^|[^\$])\\{\\{|\\{%' --exclude-dir=.git '$D'"
 expect "stack.json names the package" bash -c "[ \"\$(jq -r .package '$D/.claude/hooks/practices/stack.json')\" = app ]"
 expect "the Makefile includes python.mk" grep -qx 'include python.mk' "$D/Makefile"
-expect "python.mk gates the package" grep -qx 'PACKAGE := app' "$D/python.mk"
 expect "every script parses" bash -c "for f in \$(find '$D' -name '*.sh'); do bash -n \"\$f\" || exit 1; done"
 expect "agentic practices protocol suite" bash "$D/.claude/hooks/practices/guard.test.sh"
 expect "python practices suite" bash "$D/.claude/hooks/practices/python.test.sh"
-expect "rules load for the package" grep -qxF '  - "app/**/*.py"' "$D/.claude/rules/python-conventions.md"
+expect "rules load for every Python file" grep -qxF '  - "**/*.py"' "$D/.claude/rules/python-conventions.md"
 expect "the reviewers and their roster are rendered" bash -c "for a in plan code security test docstring; do [ -f '$D/.claude/agents/'\$a-reviewer.md ] || exit 1; done && [ -f '$D/.claude/agents/lint-problem-resolver.md' ] && [ -f '$D/.claude/review-wave.md' ]"
 expect "the roster names only agents that exist" bash -c "for a in \$(grep -o -E '\\\\b[a-z]+-(reviewer|problem-resolver)\\\\b' '$D/.claude/review-wave.md' | sort -u); do [ -f '$D/.claude/agents/'\$a.md ] || { echo \"FAIL missing \$a\"; exit 1; }; done"
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
@@ -128,6 +127,28 @@ expect "pyproject.toml that stops extending ruff's base relaxes lint-check, not 
 expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
   relaxed pyproject.toml 'extends = "basedpyright.base.json"' 'extends = "basedpyright.base.json"\nreportUnnecessaryCast = false' \
   local_only typecheck app/cast.py "$CAST"
+
+# Both gates check every Python file in the repository, not only the package: in a second
+# top-level folder, each tool fails the file that breaks its rule, and only its rule.
+mkdir -p "$D/commons"
+fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
+  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
+}
+INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
+expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
+expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/cast.py "$CAST"
+expect "bandit checks a second top-level folder, locally and in CI" fails_both security commons/insecure.py "$INSECURE"
+# The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
+NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
+  "source": ["import os\\n", "x: int = None\\n"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
+passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
+  make_with "$1" "$2" gate && ci_with "$1" "$2"
+}
+expect "a bad notebook leaves make gate and CI green" passes_both explore.ipynb "$NOTEBOOK"
+expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
+  relaxed ruff.base.toml 'extend-exclude = ["*.ipynb"]' '' fails_with explore.ipynb "$NOTEBOOK" lint-check
+expect "basedpyright.base.json's exclude is what keeps the notebook out of typecheck" \
+  relaxed basedpyright.base.json '"exclude": ["**/*.ipynb"],' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
 
 # The shared pre-commit hooks run the project's own tools, so they read the same base settings.
 git -C "$D" add -A

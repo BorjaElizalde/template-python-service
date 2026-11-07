@@ -149,6 +149,12 @@ t 0 "REST read of merge state"         'gh api repos/o/r/pulls/11/merge'
 t 0 "msg mentions a merge"             'git commit -m "gh pr merge 11"'
 t 0 "local merge into a feature branch" 'git merge origin/develop'
 t 2 "without agent_merges, a green pinned squash is still the owner's" "gh pr merge 21 --squash --match-head-commit $H"
+# A short-flag cluster is read as gh reads it: a letter that takes a value takes the rest.
+t 2 "promotion squashed, an m in an attached subject"   'gh pr merge 12 --squash -tmessage'
+t 2 "promotion given two strategies"                    'gh pr merge 12 --merge --squash'
+t 0 "promotion with -m and an attached subject"         'gh pr merge 12 -m -tsubject'
+t 0 "promotion with --merge=true"                       'gh pr merge 12 --merge=true'
+t 2 "promotion with --merge=false"                      'gh pr merge 12 --merge=false'
 
 echo "-- agent_merges: the agent's own PR into develop, squashed, pinned to a head whose every check"
 echo "   passed with gate among them (PR 21 green; 22 gate running; 23 no gate; 24 a check failed;"
@@ -180,6 +186,17 @@ guard_case "$STUB/on-no-origin/.claude/hooks/bash-guard.sh" 2 "no origin, so no 
 says "--match-head-commit $H" "a missing pin names the head to pin" 'gh pr merge 21 --squash'
 says "a-check-not-passed" "a failed check is named in the verdict" "gh pr merge 24 --squash --match-head-commit $H"
 says "only its own repository" "another repository is named as not this project's" "gh pr merge 21 -R other/app --squash --match-head-commit $H"
+t_on 2 "a rebase whose attached subject holds an s"     "gh pr merge 21 -r -tsubject --match-head-commit $H"
+t_on 2 "a squash and a rebase both"                     "gh pr merge 21 --squash --rebase --match-head-commit $H"
+t_on 2 "--squash=false"                                 "gh pr merge 21 --squash=false --rebase --match-head-commit $H"
+t_on 0 "-s, then an attached subject"                   "gh pr merge 21 -s -tmessage --match-head-commit $H"
+t_on 0 "-st, the subject the next word"                 "gh pr merge 21 -st subject --match-head-commit $H"
+t_on 0 "--squash=true"                                  "gh pr merge 21 --squash=true --match-head-commit $H"
+t_on 2 "another repository attached to -R"              "gh pr merge 21 -Rother/app --squash --match-head-commit $H"
+t_on 2 "another repository in an -sR cluster"           "gh pr merge 21 -sR other/app --match-head-commit $H"
+t_on 2 "--auto=true"                                    "gh pr merge 21 --squash --auto=true --match-head-commit $H"
+t_on 0 "--auto=false"                                   "gh pr merge 21 --squash --auto=false --match-head-commit $H"
+t_on 2 "--admin=1"                                      "gh pr merge 21 --squash --admin=1 --match-head-commit $H"
 
 echo "-- skipping the commit hooks (must block)"
 t 2 "commit --no-verify"               'git commit --no-verify -m "x"'

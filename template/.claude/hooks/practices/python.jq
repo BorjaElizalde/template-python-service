@@ -6,7 +6,7 @@ include "lib";
 import "stack" as $stack;
 
 def package: $stack[0].package;
-def in_package: startswith(package + "/");
+def outside_tests: startswith("tests/") | not;
 def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff)\\b|^\\s*#!";
 def plain_comment: has("^\\s*#\\s*[a-z0-9]") and (has(directive) | not);
 

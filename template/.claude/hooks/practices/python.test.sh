@@ -18,8 +18,9 @@ trap 'rm -rf "$REPO" "$NOGIT" "$WORK"' EXIT
 git -C "$REPO" init -q
 mkdir -p "$REPO/$PKG/services" "$REPO/$PKG/api/v1/routers" "$REPO/tests/unit"
 mkdir -p "$REPO/$PKG/api/v1/core" "$REPO/$PKG/api/mcp/tools/guides" "$REPO/$PKG/batch"
-mkdir -p "$REPO/database/versions" "$REPO/.github/workflows"
+mkdir -p "$REPO/database/versions" "$REPO/.github/workflows" "$REPO/commons"
 APP="$REPO/$PKG/services/case.py"
+COMMONS="$REPO/commons/case.py"
 MIGRATION="$REPO/database/versions/abc123_add_x.py"
 ROUTER="$REPO/$PKG/api/v1/routers/case.py"
 TEST="$REPO/tests/unit/case.py"
@@ -133,6 +134,7 @@ edit 0 "old try/except re-indented"   "$APP" $'    try:\n        y = f()\n    ex
 edit 0 "reason added to an old except" "$APP" '    except Exception:' "    except Exception:  # noqa: BLE001 any failure is unhealthy. $TRIED"
 edit R "new except with a reasoned noqa" "$APP" '    y = f()' $'    try:\n        y = f()\n    except Exception:  # noqa: BLE001 if one provider fails, carry on. '"$TRIED"$'\n        y = None'
 edit 0 "new except in tests"          "$TEST" '    y = f()' $'    try:\n        y = f()\n    except ValueError:\n        y = None'
+edit 2 "new except in another top-level folder" "$COMMONS" '    y = f()' $'    try:\n        y = f()\n    except ValueError:\n        y = None'
 edit 0 "old bare noqa re-indented"    "$APP" $'    try:\n        y = f()  # noqa' $'    y = f()  # noqa'
 edit 2 "a bare noqa still stops"      "$APP" '    y = f()' $'    try:\n        y = f()\n    except Exception:  # noqa: BLE001\n        y = None'
 
@@ -251,6 +253,7 @@ edit R "new async debug log"          "$APP" '    y = f()' $'    y = f()\n    aw
 edit R "multi-line log call"          "$APP" '    y = f()' $'    y = f()\n    await log.awarning(\n        "refresh_expired",\n        user_id=1,\n    )'
 edit R "logger name, not log"         "$APP" '    y = f()' $'    y = f()\n    logger.error("boom")'
 edit 0 "log in tests"                 "$TEST" '    y = f()' $'    y = f()\n    log.info("rows_loaded")'
+edit R "log in another top-level folder" "$COMMONS" '    y = f()' $'    y = f()\n    log.info("rows_loaded")'
 edit 0 "old log re-indented"          "$APP" $'    try:\n        log.info("rows_loaded")' $'    log.info("rows_loaded")'
 edit 0 "old comment moved onto an old log" "$APP" $'    # sampled upstream\n    log.info("rows_loaded")' '    log.info("rows_loaded")  # sampled upstream'
 edit 0 "not a logger (catalog.info)"  "$APP" '    y = f()' $'    y = f()\n    catalog.info("x")'

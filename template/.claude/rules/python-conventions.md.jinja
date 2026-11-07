@@ -1,7 +1,6 @@
 ---
 paths:
-  - "{{ package_name }}/**/*.py"
-  - "tests/**/*.py"
+  - "**/*.py"
 ---
 
 # Backend Python conventions
@@ -24,7 +23,7 @@ in the Design Philosophy (`.claude/rules/agentic.md`).
   behaviour). Never guard what our own code guarantees: input a model has validated, a value the
   database forbids, data another of our services always produces. The same goes for an `if` that
   checks for such a case, like a zero or an empty dataframe our own code never passes
-- Every except under `{{ package_name }}/` says why it earns its keep in a one-line comment, on the except
+- Every except outside `tests/` says why it earns its keep in a one-line comment, on the except
   line or directly above or below it: the failure that can really happen there and why handling
   it beats the boundary. If no such sentence holds, remove the except
 

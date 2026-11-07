@@ -119,8 +119,8 @@ agent_may_merge() {
   own="$(own_repo)"
   if [ -z "$own" ] || [ "$prrepo" != "$own" ]; then
     MERGE_WHY="merging a PR of '$prrepo' into develop. This project lets the agent merge only its own repository's PRs${own:+ ($own)}: leave this merge to the owner."
-  elif [ "$squash" = 0 ]; then
-    MERGE_WHY="merging into develop without --squash: develop takes squash merges."
+  elif [ "$squash" = 0 ] || [ "$merge" = 1 ] || [ "$rebase" = 1 ]; then
+    MERGE_WHY="merging into develop without --squash as the only strategy: develop takes squash merges."
   elif [ "$auto" = 1 ] || [ "$admin" = 1 ]; then
     MERGE_WHY="merging into develop with --auto or --admin, which merge without the checks the guard read. Wait for the checks, then merge with --squash --match-head-commit <sha>."
   elif [ "$match" != "$oid" ]; then
@@ -133,34 +133,59 @@ agent_may_merge() {
   return 1
 }
 
+# gh reads a bool flag given as --flag=<value> true for 1, t, T, true, TRUE or True.
+truthy() { case "$1" in 1|t|T|true|TRUE|True) return 0 ;; *) return 1 ;; esac; }
+
 # Does ONE shell segment merge a PR into a protected branch? Only GitHub knows the base, so the
 # PR is looked up, and a failed lookup blocks. The words are read on `bare`, where a quoted value
-# is one `_` word, so a flag's value is never taken for the PR. A promotion passes only with
-# --merge: a squash or rebase gives the target commits the source never had. With agent_merges,
-# agent_may_merge decides a PR into develop.
+# is one `_` word, so a flag's value is never taken for the PR. A short-flag cluster is read
+# letter by letter, as gh reads it: a letter that takes a value (A, b, F, t, R) takes the rest of
+# the cluster, or the next word when it ends the cluster, so `-tsubject` holds no `s` flag. A
+# promotion passes only with --merge as its one strategy: a squash or rebase gives the target
+# commits the source never had. With agent_merges, agent_may_merge decides a PR into develop.
 segment_merges_protected() {
-  local bare="$1" i=0 pr="" repo="" merge=0 squash=0 auto=0 admin=0 match="" out
-  local base head oid prrepo verdict
+  local bare="$1" i=0 pr="" repo="" merge=0 squash=0 rebase=0 auto=0 admin=0 match="" out
+  local base head oid prrepo verdict word letters c
   local -a words view
   [[ "$bare" =~ $RE_PR_MERGE ]] || return 1
   read -ra words <<<"${bare#*"${BASH_REMATCH[0]}"}"
   while [ "$i" -lt "${#words[@]}" ]; do
-    case "${words[$i]}" in
-      -R|--repo) i=$((i + 1)); repo="${words[$i]:-}" ;;
-      --repo=*) repo="${words[$i]#--repo=}" ;;
+    word="${words[$i]}"
+    case "$word" in
+      --repo) i=$((i + 1)); repo="${words[$i]:-}" ;;
+      --repo=*) repo="${word#--repo=}" ;;
       --match-head-commit) i=$((i + 1)); match="${words[$i]:-}" ;;
-      --match-head-commit=*) match="${words[$i]#--match-head-commit=}" ;;
-      -A|--author-email|-b|--body|-F|--body-file|-t|--subject) i=$((i + 1)) ;;
+      --match-head-commit=*) match="${word#--match-head-commit=}" ;;
+      --author-email|--body|--body-file|--subject) i=$((i + 1)) ;;
       --merge) merge=1 ;;
       --squash) squash=1 ;;
+      --rebase) rebase=1 ;;
       --auto) auto=1 ;;
       --admin) admin=1 ;;
+      --merge=*) truthy "${word#*=}" && merge=1 ;;
+      --squash=*) truthy "${word#*=}" && squash=1 ;;
+      --rebase=*) truthy "${word#*=}" && rebase=1 ;;
+      --auto=*) truthy "${word#*=}" && auto=1 ;;
+      --admin=*) truthy "${word#*=}" && admin=1 ;;
       --*) ;;
-      -*)
-        [[ "${words[$i]}" == *m* ]] && merge=1
-        [[ "${words[$i]}" == *s* ]] && squash=1
+      -?*)
+        letters="${word#-}"
+        while [ -n "$letters" ]; do
+          c="${letters:0:1}"
+          letters="${letters:1}"
+          case "$c" in
+            m) merge=1 ;;
+            s) squash=1 ;;
+            r) rebase=1 ;;
+            R|A|b|F|t)
+              if [ -z "$letters" ]; then i=$((i + 1)); letters="${words[$i]:-}"; fi
+              [ "$c" != R ] || repo="$letters"
+              letters=""
+              ;;
+          esac
+        done
         ;;
-      *) [ -n "$pr" ] || pr="${words[$i]}" ;;
+      *) [ -n "$pr" ] || pr="$word" ;;
     esac
     i=$((i + 1))
   done
@@ -177,8 +202,8 @@ segment_merges_protected() {
   [[ "$base" =~ $RE_PROT_BRANCH ]] || return 1
   case "$head>$base" in
     "develop>staging"|"staging>main")
-      [ "$merge" = 0 ] || return 1
-      MERGE_WHY="merging the promotion $head → $base without --merge. A squash or rebase gives $base commits $head never had, so the branches drift apart and the next promotion conflicts."
+      [ "$merge" = 1 ] && [ "$squash" = 0 ] && [ "$rebase" = 0 ] && return 1
+      MERGE_WHY="merging the promotion $head → $base without --merge as its one strategy. A squash or rebase gives $base commits $head never had, so the branches drift apart and the next promotion conflicts."
       return 0
       ;;
   esac
