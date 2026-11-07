@@ -1,7 +1,9 @@
 // From the python-service template: change the template, not this copy.
 // The basedpyright settings every service shares, read as JSON with comments. The project's
-// pyproject.toml extends this file and sets its own include.
+// pyproject.toml extends this file. basedpyright matches the exclude from this file's folder, so a
+// config that extends a copy in another folder excludes nothing.
 {
+  "exclude": ["**/*.ipynb"],
   "typeCheckingMode": "standard",
   "pythonPlatform": "Linux",
   "reportPrivateUsage": "error",

@@ -3,6 +3,7 @@
 # its own through extend-select, ignore and extend-per-file-ignores; a select there would replace
 # the whole rule list below.
 line-length = 100
+extend-exclude = ["*.ipynb"]
 
 [lint]
 # Preview rules run only when named in `select`; PLC2701 is the one named.
