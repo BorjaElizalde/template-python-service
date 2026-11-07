@@ -26,7 +26,7 @@ template uses no unsafe Copier feature, so an update runs without `--trust`.
 
 | Question | Used for |
 |---|---|
-| `package_name` | The application's package directory: where the practice checks look, which paths the rules load for, what `make gate` lints and type-checks |
+| `package_name` | The application's package directory: the project name in `pyproject.toml`, and the app paths that the docstring check and the rules name (the API and MCP surface, `config.py`) |
 
 The practice checks read it from `.claude/hooks/practices/stack.json`, the only rendered file they
 load, so they stay plain jq that the template's tests run directly.
@@ -38,7 +38,7 @@ load, so they stay plain jq that the template's tests run directly.
 | `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
 | `.claude/hooks/stack/format.sh` | `ruff format` on every edited Python file |
 | `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
-| `make gate` | `python.mk`: ruff, basedpyright, bandit and pytest over the package and `tests/` |
+| `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, and pytest over `tests/` |
 | `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
 
 ## Shared tool settings
@@ -60,8 +60,8 @@ not in its copy. A project adds to the shared settings in its `pyproject.toml`:
 - ruff (`[tool.ruff] extend = "ruff.base.toml"`): `extend-select` for more rules, `ignore` and
   `extend-per-file-ignores` for its own exceptions, each with the reason `skipped-checks.md`
   asks for. Never `select`: ruff takes a `select` as the whole rule list and drops the base's.
-- basedpyright (`[tool.basedpyright] extends = "basedpyright.base.json"`): its `include`, and any
-  setting it overrides. Both apply to the local gate only: CI's basedpyright reads only CI's copy.
+- basedpyright (`[tool.basedpyright] extends = "basedpyright.base.json"`): any setting it
+  overrides, which applies to the local gate only: CI's basedpyright never reads `pyproject.toml`.
 - pytest and coverage have no way to extend a shared file, so their settings stay the project's.
 
 CI runs `.github/actions/stack-gate/gate.sh`, which the agentic `Gate` workflow calls on every PR.
@@ -70,7 +70,8 @@ It never runs `make gate`, so a change that relaxes the local gate can't relax C
 - It fails when the project's `ruff.base.toml` or `basedpyright.base.json` differs from CI's copy,
   or when `pyproject.toml` stops extending ruff's.
 - ruff reads `pyproject.toml`, so the project's own additions apply in CI as they do locally.
-- basedpyright reads only CI's copy, over the package and `tests/`.
+- basedpyright extends only the project's `basedpyright.base.json`, which must match CI's copy,
+  and never reads `pyproject.toml`.
 
 In this template, CI's copies are symlinks to the base files, so the two can't differ here; Copier
 writes them into the project as plain files.
