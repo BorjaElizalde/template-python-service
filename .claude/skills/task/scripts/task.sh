@@ -3,7 +3,7 @@
 # The task lifecycle behind /task:start and /task:finish: one issue, one worktree, one session.
 set -euo pipefail
 
-usage="usage: task.sh start <issue> [type] | finish <issue> | point-memory"
+usage="usage: task.sh start <issue> [type] | finish <issue> | sweep | point-memory"
 
 CALLER=$(pwd -P)
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -69,21 +69,26 @@ point_memory() {
 	mv "$settings.tmp" "$settings"
 }
 
-# open_session <worktree> <name> [--continue]
+# open_session <worktree> <name> <issue> [--continue]
 open_session() {
-	# exec: claude replaces the window's shell, so Terminal can close the window when claude exits.
-	osascript - "$1" "$2" "${3:-}" \
-		"$MAIN/.claude/skills/task/session/settings.json" "$MAIN/.claude/skills/task/session/prompt.md" >/dev/null <<'APPLESCRIPT'
-on run {worktree, sessionName, resumeFlag, settingsFile, promptFile}
+	# A session opened without a first prompt waits at an empty input, so this one sends it to its
+	# issue. One prompt serves a new session and a resumed one.
+	local first="Work on issue #$3 in $ISSUES_REPO. Read it with its comments: gh issue view $3 -R $ISSUES_REPO --comments. Carry it out until it is done as the issue says; if this session already worked on it, go on from where it stopped."
+	# exec leaves claude the tab's only process, so the tab is empty once claude exits. The first
+	# prompt comes after -n: --disallowed-tools takes every value up to the next option.
+	osascript - "$1" "$2" "${4:-}" \
+		"$MAIN/.claude/skills/task/session/settings.json" "$MAIN/.claude/skills/task/session/prompt.md" "$first" >/dev/null <<'APPLESCRIPT'
+on run {worktree, sessionName, resumeFlag, settingsFile, promptFile, firstPrompt}
 	tell application "Terminal"
-		do script "cd " & quoted form of worktree & " && exec claude " & resumeFlag & " --settings " & quoted form of settingsFile & " --append-system-prompt-file " & quoted form of promptFile & " --disallowed-tools AskUserQuestion -n " & quoted form of sessionName
+		do script "cd " & quoted form of worktree & " && exec claude " & resumeFlag & " --settings " & quoted form of settingsFile & " --append-system-prompt-file " & quoted form of promptFile & " --disallowed-tools AskUserQuestion -n " & quoted form of sessionName & " " & quoted form of firstPrompt
 		activate
 	end tell
 end run
 APPLESCRIPT
 }
 
-# session_tab <tty> exit|focus: ends the session in that Terminal tab, or brings the tab to the front.
+# session_tab <tty> exit|focus: ends the session in that Terminal tab and closes its window, or brings
+# the tab to the front.
 session_tab() {
 	osascript - "$1" "$2" >/dev/null <<'APPLESCRIPT'
 on run {sessionTty, action}
@@ -100,6 +105,18 @@ on run {sessionTty, action}
 					if action is "exit" then
 						-- do script ends the text with the carriage return that Enter sends.
 						do script "/exit" in t
+						-- By id: w is the window's place in the front-to-back order, which can change.
+						set sessionWindow to contents of w
+						-- A profile that closes the window when its shell exits can close it between
+						-- any two of these lines.
+						repeat 30 times
+							try
+								if (count (processes of t)) is 0 then close sessionWindow
+							end try
+							if not (exists sessionWindow) then return
+							delay 1
+						end repeat
+						error "the tab on " & sessionTty & " still runs a process after 30 seconds"
 					else
 						set selected of t to true
 						set index of w to 1
@@ -113,16 +130,6 @@ on run {sessionTty, action}
 	error "no Terminal tab on " & sessionTty
 end run
 APPLESCRIPT
-}
-
-# Whether the session in worktree $1 exits within 30 seconds.
-session_exits() {
-	local _
-	for _ in $(seq 30); do
-		session_tty "$1" >/dev/null || return 0
-		sleep 1
-	done
-	return 1
 }
 
 # Whether branch $1 holds commits that exist nowhere else. They are safe when there are none beyond
@@ -143,8 +150,7 @@ start_task() {
 	title=${view#* }
 	[ "${view%% *}" = OPEN ] || die "issue $issue is ${view%% *}: a task starts from an open issue"
 	short=$(short_title "$title")
-	# A worktree whose folder was deleted by hand still holds its branch until git forgets it.
-	git worktree prune
+	sweep
 	if worktree=$(issue_worktree "$issue"); then
 		echo "✓ worktree exists: $worktree"
 	else
@@ -175,10 +181,10 @@ start_task() {
 		echo "✓ session already running, brought to the front: $name"
 	elif has_session_transcript "$worktree"; then
 		# claude --continue refuses to start where no session exists yet.
-		open_session "$worktree" "$name" --continue
+		open_session "$worktree" "$name" "$issue" --continue
 		echo "✓ session resumed: $name"
 	else
-		open_session "$worktree" "$name"
+		open_session "$worktree" "$name" "$issue"
 		echo "✓ session opened: $name"
 	fi
 }
@@ -198,8 +204,7 @@ finish_task() {
 		die "branch $branch has commits on no remote branch and in no merged PR: push them first"
 	fi
 	if tty=$(session_tty "$worktree"); then
-		session_tab "$tty" exit
-		session_exits "$worktree" || die "the session in $worktree did not exit; close it, then finish again"
+		session_tab "$tty" exit || die "the session in $worktree did not exit; close it, then finish again"
 	fi
 	git worktree remove "$worktree" ||
 		die "$worktree has uncommitted or untracked files: commit them, or move what matters to the PR or the issue"
@@ -208,9 +213,26 @@ finish_task() {
 	echo "✓ issue $issue finished: session closed, worktree and branch $branch removed"
 }
 
+# Finishes every task worktree of this checkout whose issue is closed: a PR merged on GitHub closes
+# its issue, but nothing finishes its task. Open issues are skipped without a word.
+sweep() {
+	local issue view
+	# A worktree whose folder was deleted by hand still holds its branch until git forgets it.
+	git worktree prune
+	for issue in $(git worktree list --porcelain | sed -En 's|^branch refs/heads/[^/]+/([0-9]+)-.*|\1|p'); do
+		view=$(issue_view "$issue") || continue
+		[ "${view%% *}" = CLOSED ] || continue
+		# A refusal exits, so each finish runs as a task.sh of its own: a refusal is reported and the
+		# sweep goes on. From the caller's folder, $0 resolves and finish sees a sweep from inside
+		# the worktree it would remove.
+		(cd "$CALLER" && bash "$0" finish "$issue") || true
+	done
+}
+
 case ${1:-} in
 start) [ $# -ge 2 ] || die "$usage"; start_task "$2" "${3:-feat}" ;;
 finish) [ $# -ge 2 ] || die "$usage"; finish_task "$2" ;;
+sweep) sweep ;;
 point-memory) point_memory "$CHECKOUT" && echo "✓ auto memory points at $CHECKOUT/.claude/memory" ;;
 *) die "$usage" ;;
 esac
