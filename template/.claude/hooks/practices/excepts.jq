@@ -1,5 +1,5 @@
 # From the python-service template: change the template, not this copy.
-# STOP: a new except in the package that does not say why it earns its keep; REMIND on one that
+# STOP: a new except outside tests/ that does not say why it earns its keep; REMIND on one that
 # does (python-conventions.md, Error Handling). The reason is a comment on the except line or a
 # plain comment directly above or below it; whether it holds is the reader's call, not the hook's.
 # An except is new when its code, comment stripped, was not there before: moving, re-indenting or
@@ -17,7 +17,7 @@ def reasoned($new; $at):
 def check($ctx):
   ($ctx.removed | map(code) | line_set) as $old_code
   | [$ctx.added[] | select(.line | has("^\\s*except\\b")) | select($old_code[.line | code] | not)]
-  | select(($ctx.rel | in_package) and length > 0)
+  | select(($ctx.rel | outside_tests) and length > 0)
   | map(select(reasoned($ctx.new; .at) | not) | .line) as $bare
   | if ($bare | length) > 0 then
       {level: "stop", text: ("Stopped by the practices hook, except rule"

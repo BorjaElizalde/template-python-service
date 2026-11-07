@@ -22,11 +22,11 @@ extend = "ruff.base.toml"
 
 [tool.basedpyright]
 extends = "basedpyright.base.json"
-include = ["{{ package_name }}", "tests"]
 
 [tool.coverage.run]
 relative_files = true
-source = ["{{ package_name }}"]
+source = ["."]
+omit = ["tests/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
