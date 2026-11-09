@@ -25,4 +25,9 @@ trap 'rm -f .basedpyright-ci.json' EXIT
 printf '{"extends": "basedpyright.base.json"}\n' >.basedpyright-ci.json
 uv run basedpyright --project .basedpyright-ci.json
 uv run bandit -r . -x ./.venv -ll -ii
-uv run pytest tests --cov
+# As in python.mk: no tests/ skips pytest, an empty tests/ fails it.
+if [ -d tests ]; then
+  uv run pytest tests --cov
+else
+  echo "::notice::pytest skipped: no tests/ folder"
+fi
