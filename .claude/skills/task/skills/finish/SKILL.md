@@ -1,12 +1,17 @@
 ---
 name: finish
-description: Use when a task is done — closes its issue once the result is delivered, closes its session, and removes its worktree and branch.
+description: Use when a task is done — closes its issue once the result is delivered, closes its session, and removes its worktree and branch. With no task named, finishes every task whose issue is closed.
 allowed-tools: Bash(gh issue view:*), Bash(gh issue close:*), Bash(gh pr list:*), Bash(bash:*)
 ---
 
 Run this from the main checkout's session, never from the task's own session: it closes that
 session and deletes its folder. A task that spans repositories is finished once in each; the issue
 closes with the first.
+
+Given no issue number, run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" sweep` in place of the
+steps below. It runs step 3 for every task of this checkout whose issue is closed, such as one
+whose PR merged on GitHub, reports each refusal and goes on, and skips open issues. Return what it
+finished and each refusal.
 
 1. Read the issue with `gh issue view <n> -R BorjaElizalde/template-python-service --json state,title,comments` and its
    PRs with `gh pr list --state all --search "BorjaElizalde/template-python-service#<n>"`.
