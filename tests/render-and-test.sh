@@ -64,7 +64,14 @@ expect "the Makefile includes python.mk" grep -qx 'include python.mk' "$D/Makefi
 expect "every script parses" bash -c "for f in \$(find '$D' -name '*.sh'); do bash -n \"\$f\" || exit 1; done"
 expect "agentic practices protocol suite" bash "$D/.claude/hooks/practices/guard.test.sh"
 expect "python practices suite" bash "$D/.claude/hooks/practices/python.test.sh"
-expect "rules load for every Python file" grep -qxF '  - "**/*.py"' "$D/.claude/rules/python-conventions.md"
+rule_paths() {  # rule_paths <rule> <path...>: the rendered rule loads for exactly these paths
+  local got
+  got="$(sed -n '2,/^---$/s/^  - "\(.*\)"$/\1/p' "$D/.claude/rules/$1")"
+  [ "$got" = "$(printf '%s\n' "${@:2}")" ] || { echo "FAIL $1 loads for: ${got//$'\n'/, }"; return 1; }
+}
+expect "the Python rules load for every Python file" rule_paths python-conventions.md '**/*.py'
+expect "the service rules load only for a service's parts" rule_paths service-conventions.md \
+  'app/api/**' 'app/batch/**' 'app/database.py' 'app/models/**' 'app/queries/**' 'app/services.py' 'database/**'
 expect "the reviewers and their roster are rendered" bash -c "for a in plan code security test docstring; do [ -f '$D/.claude/agents/'\$a-reviewer.md ] || exit 1; done && [ -f '$D/.claude/agents/lint-problem-resolver.md' ] && [ -f '$D/.claude/review-wave.md' ]"
 expect "the roster names only agents that exist" bash -c "for a in \$(grep -o -E '\\\\b[a-z]+-(reviewer|problem-resolver)\\\\b' '$D/.claude/review-wave.md' | sort -u); do [ -f '$D/.claude/agents/'\$a.md ] || { echo \"FAIL missing \$a\"; exit 1; }; done"
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
