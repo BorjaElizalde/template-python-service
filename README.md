@@ -38,7 +38,7 @@ load, so they stay plain jq that the template's tests run directly.
 | `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
 | `.claude/hooks/stack/format.sh` | `ruff format` on every edited Python file |
 | `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
-| `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, and pytest over `tests/` |
+| `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, and pytest over `tests/`, which it skips when there is no `tests/` |
 | `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
 
 ## Shared tool settings
@@ -63,6 +63,10 @@ not in its copy. A project adds to the shared settings in its `pyproject.toml`:
 - basedpyright (`[tool.basedpyright] extends = "basedpyright.base.json"`): any setting it
   overrides, which applies to the local gate only: CI's basedpyright never reads `pyproject.toml`.
 - pytest and coverage have no way to extend a shared file, so their settings stay the project's.
+
+A project with no `tests/` folder, by design, passes both gates with the seeded `pyproject.toml`
+unchanged: they skip pytest. An empty `tests/` fails both, because pytest finds no test in it: a
+folder with no tests is a mistake, not a choice.
 
 CI runs `.github/actions/stack-gate/gate.sh`, which the agentic `Gate` workflow calls on every PR.
 It never runs `make gate`, so a change that relaxes the local gate can't relax CI:
