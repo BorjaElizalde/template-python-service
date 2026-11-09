@@ -150,6 +150,18 @@ expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
 expect "basedpyright.base.json's exclude is what keeps the notebook out of typecheck" \
   relaxed basedpyright.base.json '"exclude": ["**/*.ipynb"],' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
 
+# A project may have no tests/: both gates skip pytest, with the seeded pyproject.toml unchanged.
+# An empty tests/ fails both; the passing runs before it show that pytest is what fails them.
+mv "$D/tests" "$OUT/tests"
+expect "a project with no tests/ passes make gate, which says it skipped pytest" \
+  bash -o pipefail -c "make -s -C '$D' gate | grep 'pytest skipped'"
+expect "CI's checks pass a project with no tests/" bash -c "cd '$D' && bash .github/actions/stack-gate/gate.sh"
+mkdir "$D/tests"
+expect "make gate fails a project with an empty tests/" bash -c "! make -s -C '$D' gate"
+expect "CI's checks fail a project with an empty tests/" bash -c "cd '$D' && ! bash .github/actions/stack-gate/gate.sh"
+rm -r "$D/tests"
+mv "$OUT/tests" "$D/tests"
+
 # The shared pre-commit hooks run the project's own tools, so they read the same base settings.
 git -C "$D" add -A
 expect "pre-commit passes on a new project" bash -c "cd '$D' && uv run pre-commit run --all-files"
