@@ -19,8 +19,10 @@ uvx copier update -a .copier-answers.python-service.yaml
 ```
 
 Every merge to `main` is a release: `Build` re-runs `make gate` on the merged result, then tags the
-next `YYYYMMDD.N` version. Projects take both layers' releases as one Renovate update PR. The
-template uses no unsafe Copier feature, so an update runs without `--trust`.
+next `YYYYMMDD.N` version. Projects take each layer's release as its own Renovate update PR, at
+any time: the shared Renovate preset in `template-agentic` keeps template updates outside its
+monthly schedule and every group. The template uses no unsafe Copier feature, so an update runs
+without `--trust`.
 
 ## Questions
 
@@ -102,7 +104,9 @@ The repository applies `template-agentic` to itself, as a project does, with its
 issues repository: `.claude/` holds the whole harness, and `.copier-answers.agentic.yaml` records
 the version and the answers, `Build` as the deploy workflow among them. Renovate's Copier manager
 brings each new `template-agentic` release as an update PR; an update that adds a question takes
-its default, so check the new answer in the PR. Once per clone, run
+its default, so check the new answer in the PR. The repository's `renovate.json` extends the
+shared preset and keeps the github-actions manager off `.github/workflows/gate.yaml`, which comes
+from `template-agentic`. Once per clone, run
 `bash .claude/skills/task/scripts/task.sh point-memory`.
 
 `make gate` renders the `template-agentic` version the answers file records, renders this template
