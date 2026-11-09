@@ -18,8 +18,13 @@ typecheck:
 security:
 	uv run bandit -r . -x ./.venv -ll -ii
 
+# No tests/ skips pytest. An empty tests/ still fails it, with exit 5: a mistake, not a choice.
 test:
+ifeq ($(wildcard tests),)
+	@echo "pytest skipped: no tests/ folder"
+else
 	uv run pytest tests/ -v --cov
+endif
 
 gate: lint-check typecheck security test
 	@echo "All gate checks passed!"
