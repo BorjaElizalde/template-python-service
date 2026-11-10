@@ -43,6 +43,14 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/skills/task/scripts/task.sh\" attention" }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
