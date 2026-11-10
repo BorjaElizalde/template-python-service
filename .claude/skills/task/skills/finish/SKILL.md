@@ -1,6 +1,6 @@
 ---
 name: finish
-description: Use when a task is done — closes its issue once the result is delivered, closes its session, and removes its worktree and branch. With no task named, finishes every task whose issue is closed.
+description: Use when a task is done — closes its issue once the result is delivered, closes its session, and removes its worktree and branches. With no task named, finishes every task whose issue is closed.
 allowed-tools: Bash(gh issue view:*), Bash(gh issue close:*), Bash(gh pr list:*), Bash(bash:*)
 ---
 
@@ -19,8 +19,9 @@ finished and each refusal.
    research task, a result comment on the issue. Close it with
    `gh issue close <n> -R BorjaElizalde/template-python-service --comment "<where the result is>"`. When the result is
    not delivered, stop and say what is missing.
-3. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" finish <n>`. It refuses while the branch
-   has commits on no remote branch and in no merged PR, or while the worktree has uncommitted or
-   untracked files. Report the refusal and stop: never force a removal, and leave moving the work
-   to the task's own session.
+3. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" finish <n>`. It removes the worktree and
+   every local branch of the issue, `*/<n>-*`, and leaves remote branches to GitHub. It refuses
+   while one of those branches has commits on no remote branch and in no merged PR, or while the
+   worktree has uncommitted or untracked files. Report the refusal and stop: never force a
+   removal, and leave moving the work to the task's own session.
 4. Return what was closed and removed.
