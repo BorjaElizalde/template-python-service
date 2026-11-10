@@ -19,8 +19,10 @@ uvx copier update -a .copier-answers.python-service.yaml
 ```
 
 Every merge to `main` is a release: `Build` re-runs `make gate` on the merged result, then tags the
-next `YYYYMMDD.N` version. Projects take both layers' releases as one Renovate update PR. The
-template uses no unsafe Copier feature, so an update runs without `--trust`.
+next `YYYYMMDD.N` version. Projects take each layer's release as its own Renovate update PR, at
+any time: the shared Renovate preset in `template-agentic` keeps template updates outside its
+monthly schedule and every group. The template uses no unsafe Copier feature, so an update runs
+without `--trust`.
 
 ## Questions
 
@@ -36,7 +38,7 @@ load, so they stay plain jq that the template's tests run directly.
 | Plug-in point of `template-agentic` | Here |
 |---|---|
 | `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
-| `.claude/hooks/stack/format.sh` | `ruff format` on every edited Python file |
+| `.claude/hooks/stack/format.sh` | `ruff format` on every edited `.py` and `.pyi` file, the files the gate formats |
 | `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
 | `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, and pytest over `tests/`, which it skips when there is no `tests/` |
 | `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
@@ -102,16 +104,19 @@ The repository applies `template-agentic` to itself, as a project does, with its
 issues repository: `.claude/` holds the whole harness, and `.copier-answers.agentic.yaml` records
 the version and the answers, `Build` as the deploy workflow among them. Renovate's Copier manager
 brings each new `template-agentic` release as an update PR; an update that adds a question takes
-its default, so check the new answer in the PR. Once per clone, run
+its default, so check the new answer in the PR. The repository's `renovate.json` extends the
+shared preset and keeps the github-actions manager off `.github/workflows/gate.yaml`, which comes
+from `template-agentic`. Once per clone, run
 `bash .claude/skills/task/scripts/task.sh point-memory`.
 
 `make gate` renders the `template-agentic` version the answers file records, renders this template
-on top, and runs the rendered suites: the agentic practices protocol and the Python practices.
-`AGENTIC_SRC` and `AGENTIC_REF` override that source and version, to test an unreleased agentic
-change from a local clone and its branch. It also checks that a fresh render of the repository's
-own answers reproduces every file `template-agentic` owns here. The `Gate` workflow comes from
-`template-agentic`, as in every project: on every PR into `develop`, `staging` or `main` it checks
-where the PR comes from (`main` takes `staging`, and `staging` takes `develop` or a `bugfix/*` PR
-of one commit, from this repository's own branches), then runs this repository's own
-`.github/actions/stack-gate`, which runs `make gate`: a template repository's CI may. `Build` runs
-the gate again on `main` before it tags.
+on top, and runs the rendered suites: the agentic practices protocol, the Python practices and the
+format hook. It runs shellcheck on this template's scripts and on `tests/`; `template-agentic`
+checks its own. `AGENTIC_SRC` and `AGENTIC_REF` override that source and version, to test an
+unreleased agentic change from a local clone and its branch. It also checks that a fresh render of
+the repository's own answers reproduces every file `template-agentic` owns here. The `Gate`
+workflow comes from `template-agentic`, as in every project: on every PR into `develop`, `staging`
+or `main` it checks where the PR comes from (`main` takes `staging`, and `staging` takes `develop`
+or a `bugfix/*` PR of one commit, from this repository's own branches), then runs this
+repository's own `.github/actions/stack-gate`, which runs `make gate`: a template repository's CI
+may. `Build` runs the gate again on `main` before it tags.

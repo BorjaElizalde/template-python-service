@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Renders template-agentic, then this template on top, the way a project gets them, and runs the
 # rendered harness's suites. Needs uv, git and jq.
+# SC2329: each check below is a function passed to expect as its command, so expect prints the
+# check's result and counts its failure. Tried calling each check directly, but then nothing
+# reports or counts it. Tried a directive on each function, but that repeats this reason for
+# every check. Tried ending without exit, which shellcheck accepts, but only because it then
+# takes this script for one another script sources.
+# shellcheck disable=SC2329
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # This repository applies template-agentic to itself, and every render here uses the source and
@@ -62,8 +68,12 @@ expect "no Jinja left in rendered files" bash -c "! grep -rIl -E '(^|[^\$])\\{\\
 expect "stack.json names the package" bash -c "[ \"\$(jq -r .package '$D/.claude/hooks/practices/stack.json')\" = app ]"
 expect "the Makefile includes python.mk" grep -qx 'include python.mk' "$D/Makefile"
 expect "every script parses" bash -c "for f in \$(find '$D' -name '*.sh'); do bash -n \"\$f\" || exit 1; done"
+# template-agentic shellchecks its own scripts.
+expect "shellcheck passes this template's scripts and the tests'" bash -c "cd '$ROOT' &&
+  find template tests -name '*.sh' -exec uvx --quiet --from shellcheck-py shellcheck -f gcc {} +"
 expect "agentic practices protocol suite" bash "$D/.claude/hooks/practices/guard.test.sh"
 expect "python practices suite" bash "$D/.claude/hooks/practices/python.test.sh"
+expect "format hook suite" bash "$D/.claude/hooks/stack/format.test.sh"
 rule_paths() {  # rule_paths <rule> <path...>: the rendered rule loads for exactly these paths
   local got
   got="$(sed -n '2,/^---$/s/^  - "\(.*\)"$/\1/p' "$D/.claude/rules/$1")"
