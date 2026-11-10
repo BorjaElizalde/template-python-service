@@ -20,6 +20,8 @@ git -C "$PROJECT" -c user.name=t -c user.email=t@t commit -qm project
 git -C "$PROJECT" worktree add -q --detach "$TREE"
 git -C "$OTHER" init -q
 pass=0; fail=0
+NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
+  "source": ["x=1"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}'
 
 check() {  # check <want> <desc> <path> [content]: <content>, unformatted Python by default
   local content="${4:-x=1}" code got=U
@@ -31,12 +33,14 @@ check() {  # check <want> <desc> <path> [content]: <content>, unformatted Python
   else fail=$((fail+1)); echo "FAIL (want $1, got $got) $2"; fi
 }
 
-echo "-- a Python file of the project (formats it)"
+echo "-- a Python file or stub of the project (formats it)"
 check F "in the project's checkout"        "$PROJECT/case.py"
 check F "in a linked worktree"             "$TREE/case.py"
+check F "a stub"                           "$PROJECT/case.pyi"
 
 echo "-- any other file (leaves it as written)"
 check U "a file that is not Python"        "$PROJECT/case.txt"
+check U "a notebook, which the gate skips" "$PROJECT/case.ipynb" "$NOTEBOOK"
 check U "a Python file in another repo"    "$OTHER/case.py"
 check U "a Python file outside any repo"   "$NOGIT/case.py"
 check U "a Python file ruff cannot parse"  "$PROJECT/broken.py" 'x=('

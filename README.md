@@ -38,7 +38,7 @@ load, so they stay plain jq that the template's tests run directly.
 | Plug-in point of `template-agentic` | Here |
 |---|---|
 | `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
-| `.claude/hooks/stack/format.sh` | `ruff format` on every edited Python file |
+| `.claude/hooks/stack/format.sh` | `ruff format` on every edited `.py` and `.pyi` file, the files the gate formats |
 | `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
 | `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, and pytest over `tests/`, which it skips when there is no `tests/` |
 | `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
