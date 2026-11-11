@@ -14,6 +14,9 @@ CHECKOUT=$(pwd -P)
 MAIN=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
 REPO_NAME=$(basename "$MAIN")
 cd "$MAIN"
+# The render's answers: KEY=VALUE lines, with no code in them to check. Tried pointing shellcheck
+# at the file with source= and -x, but it would then check data, not code.
+# shellcheck disable=SC1091
 . .claude/agentic.conf
 
 die() {
@@ -226,9 +229,12 @@ finish_task() {
 	fi
 	git worktree remove "$worktree" ||
 		die "$worktree has uncommitted or untracked files: commit them, or move what matters to the PR or the issue"
+	# The list splits unquoted, as its comment says. Tried an array, but bash 3.2, the macOS bash
+	# that runs this, has no mapfile to fill one, and read -a needs IFS and -d set for a list.
+	# shellcheck disable=SC2086
 	git branch -D -q $branches
 	rmdir "$(dirname "$worktree")" 2>/dev/null || true
-	echo "✓ issue $issue finished: session closed, worktree removed, branches removed:" $branches
+	echo "✓ issue $issue finished: session closed, worktree removed, branches removed: ${branches//$'\n'/ }"
 }
 
 # The issue of each task worktree of this checkout.
@@ -270,8 +276,13 @@ pr_line() {
 
 # The seconds since a session in folder $1 last wrote its transcript; nothing when none did.
 transcript_age() {
-	local newest
-	newest=$(ls -t "$(transcript_dir "$1")"/*.jsonl 2>/dev/null | head -n 1) || return 0
+	local transcript newest=
+	# Any file is newer than no file. In a folder with no transcript, the pattern stays as it is and
+	# names no file.
+	for transcript in "$(transcript_dir "$1")"/*.jsonl; do
+		if [ "$transcript" -nt "$newest" ]; then newest=$transcript; fi
+	done
+	[ -n "$newest" ] || return 0
 	echo $(($(date +%s) - $(date -r "$newest" +%s)))
 }
 

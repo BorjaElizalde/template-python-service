@@ -125,6 +125,9 @@ t 2 "escaped quote inside double"      'git commit -m "say \"x" && git push orig
 
 echo "-- other reliable blocks"
 t 2 "rm -rf root"                      'rm -rf /'
+t 2 "rm -rf home"                      'rm -rf ~'
+t 2 "rm -rf \$HOME"                    "rm -rf \$HOME"
+t 0 "rm -rf a folder under \$HOME"     "rm -rf \$HOME/build"
 t 2 "reset hard origin main"           'git reset --hard origin/main'
 t 2 "switch existing branch"           'git switch develop'
 
