@@ -32,6 +32,8 @@ select = [
     "PGH004",  # blanket noqa
     "RUF006",  # dangling asyncio task
     "ANN",  # flake8-annotations
+    "ARG",  # flake8-unused-arguments
+    "SIM",  # flake8-simplify
 ]
 # ANN401: Any is the honest type where a signature takes or returns whatever a file, a request or
 # a library hands over: JSON and YAML loaders, pydantic before-validators, framework internals that
