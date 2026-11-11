@@ -44,6 +44,13 @@ select = [
 # Tried per-file-ignores for the files that hold an honest Any, but every new loader or validator
 # would need its own entry.
 ignore = ["ANN401"]
+# ERA001: jscpd's markers, `# jscpd:ignore-start` and `# jscpd:ignore-end`, parse as Python, so
+# eradicate reads them as commented-out code; it never reads a comment that starts with a task tag
+# as code. The other task tags are ruff's defaults.
+# Tried words after each marker, which stop it parsing, but a bare marker is the form jscpd
+# documents, and words added only to get past ERA001 say nothing.
+# Tried `# noqa: ERA001` on each marker, but then every allowed copy carries two skipped checks.
+task-tags = ["TODO", "FIXME", "XXX", "jscpd"]
 
 [lint.per-file-ignores]
 # ANN: in tests the rule asks mostly for `-> None` on test functions and for types on fixture

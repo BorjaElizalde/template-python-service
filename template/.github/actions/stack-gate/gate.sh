@@ -9,7 +9,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 fail() { echo "::error file=$1::$2"; exit 1; }
 
-for f in ruff.base.toml basedpyright.base.json; do
+for f in ruff.base.toml basedpyright.base.json .jscpd.json; do
   cmp -s "$f" "$HERE/$f" ||
     fail "$f" "$f differs from CI's copy in .github/actions/stack-gate: change the template, not this copy."
 done
@@ -25,6 +25,15 @@ trap 'rm -f .basedpyright-ci.json' EXIT
 printf '{"extends": "basedpyright.base.json"}\n' >.basedpyright-ci.json
 uv run basedpyright --project .basedpyright-ci.json
 uv run bandit -r . -x ./.venv -ll -ii
+# jscpd reads .jscpd.json, which the check above holds to CI's copy. As in python.mk, a failure
+# prints the fix order that python-conventions.md gives.
+uv run jscpd . || {
+  echo "::error::For each copy jscpd lists: delete the copy that should not exist first; else" \
+    "call the code's existing owner; extract a shared function only last. A copy that must stay" \
+    "goes between # jscpd:ignore-start and # jscpd:ignore-end, with its reason" \
+    "(.claude/rules/skipped-checks.md). No jscpd? uv add --dev jscpd"
+  exit 1
+}
 # As in python.mk: no tests/ skips pytest, an empty tests/ fails it.
 if [ -d tests ]; then
   uv run pytest tests --cov
