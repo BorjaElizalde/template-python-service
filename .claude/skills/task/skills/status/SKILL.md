@@ -1,0 +1,48 @@
+---
+name: status
+description: Use when the owner asks for the status of the tasks, in words or with /task:status, and in the first reply after a session start in the main checkout. Runs the cleanup and the status, acts on each task that needs it, and answers with one card per task, then the backlog's ready, blocked and parked issues.
+allowed-tools: Bash(bash:*), Bash(gh issue view:*)
+---
+
+1. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" cleanup`, then
+   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" status`. The status lists every open issue once.
+   Under In progress, it prints one line per task: `design mode` for a design task, its session,
+   its newest PR with that PR's checks, and when the session last wrote. Then come Ready, Blocked,
+   with the open issues each waits on, and Parked, with each reason; a parked line also names an
+   open blocker.
+2. Read each task's issue with `gh issue view <n> -R BorjaElizalde/template-python-service --comments`, for its goal
+   and any `Owner steps` comment, and the last message of each session that is idle or waiting.
+3. A line that ends in `needs attention` asks for a move. Make it by the first case that fits, and
+   give the task's card its mark:
+   - a design task, waiting, or idle with a question in its last message: the question is the
+     owner's, who answers it in its Terminal tab, which `/task:start <n>` brings to the front.
+     Never answer it for the owner, and never send the session back to work past it. ✋
+   - idle, PR open and checks passed: review the PR; the owner merges it. 👀
+   - checks failed: send the session back to work with SendMessage, saying what failed. ⏳
+   - idle, no PR: its last message holds a result to close the issue on, a blocker, or a
+     question. Pick what to do. 💬
+   - waiting: the owner answers it in its Terminal tab, which `/task:start <n>` brings to the
+     front. ✋
+   - no session: resume it with `/task:start <n>`. ⏳
+
+   `Owner steps` the owner has not taken yet make the mark ✋. Every other task is running: ⏳.
+4. Reply in plain words: short sentences, the answer first, and no hashes, file paths or commands
+   unless the owner needs one to act.
+   - Open with one line: how many cards need the owner.
+   - Then the legend: 👀 PR to review · ✋ your own step · 💬 decision needed · ⏳ running.
+   - Then one card per task, first those that need the owner, then the running ones:
+
+     ```
+     ### 👀 #n The task in plain words
+     - **Goal:** one sentence.
+     - **Now:** where it stands: the session, the PR and its checks.
+     - **You:** what to do, with your pick and the PR or issue link.
+     ```
+
+     **You** also carries the `Owner steps` and what the session's last message asks for.
+   - Then three lists, one line per issue, its number and what it is in plain words: **Ready**,
+     **Blocked**, with the issues it waits on, and **Parked**, with the reason. The cards are for
+     the tasks in progress only. Leave out a list with no issue, and give a list of more than ten
+     issues its first ten, then how many more there are.
+   - End with **Cleaned up**: each task a cleanup finished or refused to finish since your last
+     status reply, and why. A task whose issue is closed gets no card: it shows only here.

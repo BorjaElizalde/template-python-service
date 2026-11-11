@@ -19,6 +19,9 @@
 # Fails OPEN (exit 0) on an empty/unparseable command, EXCEPT the rm-rf / reset-hard /
 # force-push checks, which run before the empty-command short-circuit. A PR merge whose base
 # cannot be looked up is blocked.
+# Every function here runs: any_segment calls each segment_* check by the name it is given, and the
+# checks call the rest. Tried one directive on each segment_* check, but their helpers stay flagged.
+# shellcheck disable=SC2329
 set -u
 
 COMMAND="$(jq -r '.tool_input.command // empty' 2>/dev/null || true)"
@@ -41,7 +44,7 @@ RE_PROT_TOKEN='(^|[[:space:]:=])(develop|staging|main)([[:space:]:]|$)'
 RE_PROT_BRANCH='^(develop|staging|main)$'
 RE_FORCE='(-f([[:space:]]|$)|--force([^a-zA-Z0-9_=-]|$))'
 RE_LEASE='--force-with-lease'
-RE_RMRF='(^|[[:space:]&;|])rm[[:space:]]+(-[a-zA-Z]*[rR][a-zA-Z]*[fF]|-[a-zA-Z]*[fF][a-zA-Z]*[rR])([[:space:]]+--)?[[:space:]]+(/|~|\$HOME)([[:space:]]*$|/[[:space:]]*$|/?[[:space:]])'
+RE_RMRF='(^|[[:space:]&;|])rm[[:space:]]+(-[a-zA-Z]*[rR][a-zA-Z]*[fF]|-[a-zA-Z]*[fF][a-zA-Z]*[rR])([[:space:]]+--)?[[:space:]]+(/|~|[$]HOME)([[:space:]]*$|/[[:space:]]*$|/?[[:space:]])'
 RE_RESET='git[[:space:]]+reset[[:space:]]+--hard[[:space:]]+(origin|upstream)/(main|staging|develop)'
 RE_DIR_C='git[[:space:]]+-C[[:space:]]+([^[:space:]]+)'
 RE_DIR_CD='(^|[;&|])[[:space:]]*cd[[:space:]]+([^[:space:];&|]+)'
@@ -63,6 +66,9 @@ RE_GH_URL='github\.com[:/]+([^/]+/[^/]+)$'
 # The verdict is green when every check on the head has passed (succeeded, or was neutral or
 # skipped) and gate succeeded among them. A CheckRun counts only once COMPLETED; a StatusContext
 # reads its state.
+# $c and $repo are jq's variables. Tried double quotes, but then every " and $ of the program
+# needs a backslash.
+# shellcheck disable=SC2016
 JQ_PR='[.statusCheckRollup[]? | if .__typename == "StatusContext" then {n: .context, c: .state}
     else {n: .name, c: (if .status == "COMPLETED" then .conclusion else "PENDING" end)} end] as $c
   | (.url | capture("github\\.com/(?<r>[^/]+/[^/]+)/pull/").r | ascii_downcase) as $repo
@@ -231,13 +237,16 @@ segment_api_merges() {
 #     fails OPEN, so anything superlinear in command length silently disables the check.
 # Segments split only on UNQUOTED separators; `\` escapes the next character.
 NL=$'\n'
-BS='\'
+BS="\\"
 BRK_NONE="[\"'|;&${BS}${BS}${NL}]"
 BRK_DQ="[\"${BS}${BS}]"
 BRK_SQ="[']"
 any_segment() {
   local check="$1" rest="$COMMAND" state=none bare="" lit="" chunk ch nx
   while [ -n "$rest" ]; do
+    # Each BRK_* is a bracket pattern, unquoted so it matches any one of its characters. Tried
+    # quoting it, the rule's fix, but then it matches only its own text.
+    # shellcheck disable=SC2295
     case "$state" in
       none) chunk="${rest%%$BRK_NONE*}" ;;
       dq) chunk="${rest%%$BRK_DQ*}" ;;

@@ -14,6 +14,9 @@
 # git-ignored files (such as .env and node_modules) — only tracked source in the main
 # checkout is guarded. jq reads the path from the stdin payload.
 set -u
+# The render's answers: KEY=VALUE lines, with no code in them to check. Tried pointing shellcheck
+# at the file with source= and -x, but it would then check data, not code.
+# shellcheck disable=SC1091
 . "$(cd "$(dirname "$0")/.." && pwd)/agentic.conf"
 
 FILE_PATH="$(jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
