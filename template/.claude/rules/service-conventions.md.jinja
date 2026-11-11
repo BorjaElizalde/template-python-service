@@ -31,6 +31,9 @@ operations, the database access and the migrations. `python-conventions.md` appl
 ## Code Style
 - Strategic abstractions at infrastructure (DB, ORM, queries), direct business logic
 - Same code paths for batch and API work - no duplication
+- A dependency a route runs only for its effect, such as a permission check whose value the route
+  never reads, goes in the decorator's `dependencies=[Depends(...)]`, or the `APIRouter`'s for all
+  its routes: FastAPI's idiom. As a parameter, it fails ruff's ARG
 - Before adding a shared symbol, check its established owner: business operations in
   `{{ package_name }}/services.py`, technical helpers in `{{ package_name }}/utils/`, reusable database access in
   `{{ package_name }}/queries/`, API responses in `{{ package_name }}/api/v1/responses.py`, API-facing types in

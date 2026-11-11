@@ -113,7 +113,8 @@ expect "typecheck applies the base's added errors" fails_with app/cast.py "$CAST
 CI="$D/.github/actions/stack-gate"
 expect "the CI action is a valid action" uvx --quiet check-jsonschema --builtin-schema vendor.github-actions "$CI/action.yaml"
 expect "CI's copies of the shared settings match the project's" bash -c "
-  cmp -s '$D/ruff.base.toml' '$CI/ruff.base.toml' && cmp -s '$D/basedpyright.base.json' '$CI/basedpyright.base.json'"
+  cmp -s '$D/ruff.base.toml' '$CI/ruff.base.toml' && cmp -s '$D/basedpyright.base.json' '$CI/basedpyright.base.json' &&
+  cmp -s '$D/.jscpd.json' '$CI/.jscpd.json'"
 ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds the content
   printf '%b' "$2" >"$D/$1"
   (cd "$D" && bash .github/actions/stack-gate/gate.sh) >/dev/null 2>&1
@@ -166,6 +167,36 @@ expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
   relaxed ruff.base.toml 'extend-exclude = ["*.ipynb"]' '' fails_with explore.ipynb "$NOTEBOOK" lint-check
 expect "basedpyright.base.json's exclude is what keeps the notebook out of typecheck" \
   relaxed basedpyright.base.json '"exclude": ["**/*.ipynb"],' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
+
+# Both gates fail a block of 10 lines or more written twice, and only that: every other check
+# passes the same file once its copy sits between the ignore markers. The two returns differ, so
+# each copy ends inside its return line: jscpd at times counts the blank lines after a copy too.
+copy() {  # copy <name> <lines> <returned>: a block of <lines> lines, from the def to the return
+  local adds=(amount tax fee tip)
+  printf 'def %s(orders: list[dict[str, int]]) -> dict[int, int]:\n' "$1"
+  printf '    totals: dict[int, int] = {}\n    for order in orders:\n'
+  printf '        key = order["customer"]\n        totals.setdefault(key, 0)\n'
+  printf '        totals[key] += order["%s"]\n' "${adds[@]:0:$(($2 - 6))}"
+  printf '    return %s\n' "$3"
+}
+twice() {  # twice <lines>: the block written twice in one file
+  copy total_a "$1" totals; printf '\n\n'; copy total_b "$1" 'dict(totals)'
+}
+COPIES="$(twice 10)\n"
+MARKED="$(copy total_a 10 totals
+  printf '\n\n# jscpd:ignore-start the totals change apart. Tried calling total_a, but its fees differ.\n'
+  copy total_b 10 'dict(totals)'; printf '\n\n# jscpd:ignore-end')\n"
+expect "a 10-line block written twice fails make gate and CI" fails_both duplication app/copies.py "$COPIES"
+expect "the same file passes make gate and CI with its copy between the markers" passes_both app/copies.py "$MARKED"
+expect "a 9-line block written twice passes make gate and CI" passes_both app/copies.py "$(twice 9)\n"
+expect "a block written twice in tests/ passes make gate and CI" passes_both tests/copies.py "$COPIES"
+mkdir "$D/database"
+expect "a block written twice in database/ passes make gate and CI" passes_both database/copies.py "$COPIES"
+rmdir "$D/database"
+expect "a minLines raised in the project's .jscpd.json relaxes duplication, not CI" \
+  relaxed .jscpd.json '"minLines": 9' '"minLines": 99' local_only duplication app/copies.py "$COPIES"
+expect "ruff.base.toml's jscpd task tag is what keeps the markers out of ERA001" \
+  relaxed ruff.base.toml ', "jscpd"]' ']' fails_with app/copies.py "$MARKED" lint-check
 
 # A project may have no tests/: both gates skip pytest, with the seeded pyproject.toml unchanged.
 # An empty tests/ fails both; the passing runs before it show that pytest is what fails them.

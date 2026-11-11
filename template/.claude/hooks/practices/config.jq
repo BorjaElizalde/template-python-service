@@ -1,7 +1,8 @@
 # From the python-service template: change the template, not this copy.
-# STOP: an edit that switches a check off in the lint, type-check, test or pre-commit setup without
-# a reason in the form skipped-checks.md gives. An added line's reason sits in its comment or on the
-# comment lines above it; a removed line leaves no place, so the edit adds the reason as a comment.
+# STOP: an edit that switches a check off in the lint, type-check, duplication, test or pre-commit
+# setup without a reason in the form skipped-checks.md gives. An added line's reason sits in its
+# comment or on the comment lines above it; a removed line leaves no place, so the edit adds the
+# reason as a comment.
 # Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
 # and a Makefile tool line only if no added line runs the same tool. A select added to a ruff config
 # that extends another counts as switching checks off: ruff takes it as the whole rule list and
@@ -82,8 +83,8 @@ def makefile_findings($ctx):
      | {text: "added `\(.line | short)`", at}),
     ($ctx.removed[]
      | select(
-         (test("ruff|basedpyright|bandit|pytest") and (
-           capture("(?<tool>ruff|basedpyright|bandit|pytest)") as $m
+         (test("ruff|basedpyright|bandit|pytest|jscpd") and (
+           capture("(?<tool>ruff|basedpyright|bandit|pytest|jscpd)") as $m
            | [$added[] | select(contains($m.tool))] | length == 0))
          or (test("^gate:") and (
            ([$added[] | select(test("^gate:"))][0] // "") as $gate
@@ -98,11 +99,14 @@ def reasoned($ctx; $added_comments):
   else [($ctx.new[.at] | comment // ""), comment_above($ctx.new; .at)] | any(reason_form) end;
 
 def check($ctx):
-  if $ctx.rel | test("(^|/)(ruff\\.base\\.toml|basedpyright\\.base\\.json)$") then
+  if $ctx.rel | test("(^|/)(ruff\\.base\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json)$") then
     {level: "stop", text: ("Stopped by the practices hook: \($ctx.rel) holds the settings every"
       + " Python service shares and comes from the python-service template. Every update rewrites"
-      + " it, so an edit here is lost or conflicts. Change the template instead, or add this"
-      + " project's own settings in pyproject.toml, which extends this file.")}
+      + " it, so an edit here is lost or conflicts. Change the template instead"
+      + (if $ctx.rel | endswith(".jscpd.json") then
+           ". A copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,"
+           + " with its reason (.claude/rules/skipped-checks.md)."
+         else ", or add this project's own settings in pyproject.toml, which extends this file." end))}
   else
     ([$ctx.added[].line | comment | select(. != null)] | join("\n")) as $added_comments
     | [if ($ctx.rel | test("(^|/)(pyproject\\.toml|\\.?ruff\\.toml)$")) then toml_findings($ctx)

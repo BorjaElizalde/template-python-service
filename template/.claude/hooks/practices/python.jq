@@ -7,11 +7,11 @@ import "stack" as $stack;
 
 def package: $stack[0].package;
 def outside_tests: startswith("tests/") | not;
-def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff)\\b|^\\s*#!";
+def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff|jscpd)\\b|^\\s*#!";
 def plain_comment: has("^\\s*#\\s*[a-z0-9]") and (has(directive) | not);
 
 # The tools whose docs a stop for a skipped check or a loosened config sends the agent to first.
-def checkers: "ruff, basedpyright, bandit, pytest";
+def checkers: "ruff, basedpyright, bandit, pytest, jscpd";
 
 # The line's comment, from its `#` to the end, or null. Quoted text is blanked first so a `#`
 # inside a string is not read as one; a line holding a triple quote has no trailing comment read.

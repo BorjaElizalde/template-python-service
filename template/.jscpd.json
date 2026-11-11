@@ -1,0 +1,19 @@
+{
+  "//": [
+    "From the python-service template: change the template, not this copy.",
+    "The jscpd settings the gate and CI share: a block of Python written twice fails both.",
+    "jscpd keeps a copy when its last line minus its first is minLines or more, so 9 fails a",
+    "copy of 10 lines or more. It at times counts the blank lines after a copy too, which makes",
+    "the check stricter, never looser. Imports are left out: modules share them, and no fix",
+    "removes them.",
+    "Tests are left out, and so is database/, whose migrations keep their own copy of the code",
+    "they run (migrations.md)."
+  ],
+  "format": ["python"],
+  "minLines": 9,
+  "minTokens": 50,
+  "ignore": [".venv/**", "tests/**", "database/**"],
+  "ignorePattern": ["(?m)^[ \\t]*(?:from[ \\t]+\\S+[ \\t]+)?import[ \\t]+(?:\\([^)]*\\)|.*)"],
+  "exitCode": 1,
+  "noTips": true
+}

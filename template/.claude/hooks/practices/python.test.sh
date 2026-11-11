@@ -75,6 +75,8 @@ edit 2 "fmt off, nothing above"       "$APP" 'x = [1]' $'# fmt: off\nx = [1]'
 edit 2 "mark.skip, no reason"         "$TEST" 'def test_x():' $'@pytest.mark.skip\ndef test_x():'
 edit 2 "skipif, no reason"            "$TEST" 'def test_x():' $'@pytest.mark.skipif(sys.platform == "win32")\ndef test_x():'
 edit 2 "pytest.skip()"                "$TEST" '    pass' '    pytest.skip()'
+edit 2 "jscpd ignore-start, no reason" "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()\n# jscpd:ignore-end'
+edit 2 "jscpd marker inside prose"    "$APP" 'x = c()' $'# keep this jscpd:ignore-start\nx = c()'
 write 2 "Write: new file, bare noqa"  "$APP" '' $'import os  # noqa\n'
 printf '%s' $'a = 1\nb = 1' >"$APP"
 check 2 "MultiEdit: 2nd edit adds noqa" "$(jq -n --arg p "$APP" '{tool_input:{file_path:$p,
@@ -94,6 +96,10 @@ says yes "Write it in this form: # pyright: ignore[<rule name>] <reason>" "the p
   "$APP" 'a = f()' 'a = f()  # pyright: ignore[reportOptionalMemberAccess]'
 says no "reportAssignmentType" "the form names no rule the line didn't skip" \
   "$APP" 'a = f()' 'a = f()  # pyright: ignore[reportOptionalMemberAccess]'
+says yes "Write it in this form: # jscpd:ignore-start <reason>, and # jscpd:ignore-end" \
+  "the jscpd form shows the reason and the end marker" "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()'
+says yes "(ruff, basedpyright, bandit, pytest, jscpd)" "the stop sends the agent to jscpd's docs too" \
+  "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()'
 says yes "Write it in this form: # noqa: <rule code> <reason>" "the noqa form shows a placeholder for the code" "$APP" 'x = 1' 'x = 1  # noqa: E501'
 says no "BLE001" "the noqa form names no code the line didn't skip" "$APP" 'x = 1' 'x = 1  # noqa: E501'
 
@@ -104,6 +110,11 @@ edit 0 "type ignore code + reason"    "$APP" 'a = f()' "a = f()  # type: ignore[
 edit 0 "pyright ignore + reason"      "$APP" 'a = f()' "a = f()  # pyright: ignore[reportAssignmentType]  # stub bug. $TRIED"
 edit 0 "nosec code + reason"          "$APP" 'y = load(f)' "y = load(f)  # nosec B506 config file is ours. $TRIED"
 edit 0 "pragma no cover + reason"     "$APP" 'def f():' "def f():  # pragma: no cover runs only on the host. $TRIED"
+edit 0 "jscpd ignore-start + reason"  "$APP" 'x = c()' \
+  "# jscpd:ignore-start the two totals change apart. $TRIED"$'\nx = c()\n# jscpd:ignore-end'
+edit R "jscpd ignore-start + reason above" "$APP" 'x = c()' \
+  $'# The two totals change apart.\n# '"$TRIED"$'\n# jscpd:ignore-start\nx = c()\n# jscpd:ignore-end'
+edit 0 "jscpd ignore-end alone skips nothing" "$APP" 'x = c()' $'x = c()\n# jscpd:ignore-end'
 edit 0 "fmt skip + 2nd-hash reason"   "$APP" 'x = [1]' "x = [1]  # fmt: skip  # keep aligned. $TRIED"
 edit R "reason on the lines above"    "$APP" 'x = c()' $'# Defined by the plugin loader.\n# '"$TRIED"$'\nx = c()  # noqa: F821'
 edit R "a Tried sentence wrapped over two lines" "$APP" 'x = c()' \
@@ -365,6 +376,16 @@ write 2 "basedpyright.base.json rewritten" "$REPO/basedpyright.base.json" $'{\n 
   $'{\n  "reportUnreachable": false\n}\n'
 says yes "Change the template instead" "the base-file stop sends the change to the template" "$RB" \
   $'[lint]\nselect = ["F"]\n' $'[lint]\nselect = []\n'
+JS="$REPO/.jscpd.json"
+edit_in 2 "minLines raised in .jscpd.json" "$JS" $'{\n  "minLines": 9\n}\n' '"minLines": 9' '"minLines": 99'
+edit_in 2 "a path left out in .jscpd.json" "$JS" $'{\n  "ignore": ["tests/**"]\n}\n' '"tests/**"' '"tests/**", "app/**"'
+mkdir -p "$REPO/.github/actions/stack-gate"
+edit_in 2 "CI's copy of .jscpd.json edited" "$REPO/.github/actions/stack-gate/.jscpd.json" \
+  $'{\n  "minLines": 9\n}\n' '"minLines": 9' '"minLines": 99'
+says yes "goes between \`# jscpd:ignore-start\` and \`# jscpd:ignore-end\`" "the .jscpd.json stop points to the markers" \
+  "$JS" $'{\n  "minLines": 9\n}\n' $'{\n  "minLines": 99\n}\n'
+says no "jscpd:ignore-start" "the ruff.base.toml stop names no jscpd marker" "$RB" \
+  $'[lint]\nselect = ["F"]\n' $'[lint]\nselect = []\n'
 edit_in 2 "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
@@ -385,6 +406,9 @@ edit_in R "gate leg dropped, reason above" "$MK" "$MKBASE" 'gate: lint-check typ
   "# The gate runs bandit in CI only. $TRIED"$'\ngate: lint-check typecheck test'
 edit_in R "errors ignored, reason above"  "$MK" "$MKBASE" $'\tuv run ruff check app\n' \
   "# Lint only warns here. $TRIED"$'\n\tuv run ruff check app || true\n'
+MKDUP=$'duplication:\n\tuv run jscpd .\n'
+edit_in 2 "jscpd line removed"            "$MK" "$MKDUP" $'\tuv run jscpd .\n' ''
+edit_in 0 "jscpd line kept, scan widened" "$MK" "$MKDUP" $'\tuv run jscpd .\n' $'\tuv run jscpd . scripts\n'
 
 echo "-- config: CI workflows are not checked (the owner reviews them in the PR)"
 edit_in 0 "gate.yaml loosened"            "$REPO/.github/workflows/gate.yaml" $'      - run: uv run pytest tests/ --cov\n' 'uv run pytest tests/ --cov' 'uv run pytest tests/ --cov || true'
