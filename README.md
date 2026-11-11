@@ -40,7 +40,7 @@ load, so they stay plain jq that the template's tests run directly.
 | `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
 | `.claude/hooks/stack/format.sh` | `ruff format` on every edited `.py` and `.pyi` file, the files the gate formats |
 | `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
-| `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, and pytest over `tests/`, which it skips when there is no `tests/` |
+| `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, jscpd over the same files but `tests/` and `database/`, and pytest over `tests/`, which it skips when there is no `tests/` |
 | `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
 
 ## Shared tool settings
@@ -49,9 +49,10 @@ load, so they stay plain jq that the template's tests run directly.
 |---|---|---|
 | `ruff.base.toml` | template | Line length, the preview setup, the rule selection, the reasoned ignores, the typed-exception check |
 | `basedpyright.base.json` | template | The checking mode, the platform, and the strict `report*` settings |
-| `python.mk` | template | The `lint`, `lint-check`, `typecheck`, `security`, `test` and `gate` targets |
+| `.jscpd.json` | template | jscpd's settings: a block of 10 lines or more written twice fails the gate, imports aside; `tests/` and `database/` are left out |
+| `python.mk` | template | The `lint`, `lint-check`, `typecheck`, `security`, `duplication`, `test` and `gate` targets |
 | `.pre-commit-config.yaml` | template | The commit hooks: ruff, bandit (through `make security`) and the file checks, each running the project's own pinned tool through `uv run`, so the file holds no version |
-| `.github/actions/stack-gate/` | template | The checks a project's CI runs, and CI's own copy of `ruff.base.toml` and `basedpyright.base.json` |
+| `.github/actions/stack-gate/` | template | The checks a project's CI runs, and CI's own copy of `ruff.base.toml`, `basedpyright.base.json` and `.jscpd.json` |
 | `pyproject.toml` | project, seeded once | The project, its dependencies, and its own tool settings: it extends the two base files |
 | `Makefile` | project, seeded once | The project's own targets, after `include python.mk` |
 | `.gitignore` | project, seeded once | `.env` files, which hold secrets (`.env.example` stays tracked), and what the gate and the tools leave behind |
@@ -65,6 +66,13 @@ not in its copy. A project adds to the shared settings in its `pyproject.toml`:
 - basedpyright (`[tool.basedpyright] extends = "basedpyright.base.json"`): any setting it
   overrides, which applies to the local gate only: CI's basedpyright never reads `pyproject.toml`.
 - pytest and coverage have no way to extend a shared file, so their settings stay the project's.
+- jscpd has no way to extend one either, and its settings stay the template's: a copy that must
+  stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with the reason
+  `skipped-checks.md` asks for.
+
+A tool the template adds to the dev dependencies reaches only new projects, because the seeded
+`pyproject.toml` is the project's. A project that took the template before jscpd runs
+`uv add --dev jscpd` once; until then both gates fail at the duplication check.
 
 A project with no `tests/` folder, by design, passes both gates with the seeded `pyproject.toml`
 unchanged: they skip pytest. An empty `tests/` fails both, because pytest finds no test in it: a
@@ -73,8 +81,8 @@ folder with no tests is a mistake, not a choice.
 CI runs `.github/actions/stack-gate/gate.sh`, which the agentic `Gate` workflow calls on every PR.
 It never runs `make gate`, so a change that relaxes the local gate can't relax CI:
 
-- It fails when the project's `ruff.base.toml` or `basedpyright.base.json` differs from CI's copy,
-  or when `pyproject.toml` stops extending ruff's.
+- It fails when the project's `ruff.base.toml`, `basedpyright.base.json` or `.jscpd.json` differs
+  from CI's copy, or when `pyproject.toml` stops extending ruff's.
 - ruff reads `pyproject.toml`, so the project's own additions apply in CI as they do locally.
 - basedpyright extends only the project's `basedpyright.base.json`, which must match CI's copy,
   and never reads `pyproject.toml`.

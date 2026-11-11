@@ -39,6 +39,11 @@ Loads when you read or edit tests. (`python-conventions.md`, `comments-and-docst
   the others
 - Tests must be synchronous (no async operations)
 - **Test data pattern**: Use `mock_*` high-level functions from `tests/helpers/data_factory/`. The `_create_*` row builders beside them are private to their module (the type check rejects one used outside it); a new one gets the leading underscore too. Create test data in fixtures at the top of the file and reuse the fixtures across test functions. Each test runs on its own copy of a database that holds only the schema and seed data, so keep data fixtures function-scoped: rows built by a wider-scoped fixture are gone after its first test.
+- A test that needs a fixture only for what it sets up (a patch, rows it never reads) names it in
+  `@pytest.mark.usefixtures(...)`, not as a parameter: ruff's ARG fails a parameter nothing reads,
+  and a leading underscore makes pytest look for a fixture of that name. pytest rejects marks on
+  fixtures, so a fixture that needs another to run first keeps it as a parameter, with
+  `# noqa: ARG001` and the reason `skipped-checks.md` asks for
 
 Three harness behaviours produce a green test for the wrong reason:
 - **Event loop.** The async sessionmaker resets between tests, not between phases of one test. Do

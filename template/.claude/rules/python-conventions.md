@@ -35,5 +35,15 @@ service's own parts.
   structure and standards. Comment density is NOT style to match: `comments-and-docstrings.md`
   governs comments, even when neighboring files are denser
 
+## Duplicated Code
+- The gate fails on a block of 10 lines or more written twice outside `tests/` and `database/`,
+  imports aside (jscpd, set in `.jscpd.json`). Fix each copy in this order: first delete the copy
+  that should not exist; else call the code's existing owner; extract a shared function only last.
+  Never extract a helper only to pass the check: that is the premature abstraction the Design
+  Philosophy forbids
+- Keep both copies only when they look alike but change for different reasons. Then the copy goes
+  between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with its reason in the form
+  `skipped-checks.md` gives
+
 ## Module Imports
 - Importing a module must not execute work: modules define and export, nothing runs

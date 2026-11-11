@@ -9,20 +9,23 @@ These load when you read or edit Python or `pyproject.toml`.
 
 - A skipped check (a *suppression*) is a comment or marker that tells a tool not to check a line
   or run a test: `# noqa`, `# type: ignore`, `# pyright: ignore`, `# nosec`, `# pragma: no cover`,
-  `# fmt: skip/off`, a pytest skip. A loosened config does the same for more than a line: an
-  ignore, exclude or per-file-ignores entry, a lower type-check report level, a pytest option that
-  skips tests, a pre-commit or Makefile change that stops a tool from running or from failing
+  `# fmt: skip/off`, a pytest skip, `# jscpd:ignore-start` through `# jscpd:ignore-end` around a
+  copy. A loosened config does the same for more than a line: an ignore, exclude or
+  per-file-ignores entry, a lower type-check report level, a pytest option that skips tests, a
+  pre-commit or Makefile change that stops a tool from running or from failing
 - Both are the last resort. First check whether skipping is really the only way. Read the current
-  documentation: the rule's page in the tool's docs (ruff, basedpyright, bandit, pytest) and the
-  docs of any library involved, since a newer version often adds a setting, an idiom or a typed
-  API that makes the skip unnecessary. Then look for a cleaner approach: fix the code so the check
-  passes, narrow the construct, restructure, or use the idiom the rule's docs give as its fix
-  (such as `contextlib.suppress` for an expected exception). If one works, use it
+  documentation: the rule's page in the tool's docs (ruff, basedpyright, bandit, pytest, jscpd)
+  and the docs of any library involved, since a newer version often adds a setting, an idiom or a
+  typed API that makes the skip unnecessary. Then look for a cleaner approach: fix the code so the
+  check passes, narrow the construct, restructure, or use the idiom the rule's docs give as its
+  fix (such as `contextlib.suppress` for an expected exception, or the fix order
+  `python-conventions.md` gives for a copy). If one works, use it
 - Keep the skip only if no approach leaves the project easier to maintain. Its reason then has
-  three parts: the rule code (in the directive, or at the start of a config entry's comment, as in
-  `# E402:`); why this is right here and the most maintainable option, answering what a reader of
-  the line would ask, never why the tool flags it; and one `Tried <alternative>, but <why it was
-  discarded>.` sentence per alternative, the rule's documented fix among them
+  three parts: the rule code where the tool has one (in the directive, or at the start of a config
+  entry's comment, as in `# E402:`); why this is right here and the most maintainable option,
+  answering what a reader of the line would ask, never why the tool flags it; and one `Tried
+  <alternative>, but <why it was discarded>.` sentence per alternative, the rule's documented fix
+  among them
 - The reason goes after the directive, on the same line. When that line would pass 100 columns, it
   goes on the comment lines directly above, and the line keeps only the directive. `# fmt: off`
   and `# pyright:` file directives must stand alone, so their reason always goes above. A config
