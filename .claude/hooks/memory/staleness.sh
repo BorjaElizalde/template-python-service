@@ -25,7 +25,7 @@ strip_ref() {
 # ones, and may shorten `app/api/x.py` to `api/x.py` under a second-level one.
 top_dirs() { git -C "$1" ls-files | sed -n 's#/.*##p' | sort -u; }
 second_dirs() { git -C "$1" ls-files | awk -F/ 'NF > 2 { print $2 }' | sort -u; }
-ere_alternation() { sed 's/[.[\*^$()+?{|]/\\&/g' | paste -sd '|' -; }
+ere_alternation() { sed 's/[.[\*^()+?{|$]/\\&/g' | paste -sd '|' -; }
 
 # The paths a note cites, one per line. A function, not a block inside the loop's <( ): bash 3.2
 # can mis-parse such a block and then feed the loop nothing, so a broken extraction would read as a
