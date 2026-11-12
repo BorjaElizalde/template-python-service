@@ -2,9 +2,9 @@
 
 A [Copier](https://copier.readthedocs.io/) template for the Python half of an agentic coding setup,
 layered on `template-agentic`. It fills the agentic layer's plug-in points for a Python service:
-the practice checks and their registry, the ruff formatter hook, the Python rules and reviewer
-agents, the review wave, and `make gate`. It also owns the tool settings every Python service
-shares, so a project extends them instead of copying them.
+the practice checks and their registry, the ruff formatter hook, the Python rules, and
+`make gate`. It also owns the tool settings every Python service shares, so a project extends
+them instead of copying them.
 
 ## Apply and update
 
@@ -39,7 +39,6 @@ load, so they stay plain jq that the template's tests run directly.
 |---|---|
 | `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
 | `.claude/hooks/stack/format.sh` | `ruff format` on every edited `.py` and `.pyi` file, the files the gate formats |
-| `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
 | `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, jscpd over the same files but `tests/` and `database/`, and pytest over `tests/`, which it skips when there is no `tests/` |
 | `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
 
