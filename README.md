@@ -113,8 +113,10 @@ issues repository: `.claude/` holds the whole harness, and `.copier-answers.agen
 the version and the answers, `Build` as the deploy workflow among them. Renovate's Copier manager
 brings each new `template-agentic` release as an update PR; an update that adds a question takes
 its default, so check the new answer in the PR. The repository's `renovate.json` extends the
-shared preset and keeps the github-actions manager off `.github/workflows/gate.yaml`, which comes
-from `template-agentic`. Once per clone, run
+shared rules, `renovate/base` in `template-agentic`, and keeps the github-actions manager off
+`.github/workflows/gate.yaml`, which comes from `template-agentic`. It does not extend
+`renovate/default`, the preset for a project, because that preset also keeps the manager off
+`.github/actions/stack-gate/`, which is this repository's own. Once per clone, run
 `bash .claude/skills/task/scripts/task.sh point-memory`.
 
 `make gate` renders the `template-agentic` version the answers file records, renders this template
