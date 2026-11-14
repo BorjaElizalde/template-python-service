@@ -22,7 +22,8 @@ the steps that need no reviewer.
 7. Apply findings under the Judgment Guidelines and explain the decisions. Escalate rejected
    findings and changes required outside this repository. Fixes re-enter at step 4; rerun a
    reviewer whose surface the fixes changed.
-8. Run the last pass alone. Then invoke `/gate`, push, and confirm PR CI is green.
+8. Run the last pass alone. Then invoke `/gate`, commit with `/commit`, push, and confirm PR CI is
+   green.
 
 ## Rules
 

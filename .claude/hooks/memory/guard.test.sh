@@ -5,6 +5,9 @@
 #
 # Fixtures are a throwaway git repo with fake memory stores, so the suite never depends on the
 # real stores' contents.
+# The notes are markdown, so their backticks are text. Tried double quotes, but then each backtick
+# in some thirty notes needs a backslash.
+# shellcheck disable=SC2016
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

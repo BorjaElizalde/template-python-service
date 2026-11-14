@@ -2,9 +2,9 @@
 
 A [Copier](https://copier.readthedocs.io/) template for the Python half of an agentic coding setup,
 layered on `template-agentic`. It fills the agentic layer's plug-in points for a Python service:
-the practice checks and their registry, the ruff formatter hook, the Python rules and reviewer
-agents, the review wave, and `make gate`. It also owns the tool settings every Python service
-shares, so a project extends them instead of copying them.
+the practice checks and their registry, the ruff formatter hook, the Python rules, and
+`make gate`. It also owns the tool settings every Python service shares, so a project extends
+them instead of copying them.
 
 ## Apply and update
 
@@ -39,7 +39,6 @@ load, so they stay plain jq that the template's tests run directly.
 |---|---|
 | `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
 | `.claude/hooks/stack/format.sh` | `ruff format` on every edited `.py` and `.pyi` file, the files the gate formats |
-| `.claude/review-wave.md` | The plan reviewer, the review wave, the last pass and the lint resolver |
 | `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, jscpd over the same files but `tests/` and `database/`, and pytest over `tests/`, which it skips when there is no `tests/` |
 | `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
 
@@ -113,8 +112,10 @@ issues repository: `.claude/` holds the whole harness, and `.copier-answers.agen
 the version and the answers, `Build` as the deploy workflow among them. Renovate's Copier manager
 brings each new `template-agentic` release as an update PR; an update that adds a question takes
 its default, so check the new answer in the PR. The repository's `renovate.json` extends the
-shared preset and keeps the github-actions manager off `.github/workflows/gate.yaml`, which comes
-from `template-agentic`. Once per clone, run
+shared rules, `renovate/base` in `template-agentic`, and keeps the github-actions manager off
+`.github/workflows/gate.yaml`, which comes from `template-agentic`. It does not extend
+`renovate/default`, the preset for a project, because that preset also keeps the manager off
+`.github/actions/stack-gate/`, which is this repository's own. Once per clone, run
 `bash .claude/skills/task/scripts/task.sh point-memory`.
 
 `make gate` renders the `template-agentic` version the answers file records, renders this template
