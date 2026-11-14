@@ -1,7 +1,7 @@
 ---
 name: start
-description: Use to start, open or resume the session of any task or subagent — a new task, or an existing issue with or without a worktree or a session. Finds or creates the issue, creates or reuses its worktree, and opens, resumes or brings forward its session.
-allowed-tools: Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh issue create:*), Bash(bash:*)
+description: Use to start, open or resume the session of any task or subagent — a new task, or an existing issue with or without a worktree or a session. Finds or creates the issue, creates or reuses its worktree, and opens, resumes or brings forward its session. Also use to park, release or link an issue, and to plan a backlog.
+allowed-tools: Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh issue create:*), Bash(gh issue edit:*), Bash(bash:*)
 ---
 
 Every subagent session belongs to one issue in BorjaElizalde/template-python-service and works in its own worktree,
@@ -11,34 +11,67 @@ The same steps start a new task and pick up an existing one.
 1. Find the issue. Given a number, use it. Otherwise search the open issues with
    `gh issue list -R BorjaElizalde/template-python-service --state open --search "<keywords>"` and reuse one that
    covers the task. Otherwise create one with `gh issue create -R BorjaElizalde/template-python-service`: an imperative
-   title, and a body that states the goal, the scope, and what done means. For a research task,
-   also say where its result goes: a PR, or a comment on the issue. The issue is the session's
-   whole brief: it sees nothing of the conversation that started it, so the body carries every
-   decision already taken and what the conversation found out. On an existing issue, add what was
-   settled since as a comment. Never point a task at a scratchpad, `/tmp` or `/private/tmp` path:
-   a restart wipes them, and a consumer project lost a task's input files that way. What a task
-   needs goes in the issue, or the task rebuilds it.
-2. Pick the branch type: `feat`, `fix`, `refactor` or `chore` for a change, `research` for a task
-   whose result is an answer. It names a new branch only: an issue that has a branch keeps it.
-3. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" start <n> <type>`. It first finishes every
-   task whose issue is closed, as a bare `/task:finish` does, and lists every other task that
-   needs attention, one line each, as `task.sh status` prints it. Then it picks up what the issue
-   already has:
+   title, and a body that states the goal, the scope, and what done means. For a research or a
+   design task, also say where its result goes: a PR, or a comment on the issue. The issue is the
+   session's whole brief: it sees nothing of the conversation that started it, so the body
+   carries every decision already taken and what the conversation found out. On an existing
+   issue, add what was settled since as a comment. Never point a task at a scratchpad, `/tmp` or
+   `/private/tmp` path: a restart wipes them, and a consumer project lost a task's input files
+   that way. What a task needs goes in the issue, or the task rebuilds it.
+2. Pick the branch type. It is the task's mode, for the task's life:
+   - **Execution**, the default: `feat`, `fix`, `refactor` or `chore` for a change, `research`
+     for a task whose result is an answer. Its session works alone and never waits for a person.
+   - **Design**: `design`, only when the owner asks to work the task out together ("with me",
+     "let's design", "let's discuss"), never on your own guess. Its session asks the owner, in
+     its Terminal tab, what is the owner's to decide, and builds nothing: its result, delivered
+     as a research task's, is the decisions taken and the issues for the work.
+
+   The type names a new branch only: an issue that has a branch keeps it, and its mode. To talk
+   an execution task through, the owner uses its PR; to build what a design task decided, start
+   execution tasks from its issues.
+3. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" start <n> <type>`. Before anything else, it
+   refuses a type it does not know, and an issue that must wait (see below), naming its open
+   blocker or the reason it is parked: tell the owner, and start nothing in its place. Otherwise
+   it first runs `task.sh cleanup`, which finishes every task whose issue is closed, as a bare
+   `/task:finish` does, then prints the status line of every other task, with no backlog. Then it
+   picks up what the issue already has:
    - its worktree, else its branch (left without a worktree, or pushed from another clone), else
      a new branch from `origin/develop`;
    - its running session, brought to the front and never opened twice, else its last session,
-     resumed, else a new one.
+     resumed, else a new one, in the mode of its branch, which the session line names.
 
    A new or resumed session starts with a prompt that sends it to the issue and its comments. A
    running session gets no prompt: send it what changed with SendMessage.
-4. Return the issue URL, the worktree path, the session name, what the script picked up, the
-   tasks it finished or refused to finish, and the tasks that need attention. Then act on each of
-   those, by what its line says:
-   - idle, PR open and checks passed: review the PR; the owner merges it;
-   - checks failed: send the session back to work with SendMessage, saying what failed;
-   - idle, no PR: read the session's last message, which holds a research result to close the
-     issue on, a blocker, or a question to answer;
-   - waiting: someone must answer in its Terminal tab;
-   - no session, issue open: resume it with `/task:start <n>`.
+4. Return the issue URL, the worktree path, the session name, its mode and what the script picked
+   up. Then report the status through `/task:status`.
 
-   A task whose issue is closed needs nothing: the next sweep finishes it.
+## Issues that must wait
+
+No agent starts an issue that is blocked or parked. GitHub holds both facts:
+
+- **Blocked:** a "blocked by" link to an open issue. The link is the reason, and it clears itself
+  when the blocker closes. Add one with
+  `gh issue edit <n> -R BorjaElizalde/template-python-service --add-blocked-by <m>`, or with `--blocked-by <m>` on
+  `gh issue create`; `--remove-blocked-by <m>` removes one.
+- **Parked:** the `backlog` label, with a comment that starts with `Parked:` and gives the reason.
+  Only the owner's word parks or releases an issue. Park it with
+  `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" park <n> "<reason>"`, which posts the comment,
+  then adds the label, which it creates where it does not exist yet. Release it with
+  `gh issue edit <n> -R BorjaElizalde/template-python-service --remove-label backlog`.
+
+## Plan a backlog
+
+When the owner says "plan X", start a `research` task for it, whose session works alone. When the
+owner says "plan X with me", start a `design` task, whose session works the plan out with them.
+Either issue's body asks its session to:
+
+1. study the code and the open issues;
+2. create one issue per piece of work, whose body states its goal, its scope and what done means,
+   as step 1 asks of any issue;
+3. put them in order, creating each one `--blocked-by` the issues it waits for;
+4. park each one with
+   `bash .claude/skills/task/scripts/task.sh park <n> "planned in #<this issue>, waits for the owner's review"`;
+5. post, as its result, a comment on this issue that lists them in order.
+
+A research session never waits for the owner, who corrects its plan afterwards. Either way, the
+owner tells the main session which issues to release.

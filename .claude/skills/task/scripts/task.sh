@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# The task lifecycle behind /task:start and /task:finish: one issue, one worktree, one session.
+# The task lifecycle behind /task:start and /task:finish: one issue, one worktree, one session. And
+# the parking of an issue that must not start yet.
 set -euo pipefail
 
-usage="usage: task.sh start <issue> [type] | finish <issue> | sweep | status | attention | point-memory"
+usage="usage: task.sh start <issue> [type] | finish <issue> | park <issue> <reason> | cleanup | status | on-session-start | point-memory"
 
 CALLER=$(pwd -P)
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -14,6 +15,9 @@ CHECKOUT=$(pwd -P)
 MAIN=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
 REPO_NAME=$(basename "$MAIN")
 cd "$MAIN"
+# The render's answers: KEY=VALUE lines, with no code in them to check. Tried pointing shellcheck
+# at the file with source= and -x, but it would then check data, not code.
+# shellcheck disable=SC1091
 . .claude/agentic.conf
 
 die() {
@@ -24,6 +28,33 @@ die() {
 # "<STATE> <title>" of an issue in the issues repository.
 issue_view() {
 	gh issue view "$1" -R "$ISSUES_REPO" --json state,title -q '.state + " " + .title'
+}
+
+# The jq definitions every view of an issue's holds shares, so each rule lives in one place. Over an
+# issue as gh gives it in JSON, blockers gives the open issues it is blocked by, and parked the
+# reason it is parked for, from the last comment that starts with "Parked:"; each gives nothing
+# where there is none.
+ISSUE_JQ='
+	def blockers: [.blockedBy.nodes[] | select(.state == "OPEN") | "#\(.number)"] | select(. != []) | join(", ");
+	def parked: select(any(.labels[]; .name == "backlog"))
+		| [.comments[].body | select(startswith("Parked:")) | sub("^Parked: *"; "")] | last // "no reason given";
+'
+
+# Why issue $1 must not start yet, one line per reason, else nothing.
+issue_holds() {
+	gh issue view "$1" -R "$ISSUES_REPO" --json number,labels,blockedBy,comments |
+		jq -r "$ISSUE_JQ"'"issue \(.number) is " + ("blocked by " + blockers, "parked: " + parked)'
+}
+
+# Parks issue $1 for reason $2: a comment that gives the reason, then the backlog label, so the label
+# never stands without its reason. The label is created on its first use in the issues repository;
+# --force updates one that exists.
+park() {
+	gh label create backlog -R "$ISSUES_REPO" --force --color ededed \
+		--description "Parked: no agent starts it until the owner releases it" >/dev/null
+	gh issue comment "$1" -R "$ISSUES_REPO" --body "Parked: $2" >/dev/null
+	gh issue edit "$1" -R "$ISSUES_REPO" --add-label backlog >/dev/null
+	echo "✓ issue $1 parked: $2"
 }
 
 # A title cut at a word boundary to 40 characters.
@@ -42,6 +73,16 @@ issue_worktree() {
 issue_branch() {
 	git for-each-ref --format='%(refname:lstrip=-2)' "refs/heads/*/$1-*" "refs/remotes/origin/*/$1-*" |
 		awk 'NR == 1 { print } END { exit NR == 0 }'
+}
+
+# The mode of the task on branch $1, from its type: design, whose session works the task out with
+# the owner, else execution, whose session works alone. Nothing else stores the mode, so a task
+# keeps it for life.
+task_mode() {
+	case $1 in
+	design/*) echo design ;;
+	*) echo execution ;;
+	esac
 }
 
 # The folder Claude Code writes the transcripts of the sessions in folder $1 to.
@@ -80,18 +121,37 @@ point_memory() {
 	mv "$settings.tmp" "$settings"
 }
 
-# open_session <worktree> <name> <issue> [--continue]
+# A word quoted for the shell of a Terminal tab.
+quoted() {
+	local quote="'" escaped="'\\''"
+	printf "'%s'" "${1//$quote/$escaped}"
+}
+
+# open_session <worktree> <name> <issue> <mode> [--continue]
 open_session() {
 	# A session opened without a first prompt waits at an empty input, so this one sends it to its
 	# issue. One prompt serves a new session and a resumed one.
 	local first="Work on issue #$3 in $ISSUES_REPO. Read it with its comments: gh issue view $3 -R $ISSUES_REPO --comments. Carry it out until it is done as the issue says; if this session already worked on it, go on from where it stopped."
-	# exec leaves claude the tab's only process, so the tab is empty once claude exits. The first
-	# prompt comes after -n: --disallowed-tools takes every value up to the next option.
-	osascript - "$1" "$2" "${4:-}" \
-		"$MAIN/.claude/skills/task/session/settings.json" "$MAIN/.claude/skills/task/session/prompt.md" "$first" >/dev/null <<'APPLESCRIPT'
-on run {worktree, sessionName, resumeFlag, settingsFile, promptFile, firstPrompt}
+	local files=$MAIN/.claude/skills/task/session settings tools=" --disallowed-tools AskUserQuestion" command
+	settings=$files/settings.json
+	# Every session has its permission prompts denied. An execution session never waits for a
+	# person: it has no question tool, and its Stop hook sends it back to work when it ends its turn
+	# on a question. A design session asks the owner, so it keeps the tool and drops the hook:
+	# claude --settings takes one file or JSON string, so it gets the settings less the hook as JSON.
+	if [ "$4" = design ]; then
+		settings=$(jq -c 'del(.hooks.Stop)' "$settings")
+		tools=
+	fi
+	# exec leaves claude the tab's only process, so the tab is empty once claude exits. claude takes
+	# one appended system prompt, so the tab's shell joins the words both modes share and the mode's
+	# own. The first prompt comes after -n: --disallowed-tools takes every value up to the next option.
+	command="cd $(quoted "$1") && exec claude ${5:+$5 }--settings $(quoted "$settings")"
+	command+=" --append-system-prompt \"\$(cat $(quoted "$files/prompt.md") $(quoted "$files/$4.md"))\""
+	command+="$tools -n $(quoted "$2") $(quoted "$first")"
+	osascript - "$command" >/dev/null <<'APPLESCRIPT'
+on run {command}
 	tell application "Terminal"
-		do script "cd " & quoted form of worktree & " && exec claude " & resumeFlag & " --settings " & quoted form of settingsFile & " --append-system-prompt-file " & quoted form of promptFile & " --disallowed-tools AskUserQuestion -n " & quoted form of sessionName & " " & quoted form of firstPrompt
+		do script command
 		activate
 	end tell
 end run
@@ -154,17 +214,26 @@ unshipped() {
 	return 0
 }
 
-# Picks up whatever the issue already has: its worktree, else its branch, and its session.
+# Picks up whatever the issue already has: its worktree, else its branch, and its session, in the
+# mode of its branch. A mistyped type would fix the wrong mode for the task's life, so an unknown one
+# is refused before anything else.
 start_task() {
-	local issue=$1 type=$2 view title short slug worktree branch name tty
+	local issue=$1 type=$2 view title holds short slug worktree branch mode name tty
+	case $type in
+	feat | fix | refactor | chore | research | design) ;;
+	*) die "unknown type $type: a task is feat, fix, refactor, chore or research, in execution mode, or design, in design mode" ;;
+	esac
 	view=$(issue_view "$issue") || die "no issue $issue in $ISSUES_REPO"
 	title=${view#* }
 	[ "${view%% *}" = OPEN ] || die "issue $issue is ${view%% *}: a task starts from an open issue"
+	holds=$(issue_holds "$issue")
+	[ -z "$holds" ] || die "$holds"
 	short=$(short_title "$title")
-	sweep
+	cleanup
 	SESSIONS=$(claude agents --json)
-	task_lines attention "$issue"
+	task_lines "$issue"
 	if worktree=$(issue_worktree "$issue"); then
+		branch=$(git -C "$worktree" branch --show-current)
 		echo "✓ worktree exists: $worktree"
 	else
 		git fetch origin -q
@@ -188,17 +257,18 @@ start_task() {
 	fi
 	point_memory "$MAIN"
 	point_memory "$worktree"
+	mode=$(task_mode "$branch")
 	name="#$issue $REPO_NAME: $short"
 	if tty=$(session_tty "$worktree"); then
 		session_tab "$tty" focus
-		echo "✓ session already running, brought to the front: $name"
+		echo "✓ session already running in $mode mode, brought to the front: $name"
 	elif has_session_transcript "$worktree"; then
 		# claude --continue refuses to start where no session exists yet.
-		open_session "$worktree" "$name" "$issue" --continue
-		echo "✓ session resumed: $name"
+		open_session "$worktree" "$name" "$issue" "$mode" --continue
+		echo "✓ session resumed in $mode mode: $name"
 	else
-		open_session "$worktree" "$name" "$issue"
-		echo "✓ session opened: $name"
+		open_session "$worktree" "$name" "$issue" "$mode"
+		echo "✓ session opened in $mode mode: $name"
 	fi
 }
 
@@ -226,9 +296,12 @@ finish_task() {
 	fi
 	git worktree remove "$worktree" ||
 		die "$worktree has uncommitted or untracked files: commit them, or move what matters to the PR or the issue"
+	# The list splits unquoted, as its comment says. Tried an array, but bash 3.2, the macOS bash
+	# that runs this, has no mapfile to fill one, and read -a needs IFS and -d set for a list.
+	# shellcheck disable=SC2086
 	git branch -D -q $branches
 	rmdir "$(dirname "$worktree")" 2>/dev/null || true
-	echo "✓ issue $issue finished: session closed, worktree removed, branches removed:" $branches
+	echo "✓ issue $issue finished: session closed, worktree removed, branches removed: ${branches//$'\n'/ }"
 }
 
 # The issue of each task worktree of this checkout.
@@ -237,18 +310,23 @@ task_issues() {
 }
 
 # Finishes every task worktree of this checkout whose issue is closed: a PR merged on GitHub closes
-# its issue, but nothing finishes its task. Open issues are skipped without a word.
-sweep() {
-	local issue view
+# its issue, but nothing finishes its task. One line per task it finished or refused to finish;
+# open issues are skipped without a word.
+cleanup() {
+	local issue view out
 	# A worktree whose folder was deleted by hand still holds its branch until git forgets it.
 	git worktree prune
 	for issue in $(task_issues); do
 		view=$(issue_view "$issue") || continue
 		[ "${view%% *}" = CLOSED ] || continue
-		# A refusal exits, so each finish runs as a task.sh of its own: a refusal is reported and the
-		# sweep goes on. From the caller's folder, $0 resolves and finish sees a sweep from inside
-		# the worktree it would remove.
-		(cd "$CALLER" && bash "$0" finish "$issue") || true
+		# A refusal exits, so each finish runs as a task.sh of its own, whose last line says what it
+		# did or why it refused, and the cleanup goes on. From the caller's folder, $0 resolves and
+		# finish sees a cleanup from inside the worktree it would remove.
+		if out=$(cd "$CALLER" && bash "$0" finish "$issue" 2>&1); then
+			tail -n 1 <<<"$out"
+		else
+			echo "✗ issue $issue not finished: $(tail -n 1 <<<"$out")"
+		fi
 	done
 }
 
@@ -270,8 +348,13 @@ pr_line() {
 
 # The seconds since a session in folder $1 last wrote its transcript; nothing when none did.
 transcript_age() {
-	local newest
-	newest=$(ls -t "$(transcript_dir "$1")"/*.jsonl 2>/dev/null | head -n 1) || return 0
+	local transcript newest=
+	# Any file is newer than no file. In a folder with no transcript, the pattern stays as it is and
+	# names no file.
+	for transcript in "$(transcript_dir "$1")"/*.jsonl; do
+		if [ "$transcript" -nt "$newest" ]; then newest=$transcript; fi
+	done
+	[ -n "$newest" ] || return 0
 	echo $(($(date +%s) - $(date -r "$newest" +%s)))
 }
 
@@ -289,12 +372,31 @@ active_line() {
 	fi
 }
 
-# Sweeps first, so a look also finishes what is done. Then one line per task worktree of this
-# checkout, and nothing else: the backlog is gh issue list's.
+# Every open issue, under the first heading that fits: In progress, one task line per task worktree
+# of this checkout, then the backlog. It only reads, and where there is no task it calls no claude.
 status() {
-	sweep
-	SESSIONS=$(claude agents --json)
-	task_lines all
+	if [ -n "$(task_issues)" ]; then
+		echo "In progress:"
+		SESSIONS=$(claude agents --json)
+		task_lines
+	fi
+	backlog_lines
+}
+
+# The open issues with no task worktree of this checkout, under Ready, Blocked and Parked, one line
+# each, lowest number first; a heading with no issue is left out. Each issue goes under the first
+# that fits: Parked, then Blocked, then Ready, so a parked line also names its open blockers. A line
+# keeps the whole title, so the reply can say what the issue is: the backlog never goes through the
+# hook, whose bound the task lines' cut is for. gh lists 30 issues unless told more.
+backlog_lines() {
+	gh issue list -R "$ISSUES_REPO" --state open --limit 1000 --json number,title,labels,blockedBy,comments |
+		jq -r --argjson tasks "[$(task_issues | paste -sd , -)]" "$ISSUE_JQ"'
+		[sort_by(.number)[] | select(.number | IN($tasks[]) | not)
+			| [parked] as $parked | ($parked + ["blocked by " + blockers]) as $holds
+			| {heading: (if $parked != [] then "Parked" elif $holds != [] then "Blocked" else "Ready" end),
+				line: (["#\(.number) \(.title)", ($holds | select(. != []) | join("; "))] | join(": "))}]
+		| ("Ready", "Blocked", "Parked") as $heading | map(select(.heading == $heading) | .line)
+		| select(. != []) | "\($heading):", .[]'
 }
 
 # A session idle or gone for less than this many minutes since it last wrote is left alone: one
@@ -311,41 +413,52 @@ needs_attention() {
 	esac
 }
 
-# task_lines all|attention [<issue>]: one line per task worktree of this checkout, with its session,
-# its PR and when its session last wrote; the issue given is left out. With attention, only the
-# tasks that need it.
+# task_lines [<issue>]: one line per task worktree of this checkout, with "design mode" for a design
+# task, its session, its PR and when its session last wrote, ending in "needs attention" when it
+# does; the issue given is left out.
 task_lines() {
-	local issue worktree session age view pr
+	local issue worktree session age view branch pr mode mark
 	for issue in $(task_issues); do
-		[ "$issue" != "${2:-}" ] || continue
+		[ "$issue" != "${1:-}" ] || continue
 		worktree=$(issue_worktree "$issue")
 		session=$(session_line "$worktree")
 		age=$(transcript_age "$worktree")
-		[ "$1" = all ] || needs_attention "$session" "$age" || continue
 		view=$(issue_view "$issue")
-		pr=$(pr_line "$(git -C "$worktree" branch --show-current)")
-		echo "#$issue $(short_title "${view#* }"): $session, $pr, $(active_line "$age")"
+		branch=$(git -C "$worktree" branch --show-current)
+		pr=$(pr_line "$branch")
+		mode=
+		if [ "$(task_mode "$branch")" = design ]; then mode="design mode, "; fi
+		mark=
+		if needs_attention "$session" "$age"; then mark=", needs attention"; fi
+		echo "#$issue $(short_title "${view#* }"): $mode$session, $pr, $(active_line "$age")$mark"
 	done
 }
 
-# The tasks that need attention, read only so it is fast: the SessionStart hook puts them in the
-# context of a session in the main checkout, and a /loop can print them on each round. It says
-# nothing in a task worktree, nor when no task needs attention, and it never fails a session start.
-attention() {
+# The SessionStart hook: a cleanup, then the task lines, in the context of a session that starts or
+# resumes in the main checkout, ending with the line that sends it to /task:status for the reply.
+# A hook can't call a skill, only add to the context. It says nothing in a task worktree, so task
+# sessions start untouched, nor where there is no task, and it never fails a session start.
+# Claude Code passes on 10,000 characters of a hook's output, and only a preview of the first 2,000
+# when there are more. A line is at most about 250, so 40 tasks fit; the backlog has no such bound,
+# so it is left to /task:status.
+on_session_start() {
 	[ "$(git -C "$CHECKOUT" rev-parse --absolute-git-dir)" = \
 		"$(git -C "$CHECKOUT" rev-parse --path-format=absolute --git-common-dir)" ] || return 0
 	[ -n "$(task_issues)" ] || return 0
-	trap '[ $? -eq 0 ] || { echo "task.sh attention failed, so the tasks are unknown: run it again once gh and claude agents answer."; exit 0; }' EXIT
+	trap '[ $? -eq 0 ] || { echo "The tasks are unknown: gh or claude agents did not answer. Report the status through /task:status once they do."; exit 0; }' EXIT
+	cleanup
 	SESSIONS=$(claude agents --json)
-	task_lines attention
+	task_lines
+	echo "In your first reply, report the status to the owner through /task:status."
 }
 
 case ${1:-} in
 start) [ $# -ge 2 ] || die "$usage"; start_task "$2" "${3:-feat}" ;;
 finish) [ $# -ge 2 ] || die "$usage"; finish_task "$2" ;;
-sweep) sweep ;;
+park) [ $# -ge 3 ] || die "$usage"; park "$2" "$3" ;;
+cleanup) cleanup ;;
 status) status ;;
-attention) attention ;;
+on-session-start) on_session_start ;;
 point-memory) point_memory "$CHECKOUT" && echo "✓ auto memory points at $CHECKOUT/.claude/memory" ;;
 *) die "$usage" ;;
 esac

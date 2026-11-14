@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
+# Run make gate at the top of this worktree and report it in a few lines; --fingerprint prints only
+# the tree. The tree fingerprints what the gate checked: HEAD's tree plus every change git does not
+# ignore, built in a temporary index so the real one is never touched.
+#   0  "Gate: PASS", the tree, the duration and the log's last 8 lines; the log is removed
+#   n  "Gate: FAIL (exit <n>)", the tree, the kept log's path and its last 80 lines, where n is
+#      make's exit status, 2 when a recipe fails
+#   2  usage, outside a Git worktree, or the tree can't be read; a failed gate keeps its status
+# So exit 2 alone can't tell a usage error from a failed gate: the first line printed does.
 set -u -o pipefail
 
 gate_repo=$(git rev-parse --show-toplevel 2>/dev/null) || {

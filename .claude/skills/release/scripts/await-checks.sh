@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# Poll one PR's checks until none are pending, then print them as "<bucket> <name> <link>".
+# Poll one PR's checks until none are pending, then print each as "<bucket>\t<name>\t<link>".
 #   0  every check passed or was skipped
 #   1  a check failed or was cancelled
 #   2  usage, or checks still pending at the deadline
@@ -12,8 +12,8 @@ pr=${1:-}
 [[ -n "$pr" ]] || { printf 'Usage: %s <pr-number>\n' "$0" >&2; exit 2; }
 
 interval=30
-grace=300                   # a configured workflow registers its checks well inside 5 minutes
-deadline=$((SECONDS + 3600)) # an hour covers a long build plus runner pickup and queueing
+grace=300     # a configured workflow registers its checks well inside 5 minutes
+deadline=3600 # an hour covers a long build plus runner pickup and queueing
 seen=0
 
 while :; do
