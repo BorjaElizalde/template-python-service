@@ -4,9 +4,11 @@
 # Two clones of one throwaway origin, named backend and frontend, stand in for two repositories.
 # Stub gh answers issue state and title, labels, blockers and comments, the open issues, and PRs,
 # from files under $TASK_TEST_STATE, keeps the labels and comments it is given there, and can't
-# answer while $TASK_TEST_STATE/gh-down exists; stub osascript logs the sessions it would open, end
-# or bring to the front; stub claude lists a session running in each folder named in
-# $TASK_TEST_STATE/running, and keeps the arguments a session launches with; stub ps gives its tty.
+# answer while $TASK_TEST_STATE/gh-down exists; stub osascript logs each call, runs the line it
+# types into a new tab as the tab's shell would, and ends or brings to the front the session in a
+# tab; stub claude lists a session running in each folder named in $TASK_TEST_STATE/running, and a
+# session it launches keeps its arguments and runs there until a test or a finish ends it; stub ps
+# gives a session's tty; stub sleep returns at once.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
@@ -27,6 +29,7 @@ title() {
     5) echo "Already done" ;;
     23) echo "Task 23, with a title longer than the forty characters of a task line" ;;
     25) echo "Design the next step" ;;
+    26) echo "Design a launch longer than a tty line" ;;
     8|9|1[0-9]|2[0-4]) echo "Task $1" ;;
     *) return 1 ;;
   esac
@@ -82,6 +85,16 @@ EOF
 cat >"$WORK/bin/osascript" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$TASK_TEST_STATE/osascript.log"
+# A line typed into a tab past 1024 bytes, newline included, never runs: its tty drops it.
+# $TASK_TEST_STATE/tab keeps the pid of the line's process.
+if [ $# -eq 2 ]; then
+  rm -f "$TASK_TEST_STATE/launched" "$TASK_TEST_STATE/claude-pid"
+  if [ "$(printf '%s\n' "$2" | wc -c)" -le 1024 ]; then
+    bash -s <<<"$2" &
+    echo $! >"$TASK_TEST_STATE/tab"
+    wait
+  fi
+fi
 # The session in a tab told to exit stops and its window closes. While $TASK_TEST_STATE/stuck exists
 # the session never stops, and the script fails as session_tab's does after 30 seconds.
 if [ "${3:-}" = exit ]; then
@@ -95,11 +108,20 @@ EOF
 # claude agents --json, as Claude Code prints it. Each line of $TASK_TEST_STATE/running,
 # "<folder> [<status>]", is a background session, then an interactive one, busy unless the line
 # says else, with pid 4242 on line 1, 4243 on line 2. While $TASK_TEST_STATE/claude-down exists,
-# it can't answer. Any other call launches a session: its arguments go to $TASK_TEST_STATE/launched,
-# each ended by a NUL, since the system prompt spans lines.
+# it can't answer. Any other call launches a session, which fails while $TASK_TEST_STATE/no-start
+# exists, else adds its folder to running: its arguments go to $TASK_TEST_STATE/launched, each ended
+# by a NUL, since the system prompt spans lines, and joined on one line of launches; its pid to
+# claude-pid.
 cat >"$WORK/bin/claude" <<'EOF'
 #!/usr/bin/env bash
-[ "$*" = "agents --json" ] || { printf '%s\0' "$@" >"$TASK_TEST_STATE/launched"; exit 0; }
+if [ "$*" != "agents --json" ]; then
+  [ ! -f "$TASK_TEST_STATE/no-start" ] || exit 1
+  printf '%s\0' "$@" >"$TASK_TEST_STATE/launched"
+  echo "${*//$'\n'/ }" >>"$TASK_TEST_STATE/launches"
+  echo $$ >"$TASK_TEST_STATE/claude-pid"
+  pwd -P >>"$TASK_TEST_STATE/running"
+  exit 0
+fi
 [ ! -f "$TASK_TEST_STATE/claude-down" ] || exit 1
 [ -f "$TASK_TEST_STATE/running" ] || { echo '[]'; exit 0; }
 jq -Rn '[inputs | capture("^(?<cwd>[^ ]+)( (?<status>.+))?$")] | to_entries | map(
@@ -112,7 +134,8 @@ cat >"$WORK/bin/ps" <<'EOF'
 #!/usr/bin/env bash
 [ "$1 $2 $3" = "-o tty= -p" ] && printf 'ttys%03d    \n' $(($4 - 4200))
 EOF
-chmod +x "$WORK/bin/gh" "$WORK/bin/osascript" "$WORK/bin/claude" "$WORK/bin/ps"
+printf '#!/usr/bin/env bash\n' >"$WORK/bin/sleep"
+chmod +x "$WORK/bin/gh" "$WORK/bin/osascript" "$WORK/bin/claude" "$WORK/bin/ps" "$WORK/bin/sleep"
 export PATH="$WORK/bin:$PATH"
 echo CLOSED >"$TASK_TEST_STATE/issue-5"
 
@@ -137,15 +160,10 @@ check() {  # check <desc> <command...>
 task() { bash "$1/.claude/skills/task/scripts/task.sh" "${@:2}"; }
 branch_of() { git -C "$1" rev-parse --abbrev-ref HEAD; }
 memory_of() { jq -r .autoMemoryDirectory "$1/.claude/settings.local.json"; }
-sessions() { grep -c -F "$1" "$TASK_TEST_STATE/osascript.log"; }
+sessions() { grep -c -F "$1" "$TASK_TEST_STATE/launches"; }
 last_osascript() { tail -n 1 "$TASK_TEST_STATE/osascript.log"; }
-# Runs here the command the session last opened runs in its Terminal tab, so that stub claude keeps
-# the arguments the session launches with.
-launch() {
-  rm -f "$TASK_TEST_STATE/launched"
-  bash -c "$(grep '^- cd ' "$TASK_TEST_STATE/osascript.log" | tail -n 1 | cut -c 3-)" && test -f "$TASK_TEST_STATE/launched"
-}
-launched() { jq -e -Rs 'split("\u0000")[:-1] | '"$1" "$TASK_TEST_STATE/launched"; }  # launched <jq filter>: over the launch's arguments
+sessions_exit() { rm -f "$TASK_TEST_STATE/running"; }  # every running session exits
+launched() { jq -e -Rs 'split("\u0000")[:-1] | '"$1" "$TASK_TEST_STATE/launched"; }  # launched <jq filter>: over the last launch's arguments
 launched_arg() { launched ".[index(\"$1\") + 1]" | jq -r .; }  # the value the launch gave option $1
 # launches_in execution|design: the session last opened launches in that mode. Every session has its
 # permission prompts denied, and the words both modes share, then its mode's own, as the system
@@ -153,7 +171,6 @@ launched_arg() { launched ".[index(\"$1\") + 1]" | jq -r .; }  # the value the l
 # session has the tool and no hook. claude --settings reads a file or a JSON string.
 launches_in() {
   local settings
-  launch || return 1
   settings="$(launched_arg --settings)"
   [ ! -f "$settings" ] || settings="$(cat "$settings")"
   jq -e '.hooks.PermissionRequest' <<<"$settings" &&
@@ -164,10 +181,10 @@ launches_in() {
     [ "$(launched_arg --disallowed-tools)" = AskUserQuestion ] && jq -e '.hooks.Stop' <<<"$settings"
   fi
 }
-# The session last opened runs claude interactively, with no -p or --print argument.
+# The session last opened runs claude interactively, with no -p or --print, as its tab's only process.
 interactive() {
-  grep '^- cd ' "$TASK_TEST_STATE/osascript.log" | tail -n 1 | grep -q ' && exec claude ' &&
-    launch && launched 'all(.[]; . != "-p" and . != "--print")'
+  launched 'all(.[]; . != "-p" and . != "--print")' &&
+    [ "$(cat "$TASK_TEST_STATE/claude-pid")" = "$(cat "$TASK_TEST_STATE/tab")" ]
 }
 transcript() {  # transcript <folder> [<name> <[CC]YYMMDDhhmm>]: a claude session in that folder writes it, now or then
   local dir; dir="$CLAUDE_CONFIG_DIR/projects/$(printf '%s' "$1" | tr -c 'a-zA-Z0-9' '-')"
@@ -203,12 +220,13 @@ check "its memory points at itself"            test "$(memory_of "$ISSUE42/backe
 check "the main checkout's memory points at it" test "$(memory_of "$BACKEND")" = "$BACKEND/.claude/memory"
 check "its session opens with the issue name"  test "$(sessions '#42 backend: Name make close_claude_session in')" -eq 1
 check "and the start names its mode"           grep -qxF '✓ session opened in execution mode: #42 backend: Name make close_claude_session in' "$WORK/out"
-check "with a first prompt that reads its issue" bash -c "tail -n 1 '$TASK_TEST_STATE/osascript.log' | grep -qF 'gh issue view 42 -R acme/tasks --comments'"
-check "an interactive claude, never -p or --print" interactive
+check "with a first prompt that reads its issue" bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'gh issue view 42 -R acme/tasks --json title,body,comments'"
+check "an interactive claude, never -p or --print, the tab's only process" interactive
 check "in execution mode: no question tool, a Stop hook, permission prompts denied" launches_in execution
+sessions_exit
 check "starting again resumes, creates nothing" task "$BACKEND" start 42
 check "the session opens a second time"        test "$(sessions '#42 backend:')" -eq 2
-check "both fresh: no transcript exists yet"   bash -c "! grep -q -- --continue '$TASK_TEST_STATE/osascript.log'"
+check "both fresh: no transcript exists yet"   bash -c "! grep -q -- --continue '$TASK_TEST_STATE/launches'"
 check "frontend joins the same issue folder"   task "$FRONTEND" start 42
 check "side by side, no collision"             test -d "$ISSUE42/frontend"
 check "a start inside a worktree"              task "$ISSUE42/backend" start 7 fix
@@ -219,9 +237,10 @@ refuses "a closed issue does not start"          'is CLOSED'            "$BACKEN
 
 echo "-- start: an existing issue picks up its session"
 transcript "$ISSUE42/backend"
+sessions_exit
 check "a session with a transcript"            task "$BACKEND" start 42
-check "resumes it with --continue"             bash -c "tail -n 1 '$TASK_TEST_STATE/osascript.log' | grep -q -- ' --continue '"
-check "and the same first prompt"              bash -c "tail -n 1 '$TASK_TEST_STATE/osascript.log' | grep -qF 'Work on issue #42 in acme/tasks.'"
+check "resumes it with --continue"             launched 'index("--continue") != null'
+check "and the same first prompt"              bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Work on issue #42 in acme/tasks.'"
 check "still interactive"                      interactive
 echo "$ISSUE42/backend" >"$TASK_TEST_STATE/running"
 check "a running session"                      task "$BACKEND" start 42
@@ -249,6 +268,7 @@ check "on a design branch"                     test "$(branch_of "$ISSUE25/backe
 check "and the start names design mode"        grep -qxF '✓ session opened in design mode: #25 backend: Design the next step' "$WORK/out"
 check "in design mode: the question tool, no Stop hook, permission prompts denied" launches_in design
 transcript "$ISSUE25/backend"
+sessions_exit
 check "a start with no type"                   run_in "$BACKEND" start 25
 check "resumes it in design mode"              grep -qxF '✓ session resumed in design mode: #25 backend: Design the next step' "$WORK/out"
 check "and launches it so"                     launches_in design
@@ -270,6 +290,22 @@ git -C "$ISSUE25/backend" push -q origin HEAD 2>/dev/null
 echo CLOSED >"$TASK_TEST_STATE/issue-25"
 check "a design task finishes as any other"    task "$BACKEND" finish 25
 
+echo "-- start: a session launched by a command longer than the 1024 bytes a tty line holds"
+LONG="$WORK/repos/$(printf 'long-%.0s' {1..30})backend"
+ISSUE26="$WORK/repos/worktrees/26-design-a-launch-longer-than-a-tty-line/$(basename "$LONG")"
+git clone -q "$WORK/origin.git" "$LONG"
+check "a design task in a repository with a long name" run_in "$LONG" start 26 design
+check "has a command over 1024 bytes"          test "$(wc -c <"$(git -C "$ISSUE26" rev-parse --absolute-git-dir)/task-session.sh")" -gt 1024
+check "and its session runs"                   grep -qxF "✓ session opened in design mode: #26 $(basename "$LONG"): Design a launch longer than a tty line" "$WORK/out"
+check "in design mode"                         launches_in design
+check "the tab's only process"                 interactive
+sessions_exit
+touch "$TASK_TEST_STATE/no-start"
+check "a start whose session never runs fails" bash -c "! (cd '$LONG' && bash .claude/skills/task/scripts/task.sh start 26) >'$WORK/out' 2>&1"
+check "says why, and never that a session opened" bash -c "
+  tail -n 1 '$WORK/out' | grep -q '^no session runs in .* 30 seconds after its launch: ' && ! grep -q '^✓ session' '$WORK/out'"
+rm "$TASK_TEST_STATE/no-start"
+
 echo "-- finish: refused while anything would be lost"
 refuses "an open issue does not finish"          'still open'           "$BACKEND" finish 42
 echo CLOSED >"$TASK_TEST_STATE/issue-42"
@@ -288,7 +324,7 @@ rm "$TASK_TEST_STATE/stuck"
 
 echo "-- finish: closed issue, nothing unshipped"
 check "a pushed branch finishes"               task "$BACKEND" finish 42
-check "its session ended and its window closed" test "$(sessions '/dev/ttys042 exit')" -eq 2
+check "its session ended and its window closed" test "$(last_osascript)" = "- /dev/ttys042 exit"
 check "its worktree is gone"                   test ! -e "$ISSUE42/backend"
 check "its local branch is gone"               bash -c "! git -C '$BACKEND' rev-parse -q --verify feat/42-name-make-close-claude-session-in"
 check "the issue folder stays for frontend"    test -d "$ISSUE42/frontend"

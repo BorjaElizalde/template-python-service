@@ -40,8 +40,8 @@ def durability:
   + " change? Say what holds, not what changed: no versions it moved from, no past bugs, no"
   + " \"now\", \"no longer\", \"since\" or \"used to\".";
 
-# Whether a text holds a reason in the form the stack's skipped-checks rule gives: why this is
-# right here, then one "Tried <alternative>, but <why it was discarded>." per alternative. A Tried
+# Whether a text holds a reason in the form .claude/rules/conventions.md gives: why this is right
+# here, then one "Tried <alternative>, but <why it was discarded>." per alternative. A Tried
 # sentence starts the text or follows a full stop, a `#` or a line break.
 def reason_form:
   [splits("(^|[.#\\n])\\s*tried\\s"; "i")] as $parts

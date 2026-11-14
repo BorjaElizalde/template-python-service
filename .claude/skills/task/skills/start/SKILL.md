@@ -10,14 +10,8 @@ The same steps start a new task and pick up an existing one.
 
 1. Find the issue. Given a number, use it. Otherwise search the open issues with
    `gh issue list -R BorjaElizalde/template-python-service --state open --search "<keywords>"` and reuse one that
-   covers the task. Otherwise create one with `gh issue create -R BorjaElizalde/template-python-service`: an imperative
-   title, and a body that states the goal, the scope, and what done means. For a research or a
-   design task, also say where its result goes: a PR, or a comment on the issue. The issue is the
-   session's whole brief: it sees nothing of the conversation that started it, so the body
-   carries every decision already taken and what the conversation found out. On an existing
-   issue, add what was settled since as a comment. Never point a task at a scratchpad, `/tmp` or
-   `/private/tmp` path: a restart wipes them, and a consumer project lost a task's input files
-   that way. What a task needs goes in the issue, or the task rebuilds it.
+   covers the task. Otherwise create one with `gh issue create -R BorjaElizalde/template-python-service`, written as
+   "Write an issue" below says. On an existing issue, add what was settled since as a comment.
 2. Pick the branch type. It is the task's mode, for the task's life:
    - **Execution**, the default: `feat`, `fix`, `refactor` or `chore` for a change, `research`
      for a task whose result is an answer. Its session works alone and never waits for a person.
@@ -45,6 +39,46 @@ The same steps start a new task and pick up an existing one.
 4. Return the issue URL, the worktree path, the session name, its mode and what the script picked
    up. Then report the status through `/task:status`.
 
+## Write an issue
+
+An issue states the problem; the PR that closes it states the solution. A reader who has only the
+issue must see why the work exists, whether it is worth doing, and when it is done. The session
+reads it to find the simplest design, and to find its way back when a design fails: a problem
+leaves it free to do both, where a prescribed solution ties it to one design.
+
+The title names the problem or the outcome, not a step to take: "A restart wipes a task's input
+files", not "Move task inputs out of /tmp". Its first 40 characters name the task's branch,
+session and status line, so they must tell the task apart.
+
+The body opens with the first two parts below, in this order. The other three follow, in this
+order, only when there is something to put in them:
+
+```markdown
+## Problem
+What is wrong or missing today, whom it costs and how, and the evidence: `file:line`, an issue,
+an error, a number, the owner's words quoted. For a research task, the question and why its
+answer is needed.
+
+## What is true when this is solved
+What the result is checked against, not the steps to reach it. For a research or a design task,
+also where its result goes: a PR, or a comment on the issue.
+
+## The owner's decisions
+Only what the owner decided, which the session follows. What anyone else chose goes under the
+proposed solution.
+
+## Findings
+What the conversation found out, so the session does not find it again.
+
+## Proposed solution (improve it)
+How the work could be done: the session may improve it or replace it.
+```
+
+The issue is the session's whole brief: it sees nothing of the conversation that started it, so
+every decision and every finding goes in the body. Never point a task at a scratchpad, `/tmp` or
+`/private/tmp` path: a restart wipes them, and a consumer project lost a task's input files that
+way. What a task needs goes in the issue, or the task rebuilds it.
+
 ## Issues that must wait
 
 No agent starts an issue that is blocked or parked. GitHub holds both facts:
@@ -66,8 +100,9 @@ owner says "plan X with me", start a `design` task, whose session works the plan
 Either issue's body asks its session to:
 
 1. study the code and the open issues;
-2. create one issue per piece of work, whose body states its goal, its scope and what done means,
-   as step 1 asks of any issue;
+2. create one issue per piece of work, written as "Write an issue" in
+   `.claude/skills/task/skills/start/SKILL.md` says: the problem it solves first, then what is
+   true when it is solved;
 3. put them in order, creating each one `--blocked-by` the issues it waits for;
 4. park each one with
    `bash .claude/skills/task/scripts/task.sh park <n> "planned in #<this issue>, waits for the owner's review"`;
