@@ -121,18 +121,18 @@ point_memory() {
 	mv "$settings.tmp" "$settings"
 }
 
-# A word quoted for the shell of a Terminal tab.
+# A word quoted for a shell.
 quoted() {
 	local quote="'" escaped="'\\''"
 	printf "'%s'" "${1//$quote/$escaped}"
 }
 
-# open_session <worktree> <name> <issue> <mode> [--continue]
+# open_session <worktree> <name> <issue> <mode> [--continue]: returns once the session runs.
 open_session() {
 	# A session opened without a first prompt waits at an empty input, so this one sends it to its
 	# issue. One prompt serves a new session and a resumed one.
-	local first="Work on issue #$3 in $ISSUES_REPO. Read it with its comments: gh issue view $3 -R $ISSUES_REPO --comments. Carry it out until it is done as the issue says; if this session already worked on it, go on from where it stopped."
-	local files=$MAIN/.claude/skills/task/session settings tools=" --disallowed-tools AskUserQuestion" command
+	local first="Work on issue #$3 in $ISSUES_REPO. Read its title, body and comments: gh issue view $3 -R $ISSUES_REPO --json title,body,comments. Carry it out until it is done as the issue says; if this session already worked on it, go on from where it stopped."
+	local files=$MAIN/.claude/skills/task/session settings tools=" --disallowed-tools AskUserQuestion" command launcher
 	settings=$files/settings.json
 	# Every session has its permission prompts denied. An execution session never waits for a
 	# person: it has no question tool, and its Stop hook sends it back to work when it ends its turn
@@ -142,13 +142,18 @@ open_session() {
 		settings=$(jq -c 'del(.hooks.Stop)' "$settings")
 		tools=
 	fi
-	# exec leaves claude the tab's only process, so the tab is empty once claude exits. claude takes
-	# one appended system prompt, so the tab's shell joins the words both modes share and the mode's
-	# own. The first prompt comes after -n: --disallowed-tools takes every value up to the next option.
+	# claude takes one appended system prompt, so the launcher joins the words both modes share and
+	# the mode's own. The first prompt comes after -n: --disallowed-tools takes every value up to the
+	# next option.
 	command="cd $(quoted "$1") && exec claude ${5:+$5 }--settings $(quoted "$settings")"
 	command+=" --append-system-prompt \"\$(cat $(quoted "$files/prompt.md") $(quoted "$files/$4.md"))\""
 	command+="$tools -n $(quoted "$2") $(quoted "$first")"
-	osascript - "$command" >/dev/null <<'APPLESCRIPT'
+	# The tty drops a typed line past 1024 bytes (MAX_CANON), so Terminal types only the line that
+	# runs a launcher. The launcher sits in the worktree's git dir, out of the work tree that a
+	# finish needs clean. exec leaves claude the tab's only process, so the tab is empty once it exits.
+	launcher=$(git -C "$1" rev-parse --absolute-git-dir)/task-session.sh
+	printf '%s\n' "$command" >"$launcher"
+	osascript - "exec bash $(quoted "$launcher")" >/dev/null <<'APPLESCRIPT'
 on run {command}
 	tell application "Terminal"
 		do script command
@@ -156,6 +161,13 @@ on run {command}
 	end tell
 end run
 APPLESCRIPT
+	# The tab's shell, then claude, take seconds to start.
+	for _ in {1..30}; do
+		SESSIONS=$(claude agents --json)
+		session "$1" >/dev/null && return
+		sleep 1
+	done
+	die "no session runs in $1 30 seconds after its launch: its Terminal tab shows why"
 }
 
 # session_tab <tty> exit|focus: ends the session in that Terminal tab and closes its window, or brings

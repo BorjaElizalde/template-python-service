@@ -10,8 +10,9 @@ allowed-tools: Bash(bash:*), Bash(gh issue view:*)
    its newest PR with that PR's checks, and when the session last wrote. Then come Ready, Blocked,
    with the open issues each waits on, and Parked, with each reason; a parked line also names an
    open blocker.
-2. Read each task's issue with `gh issue view <n> -R BorjaElizalde/template-python-service --comments`, for its goal
-   and any `Owner steps` comment, and the last message of each session that is idle or waiting.
+2. Read each task's issue with `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`,
+   for its goal and any `Owner steps` comment, and the last message of each session that is idle or
+   waiting.
 3. A line that ends in `needs attention` asks for a move. Make it by the first case that fits, and
    give the task's card its mark:
    - a design task, waiting, or idle with a question in its last message: the question is the
