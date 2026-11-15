@@ -2,7 +2,7 @@
 # REMIND on every new docstring: on the outside surface to write for that reader, elsewhere to ask
 # whether better code would say it instead. STOP on a module docstring anywhere but in a migration
 # (Alembic shows it as the revision message), and on a docstring that lists parameters, return
-# values or exceptions (docstrings.md). An MCP tool keeps its Args:
+# values or exceptions (python-conventions.md, Docstrings). An MCP tool keeps its Args:
 # section: fastmcp writes it into the tool's input schema as the parameter descriptions, and once a
 # docstring has one it drops the Returns: and Raises: sections. Python makes a str literal a
 # docstring when it is the first statement of the module or of a def or class body; b- and
@@ -68,7 +68,7 @@ def check($ctx):
   | if ($modules + $params | length) > 0 then
       (select($modules != [])
        | {level: "stop", text: ("Stopped by the practices hook, docstring rule"
-           + " (.claude/rules/docstrings.md). This edit adds a"
+           + " (.claude/rules/python-conventions.md, Docstrings). This edit adds a"
            + " module docstring:\n" + ($modules | map("- `\(short)`") | join("\n"))
            + "\nModules don't get docstrings in this codebase, except a migration's, which Alembic"
            + " shows as the revision message. Remove it. If it held something the code can't show,"
@@ -76,7 +76,7 @@ def check($ctx):
            + " one-line comment where it applies.")}),
       (select($params != [])
        | {level: "stop", text: ("Stopped by the practices hook, docstring rule"
-           + " (.claude/rules/docstrings.md). This docstring lists"
+           + " (.claude/rules/python-conventions.md, Docstrings). This docstring lists"
            + " parameters, return values or exceptions:\n"
            + ($params | map("- `\(.line | short)`: `\(.param | trimmed)`") | join("\n"))
            + "\n"
@@ -94,8 +94,8 @@ def check($ctx):
     elif $added == [] then empty
     elif $surface then
       {level: "remind", text: ("Practices hook, docstring rule"
-        + " (.claude/rules/docstrings.md). This docstring is read outside the code"
-        + " (API docs, SDK hover"
+        + " (.claude/rules/python-conventions.md, Docstrings). This docstring is read outside the"
+        + " code (API docs, SDK hover"
         + " text, MCP client or --help): `\($added[0] | short)`\($added | count_more). Write for"
         + " that reader in one to three sentences: what it does for them, what to send, what comes"
         + " back, and which errors come back by their ``ERR_...`` code. No internals (tables,"
@@ -110,7 +110,7 @@ def check($ctx):
           else "" end)}
     else
       {level: "remind", text: ("Practices hook, docstring rule"
-        + " (.claude/rules/docstrings.md). This edit adds a docstring:"
+        + " (.claude/rules/python-conventions.md, Docstrings). This edit adds a docstring:"
         + " `\($added[0] | short)`"
         + ($added | count_more) + ". This codebase prefers code that explains itself. Before"
         + " keeping it, ask: could a clearer name, a smaller function or a simpler structure say"
