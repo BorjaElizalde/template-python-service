@@ -29,12 +29,6 @@ service's own parts.
   failure), never per data item, and never for an outcome already saved in the database or
   returned to the caller
 
-## Code Style
-- Adapt to existing code style (structure, naming, idiom): before extending a module — and
-  especially before creating a new file — read similar files in that module and match their
-  structure and standards. Comment density is NOT style to match: `comments-and-docstrings.md`
-  governs comments, even when neighboring files are denser
-
 ## Duplicated Code
 - The gate fails on a block of 10 lines or more written twice outside `tests/` and `database/`,
   imports aside (jscpd, set in `.jscpd.json`). Fix each copy in this order: first delete the copy
