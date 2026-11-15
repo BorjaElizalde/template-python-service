@@ -19,7 +19,7 @@
 # runs. It cannot see what the command would stage, so `git add -A` and an explicit path are
 # indistinguishable to it. What it actually enforces is narrower and still worth having — a commit
 # is blocked while `git status` reports an untracked `.md` under a memory store, which is what
-# catches a reviewer note nobody ever committed.
+# catches a memory note nobody ever committed.
 #
 # The consequence is that staging must be its own tool call. A compound
 # `git add <new-note> && git commit` is blocked, because at hook time the note is still untracked.
