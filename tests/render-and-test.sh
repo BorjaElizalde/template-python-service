@@ -28,7 +28,6 @@ expect() {  # expect <desc> <command...>; a failure prints the command's own lin
 }
 commit() { git -C "$1" add -A && git -C "$1" commit -qm "$2"; }
 
-# Every agentic render here comes from this clone, the version the bundle must be.
 git -c advice.detachedHead=false clone --quiet --branch "$AGENTIC_REF" "$AGENTIC_SRC" "$OUT/agentic"
 expect "the bundle is the agentic version the answers record: make bundle writes it" \
   bash "$OUT/agentic/bundle.sh" --check "$OUT/src"
@@ -70,7 +69,6 @@ like_two_layers() {
 }
 expect "a copy of this template alone gives the two layers' files, with one answers file" like_two_layers
 
-# The README's next steps move it to one answers file, and keep the files each layer seeds once.
 printf 'own:\n\t@echo own\n' >>"$TWO/Makefile"
 printf '{}\n' >"$TWO/renovate.json"
 commit "$TWO" own

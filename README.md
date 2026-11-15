@@ -60,7 +60,7 @@ The bundled `template-agentic` asks its questions first: `issues_repo`, `worktre
 | `package_name` | The application's package directory: the project name in `pyproject.toml`, and the app paths that the docstring check and the rules name (the API and MCP surface, `config.py`) |
 | `test_boundaries` | Calls that also count as a test boundary for the tests check, beyond endpoints, MCP tools, batch tasks and the CLI (e.g. a release step's entry point, as `module.function`) |
 
-The practice checks read it from `.claude/hooks/practices/stack.json`, the only rendered file they
+The practice checks read them from `.claude/hooks/practices/stack.json`, the only rendered file they
 load, so they stay plain jq that the template's tests run directly.
 
 ## What the template fills in
@@ -142,9 +142,9 @@ issues repository: `.claude/` holds the whole harness, and `.copier-answers.agen
 the version and the answers, `Build` as the deploy workflow among them. `template/` bundles the
 same version: `make bundle` runs that version's `bundle.sh`, which writes its files into
 `template/`, lists them in `agentic/files`, and copies its `copier.yaml` to `agentic/copier.yaml`,
-which `copier.yaml` includes. A bundled file changes only through `make bundle`. Renovate's Copier
-manager brings each new `template-agentic` release as an update PR, which moves the version but
-not the bundle: its gate fails until `make bundle` runs on its branch and the result is pushed.
+which `copier.yaml` includes. Renovate's Copier manager brings each new `template-agentic`
+release as an update PR, which moves the version but not the bundle: its gate fails until
+`make bundle` runs on its branch and the result is pushed.
 An update that adds a question takes its default, so check the new answer in the PR. The
 repository's `renovate.json` extends the shared rules, `renovate/base` in `template-agentic`, and
 keeps the github-actions manager off `.github/workflows/gate.yaml` and its bundled copy, which come
