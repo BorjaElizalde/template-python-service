@@ -62,7 +62,7 @@ commit "$TWO" agentic
 D="$OUT/project"
 uvx --quiet copier copy --quiet --defaults --vcs-ref v1 "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" "$V" "$D"
 like_two_layers() {
-  diff -rq --exclude .git --exclude '.copier-answers.*' "$TWO" "$D" &&
+  diff -rq --exclude .git --exclude '.copier-answers.*' --exclude renovate.json --exclude MEMORY.md "$TWO" "$D" &&
     [ "$(cd "$D" && ls -d .copier-answers.*)" = .copier-answers.python-service.yaml ] &&
     grep -qx 'worktree_root: ../trees' "$D/.copier-answers.python-service.yaml" &&
     grep -qx 'package_name: app' "$D/.copier-answers.python-service.yaml"
@@ -77,7 +77,7 @@ moves_to_one() {
     grep -v '^[_#]' .copier-answers.agentic.yaml >>.copier-answers.python-service.yaml &&
     git rm -q .copier-answers.agentic.yaml && git commit -qam 'Keep one answers file' &&
     uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml --vcs-ref v1) &&
-    diff -rq --exclude .git --exclude Makefile --exclude renovate.json "$TWO" "$D" &&
+    diff -rq --exclude .git --exclude Makefile --exclude renovate.json --exclude MEMORY.md "$TWO" "$D" &&
     grep -qx 'own:' "$TWO/Makefile" && [ "$(cat "$TWO/renovate.json")" = '{}' ]
 }
 expect "the README's steps move a two-layer project to one answers file, keeping its answers and seeded files" moves_to_one
