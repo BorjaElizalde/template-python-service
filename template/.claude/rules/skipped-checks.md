@@ -13,9 +13,8 @@ skipped-check rules in `conventions.md`.
   `# jscpd:ignore-end` around a copy. The docs to read first are those of ruff, basedpyright,
   bandit, pytest and jscpd. A rule's documented fix is often a Python idiom, such as
   `contextlib.suppress` for an expected exception
-- The line length is 100 columns. `# fmt: off` and `# pyright:` file directives must stand alone,
-  so their reason always goes on the comment lines above. For example, a reason too long for its
-  line:
+- The line length is 100 columns. `# fmt: off` and `# pyright:` file directives must stand alone.
+  For example, a reason too long for its line:
   ```python
   # If one provider fails, carry on with the other providers.
   # Tried naming the errors, but the HTTP client, the parser and the database each raise their own.
