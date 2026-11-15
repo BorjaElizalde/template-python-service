@@ -8,9 +8,10 @@ them instead of copying them.
 
 ## Apply and update
 
-`template-agentic` goes first: this template fills its plug-in points. The template can't check
-that the agentic layer is there, because Copier renders every update's old and new versions into
-empty folders, where no other layer's files exist.
+`template-agentic` goes first: this template fills its plug-in points, and its rules add to the
+agentic `.claude/rules/conventions.md`, which needs `template-agentic` 20261114.1 or later. The
+template can't check that the agentic layer is there, because Copier renders every update's old
+and new versions into empty folders, where no other layer's files exist.
 
 ```bash
 uvx copier copy <agentic-template-url> .   # writes .copier-answers.agentic.yaml
