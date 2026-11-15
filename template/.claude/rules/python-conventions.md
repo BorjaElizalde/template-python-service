@@ -39,8 +39,8 @@ service's own parts.
 - Functions, methods, classes and tests may have a docstring, at a very high bar: one or two
   sentences on why it exists or how a caller must use it (a contract to respect, a required order
   of calls, a side effect to expect), and only when a reader can't tell that from the code and the
-  name. Nothing the code or the name already says, and no history. A contract callers must respect
-  goes in the function's or class's docstring
+  name. Nothing the code or the name already says. A contract callers must respect goes in the
+  function's or class's docstring
 - No docstring lists parameters, return values or exceptions (`Args:`, `Returns:`, `Raises:`,
   `:param`): the signature and its types already say that. The exception is an `Args:` section on
   an MCP tool: fastmcp writes it into the tool's schema as the parameter descriptions the LLM
