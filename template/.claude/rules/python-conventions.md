@@ -37,7 +37,7 @@ service's own parts.
   Philosophy forbids
 - Keep both copies only when they look alike but change for different reasons. Then the copy goes
   between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with its reason in the form
-  `skipped-checks.md` gives
+  `conventions.md` gives
 
 ## Module Imports
 - Importing a module must not execute work: modules define and export, nothing runs

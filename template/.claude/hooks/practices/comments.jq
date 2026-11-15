@@ -48,7 +48,7 @@ def check($ctx):
       + " data-integrity rule, a contract callers must respect, or the reason for a skipped check"
       + " or an except. If it restates the code, the history or the diff, delete it. Keep what"
       + " stays to one line, except a skipped check's reason, which takes the form"
-      + " skipped-checks.md gives, and the comment that opens a TOML, YAML or Makefile file,"
+      + " conventions.md gives, and the comment that opens a TOML, YAML or Makefile file,"
       + " which says what the file is for, the contract it keeps and how to run it, in as few"
       + " lines as that takes."
       + ($history | map("\nIt reads like history (`\(.)`): say what holds and why, not what"

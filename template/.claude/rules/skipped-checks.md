@@ -11,7 +11,8 @@ skipped-check rules in `conventions.md`.
 - Python's skipped checks are `# noqa`, `# type: ignore`, `# pyright: ignore`, `# nosec`,
   `# pragma: no cover`, `# fmt: skip/off`, a pytest skip, and `# jscpd:ignore-start` through
   `# jscpd:ignore-end` around a copy. The docs to read first are those of ruff, basedpyright,
-  bandit, pytest and jscpd
+  bandit, pytest and jscpd. A rule's documented fix is often a Python idiom, such as
+  `contextlib.suppress` for an expected exception
 - The line length is 100 columns. `# fmt: off` and `# pyright:` file directives must stand alone,
   so their reason always goes on the comment lines above. For example, a reason too long for its
   line:
