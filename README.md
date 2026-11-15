@@ -58,6 +58,7 @@ The bundled `template-agentic` asks its questions first: `issues_repo`, `worktre
 | Question | Used for |
 |---|---|
 | `package_name` | The application's package directory: the project name in `pyproject.toml`, and the app paths that the docstring check and the rules name (the API and MCP surface, `config.py`) |
+| `test_boundaries` | Calls that also count as a test boundary for the tests check, beyond endpoints, MCP tools, batch tasks and the CLI (e.g. a release step's entry point, as `module.function`) |
 
 The practice checks read it from `.claude/hooks/practices/stack.json`, the only rendered file they
 load, so they stay plain jq that the template's tests run directly.

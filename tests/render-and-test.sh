@@ -33,10 +33,7 @@ git -c advice.detachedHead=false clone --quiet --branch "$AGENTIC_REF" "$AGENTIC
 expect "the bundle is the agentic version the answers record: make bundle writes it" \
   bash "$OUT/agentic/bundle.sh" --check "$OUT/src"
 
-# This template's releases. v0 is one from before the bundle, which a project applied beside
-# template-agentic: no bundled file, and an answers-file template of its own. Copier reads the
-# !include of the missing agentic/copier.yaml as empty. v1 is the working tree, and v2 bundles a
-# change of the next template-agentic release.
+# v0 is a two-layer release; Copier reads the !include of the missing agentic/copier.yaml as empty.
 V="$OUT/versions"
 release() { commit "$V" "$1" && git -C "$V" tag "$1"; }
 cp -R "$OUT/src" "$V"
@@ -54,8 +51,7 @@ release v2
 
 AGENTIC_ANSWERS=(--data issues_repo=acme/tasks --data worktree_root=../trees)
 PYTHON_ANSWERS=(--data package_name=app --data 'test_boundaries=[release.run]')
-# A project that applied an earlier template-agentic release, then a release of this template from
-# before the bundle. The README's first step brings its agentic layer to the bundle's version.
+# A two-layer project on an earlier agentic release, which the README's first step brings forward.
 TWO="$OUT/two-layers"
 uvx --quiet copier copy --quiet --defaults --vcs-ref "$(git -C "$OUT/agentic" describe --tags --abbrev=0 HEAD~1)" \
   "${AGENTIC_ANSWERS[@]}" "$OUT/agentic" "$TWO"
