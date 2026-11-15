@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Renders template-agentic, then this template on top, the way a project gets them, and runs the
-# rendered harness's suites. Needs uv, git and jq.
+# Copies this template, template-agentic bundled in, the way a project gets it, and runs the
+# rendered harness's suites. make gate runs it with AGENTIC_SRC and AGENTIC_REF set. Needs uv, git
+# and jq.
 # SC2329: each check below is a function passed to expect as its command, so expect prints the
 # check's result and counts its failure. Tried calling each check directly, but then nothing
 # reports or counts it. Tried a directive on each function, but that repeats this reason for
@@ -9,17 +10,12 @@
 # shellcheck disable=SC2329
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# This repository applies template-agentic to itself, and every render here uses the source and
-# version its answers record, so a new agentic release reaches this gate through its update PR.
-# AGENTIC_SRC and AGENTIC_REF override them to test an unreleased change: a local clone and a branch.
-answer() { sed -n "s/^$1: '\{0,1\}\([^']*\)'\{0,1\}\$/\1/p" "$ROOT/.copier-answers.agentic.yaml"; }
-AGENTIC_SRC="${AGENTIC_SRC:-$(answer _src_path)}"
-AGENTIC_REF="${AGENTIC_REF:-$(answer _commit)}"
 # The real path: Copier compares the resolved answers path with the project path, so a project
 # reached through a symlink (macOS /var -> /private/var) reads its own answers as outside it.
 OUT="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$OUT"' EXIT
 fail=0
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 
 # A plain copy, so the render is the working tree whether or not it is committed or tagged.
 mkdir -p "$OUT/src"
@@ -30,47 +26,83 @@ expect() {  # expect <desc> <command...>; a failure prints the command's own lin
   if out="$("${@:2}" 2>&1)"; then echo "PASS $1"
   else echo "FAIL $1"; { grep -E 'FAIL|rror' <<<"$out" || tail -n 3 <<<"$out"; } | head -20 | sed 's/^/    /'; fail=1; fi
 }
+commit() { git -C "$1" add -A && git -C "$1" commit -qm "$2"; }
 
-# A project takes the next release with copier update. Copier renders the old version and the new
-# one into empty folders, so a question that reads another layer's files fails the update.
+# Every agentic render here comes from this clone, the version the bundle must be.
+git -c advice.detachedHead=false clone --quiet --branch "$AGENTIC_REF" "$AGENTIC_SRC" "$OUT/agentic"
+expect "the bundle is the agentic version the answers record: make bundle writes it" \
+  bash "$OUT/agentic/bundle.sh" --check "$OUT/src"
+
+# This template's releases. v0 is one from before the bundle, which a project applied beside
+# template-agentic: no bundled file, and an answers-file template of its own. Copier reads the
+# !include of the missing agentic/copier.yaml as empty. v1 is the working tree, and v2 bundles a
+# change of the next template-agentic release.
 V="$OUT/versions"
-U="$OUT/updated"
-mkdir -p "$V"
-(cd "$OUT/src" && tar -cf - .) | tar -xf - -C "$V"
+release() { commit "$V" "$1" && git -C "$V" tag "$1"; }
+cp -R "$OUT/src" "$V"
 git -C "$V" init -q
-git -C "$V" add -A
-git -C "$V" -c user.name=t -c user.email=t@t commit -qm v1
-git -C "$V" tag v1
-printf 'probe\n' >"$V/template/update-probe.txt"
-git -C "$V" add -A
-git -C "$V" -c user.name=t -c user.email=t@t commit -qm v2
-git -C "$V" tag v2
-uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$U"
-uvx --quiet copier copy --quiet --defaults --vcs-ref v1 --data package_name=app "$V" "$U"
-git -C "$U" init -q
-git -C "$U" add -A
-git -C "$U" -c user.name=t -c user.email=t@t commit -qm copy
-expect "a project takes the next release with copier update" bash -c "cd '$U' &&
-  GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
-    uvx --quiet copier update --quiet --skip-answered --defaults -a .copier-answers.python-service.yaml --vcs-ref v2 &&
+while IFS= read -r f; do rm "$V/template/$f"; done <"$V/agentic/files"
+rm -r "$V/agentic"
+cp "$OUT/agentic/template/{{ _copier_conf.answers_file }}.jinja" "$V/template/"
+release v0
+(cd "$OUT/src" && tar -cf - .) | tar -xf - -C "$V"
+release v1
+cp -R "$OUT/agentic" "$OUT/agentic-next"
+printf 'probe\n' >"$OUT/agentic-next/template/update-probe.txt"
+bash "$OUT/agentic-next/bundle.sh" "$V"
+release v2
+
+AGENTIC_ANSWERS=(--data issues_repo=acme/tasks --data worktree_root=../trees)
+PYTHON_ANSWERS=(--data package_name=app --data 'test_boundaries=[release.run]')
+# A project that applied an earlier template-agentic release, then a release of this template from
+# before the bundle. The README's first step brings its agentic layer to the bundle's version.
+TWO="$OUT/two-layers"
+uvx --quiet copier copy --quiet --defaults --vcs-ref "$(git -C "$OUT/agentic" describe --tags --abbrev=0 HEAD~1)" \
+  "${AGENTIC_ANSWERS[@]}" "$OUT/agentic" "$TWO"
+uvx --quiet copier copy --quiet --defaults --vcs-ref v0 "${PYTHON_ANSWERS[@]}" "$V" "$TWO"
+git -C "$TWO" init -q
+commit "$TWO" two-layers
+(cd "$TWO" && uvx --quiet copier update --quiet --defaults -a .copier-answers.agentic.yaml --vcs-ref HEAD)
+commit "$TWO" agentic
+D="$OUT/project"
+uvx --quiet copier copy --quiet --defaults --vcs-ref v1 "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" "$V" "$D"
+like_two_layers() {
+  diff -rq --exclude .git --exclude '.copier-answers.*' "$TWO" "$D" &&
+    [ "$(cd "$D" && ls -d .copier-answers.*)" = .copier-answers.python-service.yaml ] &&
+    grep -qx 'worktree_root: ../trees' "$D/.copier-answers.python-service.yaml" &&
+    grep -qx 'package_name: app' "$D/.copier-answers.python-service.yaml"
+}
+expect "a copy of this template alone gives the two layers' files, with one answers file" like_two_layers
+
+# The README's next steps move it to one answers file, and keep the files each layer seeds once.
+printf 'own:\n\t@echo own\n' >>"$TWO/Makefile"
+printf '{}\n' >"$TWO/renovate.json"
+commit "$TWO" own
+moves_to_one() {
+  (cd "$TWO" &&
+    grep -v '^[_#]' .copier-answers.agentic.yaml >>.copier-answers.python-service.yaml &&
+    git rm -q .copier-answers.agentic.yaml && git commit -qam 'Keep one answers file' &&
+    uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml --vcs-ref v1) &&
+    diff -rq --exclude .git --exclude Makefile --exclude renovate.json "$TWO" "$D" &&
+    grep -qx 'own:' "$TWO/Makefile" && [ "$(cat "$TWO/renovate.json")" = '{}' ]
+}
+expect "the README's steps move a two-layer project to one answers file, keeping its answers and seeded files" moves_to_one
+
+git -C "$D" init -q
+commit "$D" copy
+expect "copier update across a release that bundles an agentic change delivers it" bash -c "cd '$D' &&
+  uvx --quiet copier update --quiet --skip-answered --defaults -a .copier-answers.python-service.yaml --vcs-ref v2 &&
   [ -f update-probe.txt ] && grep -qx '_commit: v2' .copier-answers.python-service.yaml"
 
-D="$OUT/project"
-uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$D"
-uvx --quiet copier copy --quiet --defaults --data package_name=app --data 'test_boundaries=[release.run]' "$OUT/src" "$D"
 expect "stack.json carries the test boundaries" bash -c "[ \"\$(jq -c .boundaries '$D/.claude/hooks/practices/stack.json')\" = '[\"release.run\"]' ]"
-git -C "$D" init -q
-git -C "$D" add -A
-git -C "$D" -c user.name=t -c user.email=t@t commit -qm render
-
-expect "answers land in .copier-answers.python-service.yaml" test -f "$D/.copier-answers.python-service.yaml"
 expect "no Jinja left in rendered files" bash -c "! grep -rIl -E '(^|[^\$])\\{\\{|\\{%' --exclude-dir=.git '$D'"
 expect "stack.json names the package" bash -c "[ \"\$(jq -r .package '$D/.claude/hooks/practices/stack.json')\" = app ]"
 expect "the Makefile includes python.mk" grep -qx 'include python.mk' "$D/Makefile"
 expect "every script parses" bash -c "for f in \$(find '$D' -name '*.sh'); do bash -n \"\$f\" || exit 1; done"
-# template-agentic shellchecks its own scripts.
+# template-agentic shellchecks its own scripts, the ones agentic/files lists.
 expect "shellcheck passes this template's scripts and the tests'" bash -c "cd '$ROOT' &&
-  find template tests -name '*.sh' -exec uvx --quiet --from shellcheck-py shellcheck -f gcc {} +"
+  find template tests -name '*.sh' | grep -vxFf <(sed 's#^#template/#' agentic/files) |
+    xargs uvx --quiet --from shellcheck-py shellcheck -f gcc"
 expect "agentic practices protocol suite" bash "$D/.claude/hooks/practices/guard.test.sh"
 expect "python practices suite" bash "$D/.claude/hooks/practices/python.test.sh"
 expect "format hook suite" bash "$D/.claude/hooks/stack/format.test.sh"
@@ -234,11 +266,11 @@ expect "git add -A staged none of what the gate left" bash -c "cd '$D' && [ -f .
 
 # A first copy into a project that has its own Makefile, pyproject.toml and .gitignore keeps them.
 E="$OUT/existing"
-uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data issues_repo=acme/tasks "$AGENTIC_SRC" "$E"
+mkdir "$E"
 printf 'run:\n\t@echo run\n' >"$E/Makefile"
 printf '[project]\nname = "svc"\n' >"$E/pyproject.toml"
 printf '.idea/\n' >"$E/.gitignore"
-uvx --quiet copier copy --quiet --defaults --data package_name=svc "$OUT/src" "$E"
+uvx --quiet copier copy --quiet --defaults --data issues_repo=acme/tasks --data package_name=svc "$OUT/src" "$E"
 expect "a first copy keeps the project's Makefile, pyproject.toml and .gitignore" bash -c "
   [ \"\$(cat '$E/Makefile')\" = \"\$(printf 'run:\n\t@echo run')\" ] && [ \"\$(cat '$E/pyproject.toml')\" = \"\$(printf '[project]\nname = \"svc\"')\" ] &&
   [ \"\$(cat '$E/.gitignore')\" = .idea/ ] &&
@@ -248,8 +280,7 @@ expect "a first copy keeps the project's Makefile, pyproject.toml and .gitignore
 # here; the files it seeds once (_skip_if_exists) and the answers file are the project's. Every
 # answer the file records goes in, so a question a release adds renders as answered, not default.
 grep -v '^_' "$ROOT/.copier-answers.agentic.yaml" >"$OUT/self-answers.yaml"
-uvx --quiet copier copy --quiet --defaults --vcs-ref "$AGENTIC_REF" --data-file "$OUT/self-answers.yaml" \
-  "$AGENTIC_SRC" "$OUT/self"
+uvx --quiet copier copy --quiet --defaults --vcs-ref HEAD --data-file "$OUT/self-answers.yaml" "$OUT/agentic" "$OUT/self"
 expect "this repository's harness matches a render of its agentic answers" bash -c "cd '$OUT/self' &&
   find . -type f ! -name .copier-answers.agentic.yaml ! -path ./.claude/memory/MEMORY.md ! -path ./renovate.json |
   while read -r f; do cmp -s \"\$f\" '$ROOT'/\"\$f\" || { echo \"FAIL \${f#./} differs from the render\"; exit 1; }; done"

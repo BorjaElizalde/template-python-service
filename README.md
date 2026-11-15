@@ -1,31 +1,59 @@
 # template-python-service
 
-A [Copier](https://copier.readthedocs.io/) template for the Python half of an agentic coding setup,
-layered on `template-agentic`. It fills the agentic layer's plug-in points for a Python service:
-the practice checks and their registry, the ruff formatter hook, the Python rules, and
-`make gate`. It also owns the tool settings every Python service shares, so a project extends
-them instead of copying them.
+A [Copier](https://copier.readthedocs.io/) template for an agentic coding setup of a Python
+service. It carries `template-agentic`, the Claude Code harness, inside it, and fills that
+harness's plug-in points for a Python service: the practice checks and their registry, the ruff
+formatter hook, the Python rules, and `make gate`. It also owns the tool settings every Python
+service shares, so a project extends them instead of copying them.
 
 ## Apply and update
 
-`template-agentic` goes first: this template fills its plug-in points, and its rules add to the
-agentic `.claude/rules/conventions.md`, which needs `template-agentic` 20261114.1 or later. The
-template can't check that the agentic layer is there, because Copier renders every update's old
-and new versions into empty folders, where no other layer's files exist.
+A Python project applies this template only. One copy gives it the harness and the Python layer,
+with one answers file:
 
 ```bash
-uvx copier copy <agentic-template-url> .   # writes .copier-answers.agentic.yaml
 uvx copier copy <this-template-url> .      # writes .copier-answers.python-service.yaml
+bash .claude/skills/task/scripts/task.sh point-memory    # once per clone: Claude's auto memory → .claude/memory/
 uvx copier update -a .copier-answers.python-service.yaml
 ```
 
 Every merge to `main` is a release: `Build` re-runs `make gate` on the merged result, then tags the
-next `YYYYMMDD.N` version. Projects take each layer's release as its own Renovate update PR, at
-any time: the shared Renovate preset in `template-agentic` keeps template updates outside its
-monthly schedule and every group. The template uses no unsafe Copier feature, so an update runs
-without `--trust`.
+next `YYYYMMDD.N` version. Projects take each release as a Renovate update PR, at any time: the
+shared Renovate preset in `template-agentic` keeps template updates outside its monthly schedule
+and every group. A `template-agentic` release reaches a project with the release of this template
+that bundles it. The template uses no unsafe Copier feature, so an update runs without `--trust`.
+
+### Move a project from two answers files to one
+
+A project that applied `template-agentic` beside this template has two answers files. It moves to
+one with a release of this template that bundles `template-agentic`:
+
+1. Bring the agentic layer to the version that release bundles: the `_commit` of this repository's
+   `.copier-answers.agentic.yaml` at the release's tag. On any other version, the next step leaves
+   a conflict in each file the two versions write differently. Copier refuses a downgrade, so a
+   project already past that version waits for a release that bundles its own. Commit the update.
+
+   ```bash
+   uvx copier update --defaults -a .copier-answers.agentic.yaml --vcs-ref <agentic-version>
+   ```
+
+2. Move the agentic answers into this template's answers file, then update to the release:
+
+   ```bash
+   grep -v '^[_#]' .copier-answers.agentic.yaml >>.copier-answers.python-service.yaml
+   git rm -q .copier-answers.agentic.yaml
+   git commit -qam 'Keep one answers file'
+   uvx copier update --defaults -a .copier-answers.python-service.yaml --vcs-ref <release>
+   ```
+
+The update keeps every answer of the two layers and the files each layer seeds once: the
+project's `renovate.json`, `.claude/memory/MEMORY.md`, `.gitignore`, `Makefile` and
+`pyproject.toml`. From then on the project takes one update PR.
 
 ## Questions
+
+The bundled `template-agentic` asks its questions first: `issues_repo`, `worktree_root`,
+`deploy_workflow` and `agent_merges`, which its README describes. This template's own:
 
 | Question | Used for |
 |---|---|
@@ -110,21 +138,31 @@ clone's git config.
 
 The repository applies `template-agentic` to itself, as a project does, with its own issues as the
 issues repository: `.claude/` holds the whole harness, and `.copier-answers.agentic.yaml` records
-the version and the answers, `Build` as the deploy workflow among them. Renovate's Copier manager
-brings each new `template-agentic` release as an update PR; an update that adds a question takes
-its default, so check the new answer in the PR. The repository's `renovate.json` extends the
-shared rules, `renovate/base` in `template-agentic`, and keeps the github-actions manager off
-`.github/workflows/gate.yaml`, which comes from `template-agentic`. It does not extend
-`renovate/default`, the preset for a project, because that preset also keeps the manager off
-`.github/actions/stack-gate/`, which is this repository's own. Once per clone, run
-`bash .claude/skills/task/scripts/task.sh point-memory`.
+the version and the answers, `Build` as the deploy workflow among them. `template/` bundles the
+same version: `make bundle` runs that version's `bundle.sh`, which writes its files into
+`template/`, lists them in `agentic/files`, and copies its `copier.yaml` to `agentic/copier.yaml`,
+which `copier.yaml` includes. A bundled file changes only through `make bundle`. Renovate's Copier
+manager brings each new `template-agentic` release as an update PR, which moves the version but
+not the bundle: its gate fails until `make bundle` runs on its branch and the result is pushed.
+An update that adds a question takes its default, so check the new answer in the PR. The
+repository's `renovate.json` extends the shared rules, `renovate/base` in `template-agentic`, and
+keeps the github-actions manager off `.github/workflows/gate.yaml` and its bundled copy, which come
+from `template-agentic`. It does not extend `renovate/default`, the preset for a project, because
+that preset also keeps the manager off `.github/actions/stack-gate/`, which is this repository's
+own. Once per clone, run `bash .claude/skills/task/scripts/task.sh point-memory`.
 
-`make gate` renders the `template-agentic` version the answers file records, renders this template
-on top, and runs the rendered suites: the agentic practices protocol, the Python practices and the
-format hook. It runs shellcheck on this template's scripts and on `tests/`; `template-agentic`
-checks its own. `AGENTIC_SRC` and `AGENTIC_REF` override that source and version, to test an
-unreleased agentic change from a local clone and its branch. It also checks that a fresh render of
-the repository's own answers reproduces every file `template-agentic` owns here. The `Gate`
+`make gate` fails when `template/` bundles another `template-agentic` version than the answers file
+records, or a bundled file changed by hand. It copies this template and runs the rendered suites:
+the agentic practices protocol, the Python practices and the format hook. It proves that the copy
+gives the files of a project that applied the two layers apart, with one answers file; that
+`copier update` across a release that bundles an agentic change delivers it; and that the steps in
+[Move a project from two answers files to one](#move-a-project-from-two-answers-files-to-one) take
+such a project, from an earlier agentic release, to the copy's files, keeping its answers and the
+files each layer seeds once. It runs shellcheck on this template's scripts and on `tests/`;
+`template-agentic` checks its own, the files `agentic/files` lists. `AGENTIC_SRC` and `AGENTIC_REF`
+override the agentic source and version of `make gate` and `make bundle`, to test an unreleased
+agentic change from a local clone and its branch. It also checks that a fresh render of the
+repository's own answers reproduces every file `template-agentic` owns here. The `Gate`
 workflow comes from `template-agentic`, as in every project: on every PR into `develop`, `staging`
 or `main` it checks where the PR comes from (`main` takes `staging`, and `staging` takes `develop`
 or a `bugfix/*` PR of one commit, from this repository's own branches), then runs this

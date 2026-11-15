@@ -1,8 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "The Gate workflow comes from template-agentic and takes its action pins from that template's update PR, so Renovate's github-actions manager leaves it alone. The stack-gate action is this repository's own.",
+  "description": "The Gate workflow, here and in the bundle under template/, comes from template-agentic and takes its action pins from that template's update PR, so Renovate's github-actions manager leaves it alone. The stack-gate action is this repository's own.",
   "extends": ["github>BorjaElizalde/template-agentic//renovate/base"],
   "github-actions": {
-    "ignorePaths": [".github/workflows/gate.yaml"]
+    "ignorePaths": [".github/workflows/gate.yaml", "template/.github/workflows/gate.yaml"]
   }
 }
