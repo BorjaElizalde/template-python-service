@@ -15,6 +15,7 @@ WORK="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$WORK"' EXIT
 export TASK_TEST_STATE="$WORK/state"
 export CLAUDE_CONFIG_DIR="$WORK/claude"
+unset CLAUDE_PID  # a start runs from no session, unless a check names the pid of one
 pass=0; fail=0
 
 mkdir -p "$WORK/bin" "$TASK_TEST_STATE" "$WORK/seed/.claude/skills/task/scripts" "$WORK/repos"
@@ -86,11 +87,13 @@ cat >"$WORK/bin/osascript" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$TASK_TEST_STATE/osascript.log"
 # A line typed into a tab past 1024 bytes, newline included, never runs: its tty drops it.
-# $TASK_TEST_STATE/tab keeps the pid of the line's process.
+# $TASK_TEST_STATE/tab keeps the pid of the line's process. The tab's shell has a folder hook, as
+# zsh's chpwd is: each cd it runs exports TAB_HOOK_FOLDER, the folder it entered.
 if [ $# -eq 2 ]; then
-  rm -f "$TASK_TEST_STATE/launched" "$TASK_TEST_STATE/claude-pid"
+  rm -f "$TASK_TEST_STATE/launched" "$TASK_TEST_STATE/claude-pid" "$TASK_TEST_STATE/hook-folder"
   if [ "$(printf '%s\n' "$2" | wc -c)" -le 1024 ]; then
-    bash -s <<<"$2" &
+    bash -s <<<"cd() { builtin cd \"\$@\" && export TAB_HOOK_FOLDER=\$PWD; }
+$2" &
     echo $! >"$TASK_TEST_STATE/tab"
     wait
   fi
@@ -111,7 +114,7 @@ EOF
 # it can't answer. Any other call launches a session, which fails while $TASK_TEST_STATE/no-start
 # exists, else adds its folder to running: its arguments go to $TASK_TEST_STATE/launched, each ended
 # by a NUL, since the system prompt spans lines, and joined on one line of launches; its pid to
-# claude-pid.
+# claude-pid; the folder its tab's hook exported to hook-folder.
 cat >"$WORK/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 if [ "$*" != "agents --json" ]; then
@@ -119,6 +122,7 @@ if [ "$*" != "agents --json" ]; then
   printf '%s\0' "$@" >"$TASK_TEST_STATE/launched"
   echo "${*//$'\n'/ }" >>"$TASK_TEST_STATE/launches"
   echo $$ >"$TASK_TEST_STATE/claude-pid"
+  echo "${TAB_HOOK_FOLDER:-}" >"$TASK_TEST_STATE/hook-folder"
   pwd -P >>"$TASK_TEST_STATE/running"
   exit 0
 fi
@@ -221,7 +225,9 @@ check "the main checkout's memory points at it" test "$(memory_of "$BACKEND")" =
 check "its session opens with the issue name"  test "$(sessions '#42 backend: Name make close_claude_session in')" -eq 1
 check "and the start names its mode"           grep -qxF '✓ session opened in execution mode: #42 backend: Name make close_claude_session in' "$WORK/out"
 check "with a first prompt that reads its issue" bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'gh issue view 42 -R acme/tasks --json title,body,comments'"
+check "and names no orchestrator, as no session runs the start" bash -c "! tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Your orchestrator'"
 check "an interactive claude, never -p or --print, the tab's only process" interactive
+check "with the folder hooks of its tab's shell run in its worktree" test "$(cat "$TASK_TEST_STATE/hook-folder")" = "$ISSUE42/backend"
 check "in execution mode: no question tool, a Stop hook, permission prompts denied" launches_in execution
 sessions_exit
 check "starting again resumes, creates nothing" task "$BACKEND" start 42
@@ -238,9 +244,11 @@ refuses "a closed issue does not start"          'is CLOSED'            "$BACKEN
 echo "-- start: an existing issue picks up its session"
 transcript "$ISSUE42/backend"
 sessions_exit
-check "a session with a transcript"            task "$BACKEND" start 42
+echo "$BACKEND" >"$TASK_TEST_STATE/running"
+CLAUDE_PID=4242 check "a session with a transcript, started from a session in the main checkout" task "$BACKEND" start 42
 check "resumes it with --continue"             launched 'index("--continue") != null'
 check "and the same first prompt"              bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Work on issue #42 in acme/tasks.'"
+check "which names that session its orchestrator" bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Your orchestrator, the session that started this task, is \`a task session\`.'"
 check "still interactive"                      interactive
 echo "$ISSUE42/backend" >"$TASK_TEST_STATE/running"
 check "a running session"                      task "$BACKEND" start 42

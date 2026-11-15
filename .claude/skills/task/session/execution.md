@@ -7,15 +7,17 @@ continue. Before you choose, you may spend another turn thinking or spawn subage
 you may not stop to wait for an answer. Stop only when the task is done, or when it waits on
 `Owner steps`.
 
-For a task that ends in a PR, open the PR with `/pull-request` once the work is done. Then:
+For a task that ends in a PR, open the PR with `/pull-request` once the work is done. Then
+run the steps below, and give each agent the command that reads the task's issue,
+`gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`.
+Skip steps 1 and 3 when the change is small, a bug fix or a small extension. Judge that by what
+the change does, not by its line count: a mirrored copy doubles the count, and a wide mechanical
+rename is large but low risk.
 
-1. Spawn the `code-reviewer` agent, and give it the command that reads the task's issue,
-   `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`.
-   Fix each **Must change** finding, and each **Optional** one unless a reason stands against it,
-   then push.
-2. Spawn the `code-trimmer` agent with the same command. Audit its report and its commit, and
-   take back each cut that removed what the issue needs.
-3. Spawn one `simplicity-reviewer` with the same command, and decide on its designs: take one it
-   shows simpler unless a reason stands against it. Rebuild to the design you take and push it.
-   When the rebuild adds code, run steps 1 and 2 again on the result; a line it only shortens or
-   rewraps adds none.
+1. Spawn the `code-reviewer` agent. Fix each **Must change** finding, and each **Optional** one
+   unless a reason stands against it, then push.
+2. Spawn the `code-trimmer` agent. Audit its report and its commit, and take back each cut that
+   removed what the issue needs.
+3. Spawn one `simplicity-reviewer`, and decide on its designs: take one it shows simpler unless a
+   reason stands against it. Rebuild to the design you take and push it. When the rebuild adds
+   code, run steps 1 and 2 again on the result; a line it only shortens or rewraps adds none.
