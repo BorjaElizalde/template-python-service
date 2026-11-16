@@ -29,13 +29,16 @@ expect() {  # expect <desc> <command...>; a failure prints the command's own lin
 commit() { git -C "$1" add -A && git -C "$1" commit -qm "$2"; }
 git -c advice.detachedHead=false clone --quiet --branch "$AGENTIC_REF" "$AGENTIC_SRC" "$OUT/agentic"
 
-# V is this repository: v0 a release from before the bundle, and main the working tree.
+# V is this repository: v0 a release from before the bundle, which had no guard, and main the
+# working tree.
 V="$OUT/versions"
 cp -R "$OUT/src" "$V"
 git -C "$V" init -q -b main
 cp "$OUT/agentic/template/{{ _copier_conf.answers_file }}.jinja" "$V/template/"
+sed "s/{% if 'issues_repo'[^%]*%}[^%]*{% elif /{% if /" "$OUT/src/copier.yaml" >"$V/copier.yaml"
 commit "$V" v0 && git -C "$V" tag v0
 rm "$V/template/{{ _copier_conf.answers_file }}.jinja"
+cp "$OUT/src/copier.yaml" "$V/copier.yaml"
 commit "$V" main
 build() {  # build <tag> [<make variable>...]: what Build does on a merge to main
   rm -rf "$OUT/build"
@@ -47,11 +50,10 @@ build v1
 AGENTIC_ANSWERS=(--data issues_repo=acme/tasks --data worktree_root=../trees)
 PYTHON_ANSWERS=(--data package_name=app --data 'test_boundaries=[release.run]')
 # A two-layer project on an earlier agentic release, which the README's first step brings forward.
-# The agentic answers meet v0's guard, which only a branch's copier.yaml has; Copier records none.
 TWO="$OUT/two-layers"
 uvx --quiet copier copy --quiet --defaults --vcs-ref "$(git -C "$OUT/agentic" describe --tags --abbrev=0 HEAD~1)" \
   "${AGENTIC_ANSWERS[@]}" "$OUT/agentic" "$TWO"
-uvx --quiet copier copy --quiet --defaults --vcs-ref v0 "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" "$V" "$TWO"
+uvx --quiet copier copy --quiet --defaults --vcs-ref v0 "${PYTHON_ANSWERS[@]}" "$V" "$TWO"
 git -C "$TWO" init -q
 commit "$TWO" two-layers
 (cd "$TWO" && uvx --quiet copier update --quiet --defaults -a .copier-answers.agentic.yaml --vcs-ref HEAD)
@@ -61,6 +63,8 @@ uvx --quiet copier copy --quiet --defaults "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANS
 like_two_layers() {
   diff -rq --exclude .git --exclude '.copier-answers.*' --exclude renovate.json --exclude MEMORY.md "$TWO" "$D" &&
     [ "$(cd "$D" && ls -d .copier-answers.*)" = .copier-answers.python-service.yaml ] &&
+    cmp "$OUT/agentic/template/renovate.json" "$D/renovate.json" &&
+    cmp "$OUT/agentic/template/.claude/memory/MEMORY.md" "$D/.claude/memory/MEMORY.md" &&
     grep -qx '_commit: v1' "$D/.copier-answers.python-service.yaml" &&
     grep -qx 'worktree_root: ../trees' "$D/.copier-answers.python-service.yaml" &&
     grep -qx 'package_name: app' "$D/.copier-answers.python-service.yaml"
@@ -68,10 +72,11 @@ like_two_layers() {
 expect "a copy of this template's newest release gives the two layers' files, with one answers file" like_two_layers
 branch_copy_fails() {
   local out
-  ! out="$(uvx --quiet copier copy --quiet --defaults --vcs-ref main "${PYTHON_ANSWERS[@]}" "$V" "$OUT/branch" 2>&1)" &&
+  ! out="$(uvx --quiet copier copy --quiet --defaults --vcs-ref main "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" \
+    "$V" "$OUT/branch" 2>&1)" &&
     grep -q 'Copy a release tag' <<<"$out"
 }
-expect "a copy of a branch, which holds no template-agentic, fails and says to copy a release" branch_copy_fails
+expect "a copy of a branch fails and says to copy a release, even given the agentic answers" branch_copy_fails
 
 printf 'own:\n\t@echo own\n' >>"$TWO/Makefile"
 printf '{}\n' >"$TWO/renovate.json"

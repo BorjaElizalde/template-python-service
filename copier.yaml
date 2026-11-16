@@ -1,6 +1,6 @@
 # template-agentic's settings and questions, which a release tag bundles and no branch holds.
-# Copier joins the two documents' _skip_if_exists lists; for any other setting or question both
-# name, this one wins.
+# Copier joins the two documents' _exclude, _jinja_extensions, _secret_questions and
+# _skip_if_exists lists; for any other setting or question both name, this one wins.
 !include agentic/copier.yaml
 ---
 _subdirectory: template
@@ -16,8 +16,9 @@ package_name:
   type: str
   help: The application's Python package directory (e.g. app)
   # Copier reads the !include a branch lacks as empty, so the first clause stops a copy of a branch.
+  # It reads _copier_answers, which holds answers to the template's questions only, never --data.
   validator: >-
-    {% if issues_repo is not defined %}Copy a release tag: a branch holds no template-agentic, which a release bundles{% elif not package_name or package_name | lower != package_name or ' ' in package_name or '/' in package_name %}Give the package directory as a lowercase Python identifier{% endif %}
+    {% if 'issues_repo' not in _copier_answers %}Copy a release tag: a branch holds no template-agentic, which a release bundles{% elif not package_name or package_name | lower != package_name or ' ' in package_name or '/' in package_name %}Give the package directory as a lowercase Python identifier{% endif %}
 
 test_boundaries:
   type: yaml

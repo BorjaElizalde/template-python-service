@@ -16,6 +16,6 @@ release-tag:
 	  git fetch --quiet --depth 1 origin tag "$$previous" && \
 	  clone="$$(mktemp -d)" && trap 'rm -rf "$$clone"' EXIT && \
 	  git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$$AGENTIC_REF" "$$AGENTIC_SRC" "$$clone" && \
-	  bash "$$clone/bundle.sh" . && git add -A && \
+	  bash "$$clone/bundle.sh" . && git add --force -- agentic template && \
 	  git tag "$(TAG)" "$$(git commit-tree "$$(git write-tree)" -p HEAD -p "$$previous" \
 	    -m "Release $(TAG), with template-agentic $$AGENTIC_REF")"
