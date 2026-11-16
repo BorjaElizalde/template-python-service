@@ -5,8 +5,8 @@ paths:
 
 # Testing conventions
 
-Loads when you read or edit tests. (`python-conventions.md`, `comments-and-docstrings.md` and
-`skipped-checks.md` also apply here.)
+Loads when you read or edit tests. (`python-conventions.md` and `skipped-checks.md` also apply
+here.)
 
 - Every test has three steps: build the case's data with the `mock_*` helpers (an edge case lives
   in the data), call the boundary a consumer uses, then check the result. For nearly every test
