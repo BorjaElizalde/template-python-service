@@ -1,5 +1,0 @@
-{
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Seeded once by the agentic template. Every rule comes from the shared preset; add the project's own as packageRules here, and no github-actions ignorePaths, which would replace the preset's list.",
-  "extends": ["github>BorjaElizalde/template-agentic//renovate/default"]
-}
