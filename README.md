@@ -55,8 +55,8 @@ project's `renovate.json`, `.claude/memory/MEMORY.md`, `.gitignore`, `Makefile` 
 
 ## Questions
 
-The bundled `template-agentic` asks its questions first: `issues_repo`, `worktree_root`,
-`deploy_workflow` and `agent_merges`, which its README describes. This template's own:
+The bundled `template-agentic` asks its own questions first, which its README describes. This
+template's own:
 
 | Question | Used for |
 |---|---|

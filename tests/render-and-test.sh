@@ -17,10 +17,6 @@ trap 'rm -rf "$OUT"' EXIT
 fail=0
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 
-# A plain copy, so the render is the working tree whether or not it is committed or tagged.
-mkdir -p "$OUT/src"
-(cd "$ROOT" && tar --exclude .git -cf - .) | tar -xf - -C "$OUT/src"
-
 expect() {  # expect <desc> <command...>; a failure prints the command's own lines that report it
   local out
   if out="$("${@:2}" 2>&1)"; then echo "PASS $1"
@@ -30,15 +26,16 @@ commit() { git -C "$1" add -A && git -C "$1" commit -qm "$2"; }
 git -c advice.detachedHead=false clone --quiet --branch "$AGENTIC_REF" "$AGENTIC_SRC" "$OUT/agentic"
 
 # V is this repository: v0 a release from before the bundle, which had no guard, and main the
-# working tree.
+# working tree, committed or not.
 V="$OUT/versions"
-cp -R "$OUT/src" "$V"
+mkdir "$V"
+(cd "$ROOT" && tar --exclude .git -cf - .) | tar -xf - -C "$V"
 git -C "$V" init -q -b main
 cp "$OUT/agentic/template/{{ _copier_conf.answers_file }}.jinja" "$V/template/"
-sed "s/{% if 'issues_repo'[^%]*%}[^%]*{% elif /{% if /" "$OUT/src/copier.yaml" >"$V/copier.yaml"
+sed "s/{% if 'issues_repo'[^%]*%}[^%]*{% elif /{% if /" "$ROOT/copier.yaml" >"$V/copier.yaml"
 commit "$V" v0 && git -C "$V" tag v0
 rm "$V/template/{{ _copier_conf.answers_file }}.jinja"
-cp "$OUT/src/copier.yaml" "$V/copier.yaml"
+cp "$ROOT/copier.yaml" "$V/copier.yaml"
 commit "$V" main
 build() {  # build <tag> [<make variable>...]: what Build does on a merge to main
   rm -rf "$OUT/build"
