@@ -1,0 +1,38 @@
+# From the agentic template: change the template, not this copy.
+name: Gate
+
+on:
+  pull_request:
+    branches: [develop, staging, main]
+
+concurrency:
+  group: gate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Rulesets can't limit a PR's source or size, so the gate does; a branch name can't hold a colon.
+      - name: Check the PR's source and commits
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          COMMITS: ${{ github.event.pull_request.commits }}
+        run: |
+          case "$BASE:$HEAD" in
+            develop:*) exit 0 ;;
+            main:staging | staging:develop) ;;
+            staging:bugfix/*)
+              [ "$COMMITS" -eq 1 ] ||
+                { echo "::error::A bugfix/ PR into staging holds one commit, not $COMMITS: amend it into one and push with --force-with-lease."; exit 1; } ;;
+            *) echo "::error::No PR from $HEAD into $BASE: main takes staging, and staging takes develop or bugfix/*."; exit 1 ;;
+          esac
+          [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ] ||
+            { echo "::error::$BASE takes PRs from this repository's own branches, not from $HEAD_REPO."; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      # The stack layer's checks, each tool called directly. A project's CI never runs make gate,
+      # so a change that relaxes the local gate can't relax CI.
+      - uses: ./.github/actions/stack-gate
