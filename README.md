@@ -1,40 +1,50 @@
 # template-python-service
 
-A [Copier](https://copier.readthedocs.io/) template for an agentic coding setup of a Python
-service. Each release carries `template-agentic`, the Claude Code harness, inside it, and the
-template fills that harness's plug-in points for a Python service: the practice checks and their
-registry, the ruff formatter hook, the Python rules, and `make gate`. It also owns the tool settings
-every Python service shares, so a project extends them instead of copying them.
+A [Copier](https://copier.readthedocs.io/) template that sets up agentic coding in a Python
+service. Each release bundles the Claude Code harness of `template-agentic` and adds the Python
+layer: the Python rules and practice checks, a ruff format hook, `make gate`, the checks CI runs on
+each PR, commit hooks, and the ruff, basedpyright and jscpd settings every Python service shares.
 
 ## Apply and update
 
-A Python project applies this template only. One copy gives it the harness and the Python layer,
-with one answers file:
+Apply this template alone, never `template-agentic` beside it. Copy the newest release, then update
+to each new one:
 
 ```bash
-uvx copier copy <this-template-url> .      # writes .copier-answers.python-service.yaml
-bash .claude/skills/task/scripts/task.sh point-memory    # once per clone: Claude's auto memory → .claude/memory/
+uvx copier copy https://github.com/BorjaElizalde/template-python-service.git .
 uvx copier update -a .copier-answers.python-service.yaml
 ```
 
-Every merge to `main` is a release: `Build` re-runs `make gate` on the merged result, then tags the
-next `YYYYMMDD.N` version on a commit that adds `template-agentic`, at the version this repository
-pins, to `main`'s tree. No branch holds that commit or any other copy of `template-agentic`, so a
-copy or an update takes a release tag, as Copier does by default; a copy of a branch fails and says
-so. Projects take each release as a Renovate update PR, at any time: the
-shared Renovate preset in `template-agentic` keeps template updates outside its monthly schedule
-and every group. A `template-agentic` release reaches a project with the release of this template
-that bundles it. The template uses no unsafe Copier feature, so an update runs without `--trust`.
+With Renovate, each release comes as an update PR.
+
+A first copy keeps a `Makefile` and a `pyproject.toml` the repository already has. Add
+`include python.mk` to the `Makefile`. Add to `pyproject.toml` the `[tool.ruff]` and
+`[tool.basedpyright]` lines and the `dev` dependency group of `template/pyproject.toml.jinja`.
+Then delete the targets and settings that the template's files hold.
+
+Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
+default branch. Tasks branch from `develop`, and the `Gate` workflow checks PRs into the three:
+
+```bash
+git push origin main main:staging main:develop
+gh repo edit --default-branch develop
+```
+
+Once per clone, install the commit hooks:
+
+```bash
+uv run pre-commit install
+```
 
 ### Move a project from two answers files to one
 
-A project that applied `template-agentic` beside this template has two answers files. It moves to
-one with a release of this template that bundles `template-agentic`:
+A project that applied `template-agentic` beside this template has two answers files. To keep one,
+pick a release of this template, then:
 
-1. Bring the agentic layer to the version that release bundles: the `_commit` of this repository's
-   `.copier-answers.agentic.yaml` at the release's tag. On any other version, the next step leaves
-   a conflict in each file the two versions write differently. Copier refuses a downgrade, so a
-   project already past that version waits for a release that bundles its own. Commit the update.
+1. Update the agentic layer to the version the release bundles, which is the `_commit` of this
+   repository's `.copier-answers.agentic.yaml` at the release's tag. Copier refuses a downgrade, so
+   a project past that version takes a release that bundles its version or a newer one. Commit the
+   update.
 
    ```bash
    uvx copier update --defaults -a .copier-answers.agentic.yaml --vcs-ref <agentic-version>
@@ -49,126 +59,20 @@ one with a release of this template that bundles `template-agentic`:
    uvx copier update --defaults -a .copier-answers.python-service.yaml --vcs-ref <release>
    ```
 
-The update keeps every answer of the two layers and the files each layer seeds once: the
-project's `renovate.json`, `.claude/memory/MEMORY.md`, `.gitignore`, `Makefile` and
-`pyproject.toml`. From then on the project takes one update PR.
+## Extend
 
-## Questions
+The project owns five files, which the template writes once and never updates: `Makefile`,
+`pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. Every other file
+the template writes is the template's: change it there, not in the project.
 
-The bundled `template-agentic` asks its own questions first, which its README describes. This
-template's own:
-
-| Question | Used for |
-|---|---|
-| `package_name` | The application's package directory: the project name in `pyproject.toml`, and the app paths that the docstring check and the rules name (the API and MCP surface, `config.py`) |
-| `test_boundaries` | Calls that also count as a test boundary for the tests check, beyond endpoints, MCP tools, batch tasks and the CLI (e.g. a release step's entry point, as `module.function`) |
-
-The practice checks read them from `.claude/hooks/practices/stack.json`, the only rendered file they
-load, so they stay plain jq that the template's tests run directly.
-
-## What the template fills in
-
-| Plug-in point of `template-agentic` | Here |
-|---|---|
-| `.claude/hooks/practices/registry.jq` | `kind($path)` sorts Python, tool-config and data files; `practices($ctx; $kind)` runs the checks beside it: skipped checks, excepts, docstrings, comments, logs, tests, config |
-| `.claude/hooks/stack/format.sh` | `ruff format` on every edited `.py` and `.pyi` file, the files the gate formats |
-| `make gate` | `python.mk`: ruff, basedpyright and bandit over every Python file in the repository but notebooks, jscpd over the same files but `tests/` and `database/`, and pytest over `tests/`, which it skips when there is no `tests/` |
-| `.github/actions/stack-gate/action.yaml` | `gate.sh`: the same tools called directly, never `make gate`, with CI's own copy of the shared settings beside it |
-
-## Shared tool settings
-
-| File | Owner | Holds |
-|---|---|---|
-| `ruff.base.toml` | template | Line length, the preview setup, the rule selection, the reasoned ignores, the typed-exception check |
-| `basedpyright.base.json` | template | The checking mode, the platform, and the strict `report*` settings |
-| `.jscpd.json` | template | jscpd's settings: a block of 10 lines or more written twice fails the gate, imports aside; `tests/` and `database/` are left out |
-| `python.mk` | template | The `lint`, `lint-check`, `typecheck`, `security`, `duplication`, `test` and `gate` targets |
-| `.pre-commit-config.yaml` | template | The commit hooks: ruff, bandit (through `make security`) and the file checks, each running the project's own pinned tool through `uv run`, so the file holds no version |
-| `.github/actions/stack-gate/` | template | The checks a project's CI runs, and CI's own copy of `ruff.base.toml`, `basedpyright.base.json` and `.jscpd.json` |
-| `pyproject.toml` | project, seeded once | The project, its dependencies, and its own tool settings: it extends the two base files |
-| `Makefile` | project, seeded once | The project's own targets, after `include python.mk` |
-| `.gitignore` | project, seeded once | `.env` files, which hold secrets (`.env.example` stays tracked), and what the gate and the tools leave behind |
-
-Every update rewrites the template's files; a project changes a shared setting in the template,
-not in its copy. A project adds to the shared settings in its `pyproject.toml`:
-
-- ruff (`[tool.ruff] extend = "ruff.base.toml"`): `extend-select` for more rules, `ignore` and
-  `extend-per-file-ignores` for its own exceptions, each with the reason `skipped-checks.md`
-  asks for. Never `select`: ruff takes a `select` as the whole rule list and drops the base's.
-- basedpyright (`[tool.basedpyright] extends = "basedpyright.base.json"`): any setting it
-  overrides, which applies to the local gate only: CI's basedpyright never reads `pyproject.toml`.
-- pytest and coverage have no way to extend a shared file, so their settings stay the project's.
-- jscpd has no way to extend one either, and its settings stay the template's: a copy that must
-  stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with the reason
-  `skipped-checks.md` asks for.
-
-A tool the template adds to the dev dependencies reaches only new projects, because the seeded
-`pyproject.toml` is the project's. A project that took the template before jscpd runs
-`uv add --dev jscpd` once; until then both gates fail at the duplication check.
-
-A project with no `tests/` folder, by design, passes both gates with the seeded `pyproject.toml`
-unchanged: they skip pytest. An empty `tests/` fails both, because pytest finds no test in it: a
-folder with no tests is a mistake, not a choice.
-
-CI runs `.github/actions/stack-gate/gate.sh`, which the agentic `Gate` workflow calls on every PR.
-It never runs `make gate`, so a change that relaxes the local gate can't relax CI:
-
-- It fails when the project's `ruff.base.toml`, `basedpyright.base.json` or `.jscpd.json` differs
-  from CI's copy, or when `pyproject.toml` stops extending ruff's.
-- ruff reads `pyproject.toml`, so the project's own additions apply in CI as they do locally.
-- basedpyright extends only the project's `basedpyright.base.json`, which must match CI's copy,
-  and never reads `pyproject.toml`.
-
-In this template, CI's copies are symlinks to the base files, so the two can't differ here; Copier
-writes them into the project as plain files.
-
-The `Makefile` is the project's own entry point, so updates never touch it; the shared targets
-reach it through `include python.mk`. A project adds a leg to the gate by naming it as one more
-prerequisite, `gate: my-check`, without redefining the target. A project that already has a
-`Makefile` and a `pyproject.toml` keeps both: it adds the `include` line and the two `extend`
-lines, then deletes the targets and settings the template's files now hold.
-
-Tests that call no boundary, because they check a contract or shipped data, live in
-`tests/contracts/`, `tests/migrations/` or `tests/config_integrity/`.
-
-## Develop
-
-This repository works on the same three branches as every project. Feature PRs squash into
-`develop`; `/release` merges `develop` into `staging` and `staging` into `main`, where `Build`
-tags the next version; a `bugfix/` branch of one commit merges into `staging`. `develop` is the
-default branch, and rulesets hold each branch to PRs with a passing `gate`, `staging` and `main`
-to merge commits and `develop` to squashes. Commits use the GitHub noreply address set in the
-clone's git config.
-
-The repository applies `template-agentic` to itself, as a project does, with its own issues as the
-issues repository: `.claude/` holds the whole harness, and `.copier-answers.agentic.yaml` records
-the version and the answers, `Build` as the deploy workflow among them. A release bundles the same
-version: `make release-tag`, which `Build` runs, clones it and runs its `bundle.sh`, which writes
-its files into `template/` and its `copier.yaml` to `agentic/copier.yaml`, which `copier.yaml`
-includes. It commits the result with the previous release as second parent, so the compare link in
-a project's update PR shows only what changed. Renovate's Copier manager brings each new
-`template-agentic` release as an update PR, which needs no other commit: its gate bundles the new
-version. An update that adds a question takes its default, so check the new answer in the PR. The
-repository's `renovate.json` extends the shared rules, `renovate/base` in `template-agentic`, and
-keeps the github-actions manager off `.github/workflows/gate.yaml`, which comes from
-`template-agentic`. It does not extend `renovate/default`, the preset for a project, because that
-preset also keeps the manager off `.github/actions/stack-gate/`, which is this repository's own.
-Once per clone, run `bash .claude/skills/task/scripts/task.sh point-memory`.
-
-`make gate` makes releases of this template as `Build` does, at the `template-agentic` version the
-answers file records, and runs the suites of a copy: the agentic practices protocol, the Python
-practices and the format hook. It proves that the copy gives the files of a project that applied
-the two layers apart, with one answers file; that a copy of a branch fails; that `copier update`
-across a release that bundles an agentic change delivers it; and that the steps in
-[Move a project from two answers files to one](#move-a-project-from-two-answers-files-to-one) take
-such a project, from an earlier agentic release, to the copy's files, keeping its answers and the
-files each layer seeds once. It runs shellcheck on this template's scripts and on `tests/`;
-`template-agentic` checks its own. `AGENTIC_SRC` and `AGENTIC_REF` override the agentic source and
-version, to test an unreleased agentic change from a local clone and its branch. It also checks
-that a fresh render of the repository's own answers reproduces every file `template-agentic` owns
-here. The `Gate`
-workflow comes from `template-agentic`, as in every project: on every PR into `develop`, `staging`
-or `main` it checks where the PR comes from (`main` takes `staging`, and `staging` takes `develop`
-or a `bugfix/*` PR of one commit, from this repository's own branches), then runs this
-repository's own `.github/actions/stack-gate`, which runs `make gate`: a template repository's CI
-may. `Build` runs the gate again on `main` before it tags.
+- **ruff**, in `pyproject.toml`: add rules with `extend-select`, and the project's exceptions with
+  `ignore` and `extend-per-file-ignores`, each with the reason `.claude/rules/skipped-checks.md`
+  asks for. Never use `select`: it replaces the shared rule list.
+- **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only, because CI's
+  basedpyright never reads `pyproject.toml`.
+- **jscpd**: its settings are the template's. A copy that must stay goes between
+  `# jscpd:ignore-start` and `# jscpd:ignore-end`, with the reason `.claude/rules/skipped-checks.md`
+  asks for.
+- **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
+  redefining `gate`.
+- **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
