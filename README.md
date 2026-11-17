@@ -17,16 +17,12 @@ uvx copier update -a .copier-answers.python-service.yaml
 
 With Renovate, each release comes as an update PR.
 
-A first copy keeps a `Makefile`, `pyproject.toml`, `.gitignore` or `renovate.json` the repository
-already has. Merge into each what the template's copy holds, in `template/` at the release's tag:
-
-- `Makefile`: `include python.mk`.
-- `pyproject.toml`: `extend = "ruff.base.toml"` under `[tool.ruff]`,
-  `extends = "basedpyright.base.json"` under `[tool.basedpyright]`, and the `dev` dependency group.
-- `.gitignore` and `renovate.json`: their lines.
-
-Then delete the targets and settings that `python.mk`, `ruff.base.toml` and
-`basedpyright.base.json` hold.
+The template writes five files once and never updates them, so they are the project's: `Makefile`,
+`pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. A first copy keeps
+the ones the repository already has. Merge the template's copy into each, from `template/` at the
+release's tag; for `pyproject.toml`, that is its `[tool.ruff]` and `[tool.basedpyright]` tables and
+its `dev` dependency group. Then delete the targets and settings that `python.mk`, `ruff.base.toml`
+and `basedpyright.base.json` hold.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
 default branch:
@@ -66,9 +62,8 @@ Pick a release of this template, then:
 
 ## Extend
 
-The project owns five files, which the template writes once and never updates: `Makefile`,
-`pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. Every other file
-the template writes is the template's: change it there, not in the project.
+Apart from the project's five files, every file the template writes is the template's: change it
+there, not in the project.
 
 - **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select`, and the
   project's exceptions with `ignore` and `extend-per-file-ignores`, each with the reason
