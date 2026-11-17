@@ -41,8 +41,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      # GITHUB_TOKEN may push the bundled template/.github/workflows/: GitHub guards the root one only.
       - env:
           VERSION_TAG: ${{ needs.version-tag.outputs.version_tag }}
         run: |
-          git tag "$VERSION_TAG"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          make release-tag TAG="$VERSION_TAG"
           git push origin "$VERSION_TAG"

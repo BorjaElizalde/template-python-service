@@ -1,6 +1,6 @@
 # From the python-service template: change the template, not this copy.
 # STOP: a skipped check (a suppression such as `# noqa`) without its rule code, or without a reason
-# in the form skipped-checks.md gives, after the directive or on the comment lines above it. The
+# in the form conventions.md gives, after the directive or on the comment lines above it. The
 # hook checks the form; review judges whether the reason holds. Reason places were checked against
 # each tool: ruff, basedpyright, bandit and jscpd honour text after the directive; `# fmt: skip`
 # only behind a second `#`; `# fmt: off` only standing alone, so its reason goes on the comment

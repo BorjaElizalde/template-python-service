@@ -1,7 +1,7 @@
 # From the python-service template: change the template, not this copy.
-# REMIND: every new prose comment in Python, TOML, YAML and the Makefile
-# (comments-and-docstrings.md), with one more line when it reads like history. A comment is new
-# when its text was not in the file before: moving or re-indenting an old one is not new.
+# REMIND: every new prose comment in Python, TOML, YAML and the Makefile (conventions.md), with
+# one more line when it reads like history. A comment is new when its text was not in the file
+# before: moving or re-indenting an old one is not new.
 # Directives such as `# noqa` or `# fmt: off` are not prose, and neither is a `#` line inside a
 # triple-quoted string (the MCP guides hold markdown headings).
 include "lib";
@@ -36,7 +36,7 @@ def check($ctx):
   | select(length > 0)
   | (first(.[] | history_marker | select(. != null) | [.]) // []) as $history
   | {level: "remind", text: ("Practices hook, comment rule"
-      + " (.claude/rules/comments-and-docstrings.md). This edit adds a comment: `\(.[0] | short)`"
+      + " (.claude/rules/conventions.md). This edit adds a comment: `\(.[0] | short)`"
       + (if length > 1 then " (and \(length - 1) more)" else "" end) + "."
       + " This codebase keeps comments to a minimum: the code and its names should explain"
       + " themselves. Before keeping it, ask whether a clearer name or a simpler structure would"
@@ -47,7 +47,7 @@ def check($ctx):
       + " constraint (how a provider, library or platform behaves), a safety, security or"
       + " data-integrity rule, a contract callers must respect, or the reason for a skipped check"
       + " or an except. If it restates the code, the history or the diff, delete it. Keep what"
-      + " stays to one line, except a skipped check's reason, which takes the form"
-      + " skipped-checks.md gives."
+      + " stays to one line, except a skipped check's reason and the comment that opens a TOML,"
+      + " YAML or Makefile file, which take the forms conventions.md gives."
       + ($history | map("\nIt reads like history (`\(.)`): say what holds and why, not what"
           + " changed.") | add // ""))};
