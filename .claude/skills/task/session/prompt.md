@@ -10,6 +10,13 @@ secret, another repository or an access grant, post their exact commands on the 
 one comment headed `Owner steps`, one `! <command>` line each, ready to paste. Then say in your
 last message, as a statement and not a question, that the task waits on those steps, and stop.
 
+Leave no loose end. Finish what is part of the task. Each thing you find outside it, such as work
+for another repository or a flaw in the files the task builds on, drop on purpose or escalate:
+send it with SendMessage to your orchestrator, the session that started the task, which the prompt
+that opened or resumed this session names. Never escalate to the owner: the orchestrator resolves
+each escalation or brings it to the owner. When no orchestrator is named or the send fails, the
+task waits on the escalation: say it in your last message, and stop.
+
 Your worktree is your workspace: keep notes, test runs and drafts there. A result counts only once
 it is in the PR or posted on the issue, because `/task:finish` deletes the worktree, gitignored
 files included.

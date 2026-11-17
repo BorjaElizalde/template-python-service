@@ -132,7 +132,11 @@ open_session() {
 	# A session opened without a first prompt waits at an empty input, so this one sends it to its
 	# issue. One prompt serves a new session and a resumed one.
 	local first="Work on issue #$3 in $ISSUES_REPO. Read its title, body and comments: gh issue view $3 -R $ISSUES_REPO --json title,body,comments. Carry it out until it is done as the issue says; if this session already worked on it, go on from where it stopped."
-	local files=$MAIN/.claude/skills/task/session settings tools=" --disallowed-tools AskUserQuestion" command launcher
+	local files=$MAIN/.claude/skills/task/session settings tools=" --disallowed-tools AskUserQuestion" command launcher orchestrator
+	# CLAUDE_PID is the pid of the Claude Code session that runs this start: several sessions can share a folder.
+	if orchestrator=$(jq -re --argjson pid "${CLAUDE_PID:-0}" 'first(.[] | select(.pid == $pid) | .name)' <<<"$SESSIONS"); then
+		first+=" Your orchestrator, the session that started this task, is \`$orchestrator\`."
+	fi
 	settings=$files/settings.json
 	# Every session has its permission prompts denied. An execution session never waits for a
 	# person: it has no question tool, and its Stop hook sends it back to work when it ends its turn
@@ -145,15 +149,17 @@ open_session() {
 	# claude takes one appended system prompt, so the launcher joins the words both modes share and
 	# the mode's own. The first prompt comes after -n: --disallowed-tools takes every value up to the
 	# next option.
-	command="cd $(quoted "$1") && exec claude ${5:+$5 }--settings $(quoted "$settings")"
+	command="exec claude ${5:+$5 }--settings $(quoted "$settings")"
 	command+=" --append-system-prompt \"\$(cat $(quoted "$files/prompt.md") $(quoted "$files/$4.md"))\""
 	command+="$tools -n $(quoted "$2") $(quoted "$first")"
 	# The tty drops a typed line past 1024 bytes (MAX_CANON), so Terminal types only the line that
 	# runs a launcher. The launcher sits in the worktree's git dir, out of the work tree that a
-	# finish needs clean. exec leaves claude the tab's only process, so the tab is empty once it exits.
+	# finish needs clean. The tab's own shell enters the worktree, so the folder hooks it runs on a cd
+	# (zsh's chpwd, direnv) give claude the environment of a claude typed there. exec leaves claude
+	# the tab's only process, so the tab is empty once it exits.
 	launcher=$(git -C "$1" rev-parse --absolute-git-dir)/task-session.sh
 	printf '%s\n' "$command" >"$launcher"
-	osascript - "exec bash $(quoted "$launcher")" >/dev/null <<'APPLESCRIPT'
+	osascript - "cd $(quoted "$1") && exec bash $(quoted "$launcher")" >/dev/null <<'APPLESCRIPT'
 on run {command}
 	tell application "Terminal"
 		do script command
