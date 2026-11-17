@@ -1,10 +1,10 @@
-_min_copier_version: "9.14.0"
+# template-agentic's settings and questions, which a release tag bundles and no branch holds.
+# Copier joins the two documents' _exclude, _jinja_extensions, _secret_questions and
+# _skip_if_exists lists; for any other setting or question both name, this one wins.
+!include agentic/copier.yaml
+---
 _subdirectory: template
 _answers_file: .copier-answers.python-service.yaml
-
-# A complement of template-agentic: it fills the agentic layer's plug-in points, so that layer goes
-# first. No question may read the agentic answers: on every update Copier renders the old version
-# and the new one into empty folders, where they don't exist, and the update fails.
 
 # Seeded once, then project-owned: updates skip them, and a first copy keeps an existing file.
 _skip_if_exists:
@@ -15,8 +15,10 @@ _skip_if_exists:
 package_name:
   type: str
   help: The application's Python package directory (e.g. app)
+  # Copier reads the !include a branch lacks as empty, so the first clause stops a copy of a branch.
+  # _copier_answers holds only answers to questions, so a branch's --data issues_repo is not in it.
   validator: >-
-    {% if not package_name or package_name | lower != package_name or ' ' in package_name or '/' in package_name %}Give the package directory as a lowercase Python identifier{% endif %}
+    {% if 'issues_repo' not in _copier_answers %}Copy a release tag: a branch holds no template-agentic, which a release bundles{% elif not package_name or package_name | lower != package_name or ' ' in package_name or '/' in package_name %}Give the package directory as a lowercase Python identifier{% endif %}
 
 test_boundaries:
   type: yaml
