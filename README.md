@@ -17,10 +17,16 @@ uvx copier update -a .copier-answers.python-service.yaml
 
 With Renovate, each release comes as an update PR.
 
-A first copy keeps a `Makefile` and a `pyproject.toml` the repository already has. Add
-`include python.mk` to the `Makefile`. Add to `pyproject.toml` the `[tool.ruff]` and
-`[tool.basedpyright]` lines and the `dev` dependency group of `template/pyproject.toml.jinja`.
-Then delete the targets and settings that the template's files hold.
+A first copy keeps a `Makefile`, `pyproject.toml`, `.gitignore` or `renovate.json` the repository
+already has. Merge into each what the template's copy holds, in `template/` at the release's tag:
+
+- `Makefile`: `include python.mk`.
+- `pyproject.toml`: `extend = "ruff.base.toml"` under `[tool.ruff]`,
+  `extends = "basedpyright.base.json"` under `[tool.basedpyright]`, and the `dev` dependency group.
+- `.gitignore` and `renovate.json`: their lines.
+
+Then delete the targets and settings that `python.mk`, `ruff.base.toml` and
+`basedpyright.base.json` hold.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
 default branch. Tasks branch from `develop`, and the `Gate` workflow checks PRs into the three:
@@ -43,7 +49,7 @@ pick a release of this template, then:
 
 1. Update the agentic layer to the version the release bundles, which is the `_commit` of this
    repository's `.copier-answers.agentic.yaml` at the release's tag. Copier refuses a downgrade, so
-   a project past that version takes a release that bundles its version or a newer one. Commit the
+   a project past that version uses a release that bundles its version or a newer one. Commit the
    update.
 
    ```bash
@@ -65,14 +71,14 @@ The project owns five files, which the template writes once and never updates: `
 `pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. Every other file
 the template writes is the template's: change it there, not in the project.
 
-- **ruff**, in `pyproject.toml`: add rules with `extend-select`, and the project's exceptions with
-  `ignore` and `extend-per-file-ignores`, each with the reason `.claude/rules/skipped-checks.md`
-  asks for. Never use `select`: it replaces the shared rule list.
+- **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select`, and the
+  project's exceptions with `ignore` and `extend-per-file-ignores`, each with the reason
+  `.claude/rules/skipped-checks.md` asks for. Never use `select`: it replaces the shared rule list.
 - **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only, because CI's
   basedpyright never reads `pyproject.toml`.
 - **jscpd**: its settings are the template's. A copy that must stay goes between
   `# jscpd:ignore-start` and `# jscpd:ignore-end`, with the reason `.claude/rules/skipped-checks.md`
   asks for.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
-  redefining `gate`.
+  redefining `gate`. It runs in `make gate` only, not in CI.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
