@@ -29,7 +29,7 @@ Then delete the targets and settings that `python.mk`, `ruff.base.toml` and
 `basedpyright.base.json` hold.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
-default branch. Tasks branch from `develop`, and the `Gate` workflow checks PRs into the three:
+default branch:
 
 ```bash
 git push origin main main:staging main:develop
@@ -44,8 +44,7 @@ uv run pre-commit install
 
 ### Move a project from two answers files to one
 
-A project that applied `template-agentic` beside this template has two answers files. To keep one,
-pick a release of this template, then:
+Pick a release of this template, then:
 
 1. Update the agentic layer to the version the release bundles, which is the `_commit` of this
    repository's `.copier-answers.agentic.yaml` at the release's tag. Copier refuses a downgrade, so
@@ -74,11 +73,9 @@ the template writes is the template's: change it there, not in the project.
 - **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select`, and the
   project's exceptions with `ignore` and `extend-per-file-ignores`, each with the reason
   `.claude/rules/skipped-checks.md` asks for. Never use `select`: it replaces the shared rule list.
-- **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only, because CI's
-  basedpyright never reads `pyproject.toml`.
-- **jscpd**: its settings are the template's. A copy that must stay goes between
-  `# jscpd:ignore-start` and `# jscpd:ignore-end`, with the reason `.claude/rules/skipped-checks.md`
-  asks for.
+- **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only, not to CI.
+- **jscpd**: a copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,
+  with the reason `.claude/rules/skipped-checks.md` asks for.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
   redefining `gate`. It runs in `make gate` only, not in CI.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
