@@ -127,8 +127,6 @@ mkdir -p "$D/app" "$D/tests"
 printf 'def double(x: int) -> int:\n    return x * 2\n' >"$D/app/core.py"
 printf 'from app.core import double\n\n\ndef test_double():\n    assert double(2) == 4\n' >"$D/tests/test_core.py"
 expect "a new project passes make gate, its untyped test exempt from ANN" make -s -C "$D" gate
-# A project extends the fragments in its own Makefile: here with its own target, as one more check
-# of the gate.
 printf 'own: ## Check what only this project checks.\n\t@echo own ran\n\ngate: own\n' >>"$D/Makefile"
 help_lists_each_layer() {  # each target bare make lists, after the file it is listed under
   local owners

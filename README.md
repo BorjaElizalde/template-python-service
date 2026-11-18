@@ -76,12 +76,12 @@ there, not in the project.
   runs `make help`, which lists each target that has a description on its rule line, as
   `run: ## Serve the app.`, under the file that defines it. Extend the two fragments in three ways:
   - Add the project's own targets.
-  - Give a target of theirs one more prerequisite, as `gate: my-check`. That check runs in
+  - Give a fragment's target one more prerequisite, as `gate: my-check`. That check runs in
     `make gate` only, not in CI.
-  - Set a variable of theirs after the include, as `CLAUDE_FLAGS =`, which starts Claude without
+  - Set a fragment's variable after the include, as `CLAUDE_FLAGS =`, which starts Claude without
     Remote Control.
 
-  Never write a second recipe for a target of theirs: every `make` call then warns that it
+  Never write a second recipe for a fragment's target: every `make` call then warns that it
   overrides the target's commands. A project that has its own `claude` or `help` target deletes it
   when an update brings the template's.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
