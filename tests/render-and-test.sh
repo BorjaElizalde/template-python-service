@@ -127,6 +127,18 @@ mkdir -p "$D/app" "$D/tests"
 printf 'def double(x: int) -> int:\n    return x * 2\n' >"$D/app/core.py"
 printf 'from app.core import double\n\n\ndef test_double():\n    assert double(2) == 4\n' >"$D/tests/test_core.py"
 expect "a new project passes make gate, its untyped test exempt from ANN" make -s -C "$D" gate
+printf 'own: ## Check what only this project checks.\n\t@echo own ran\n\ngate: own\n' >>"$D/Makefile"
+help_lists_each_layer() {  # each target bare make lists, after the file it is listed under
+  local owners
+  owners="$(make -s -C "$D" | awk '/^[^ ]/ { f = $0 } /^  / { print f, $1 }')"
+  { [ "$(grep -v '^\.claude/agentic\.mk ' <<<"$owners")" = "$(printf '%s\n' 'Makefile own' 'python.mk lint' \
+    'python.mk lint-check' 'python.mk typecheck' 'python.mk security' 'python.mk duplication' 'python.mk test' \
+    'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
+    { echo "FAIL bare make listed: ${owners//$'\n'/, }"; return 1; }
+}
+expect "bare make lists the project's own target, then python.mk's seven, and claude from the agentic fragment" help_lists_each_layer
+expect "make gate runs the check a project's Makefile adds as its prerequisite" \
+  bash -o pipefail -c "make -s -C '$D' gate | grep -x 'own ran'"
 make_with() {  # make_with <file> <content> <target>: runs the target while the file holds the content
   printf '%b' "$2" >"$D/$1"
   make -s -C "$D" "$3" >/dev/null 2>&1
