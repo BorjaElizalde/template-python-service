@@ -21,8 +21,8 @@ The template writes five files once and never updates them, so they are the proj
 `pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. A first copy keeps
 the ones the repository already has. Merge the template's copy into each, from `template/` at the
 release's tag; for `pyproject.toml`, that is its `[tool.ruff]` and `[tool.basedpyright]` tables and
-its `dev` dependency group. Then delete the targets and settings that `python.mk`, `ruff.base.toml`
-and `basedpyright.base.json` hold.
+its `dev` dependency group. Then delete the targets and settings that `python.mk`,
+`.claude/agentic.mk`, `ruff.base.toml` and `basedpyright.base.json` hold.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
 default branch:
@@ -71,6 +71,17 @@ there, not in the project.
 - **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only, not to CI.
 - **jscpd**: a copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,
   with the reason `.claude/rules/skipped-checks.md` asks for.
-- **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
-  redefining `gate`. It runs in `make gate` only, not in CI.
+- **make**, in the `Makefile`: its `include python.mk` brings the checks and `make gate`, and
+  `python.mk` includes `.claude/agentic.mk`, which brings `make claude` and `make help`. Bare `make`
+  runs `make help`, which lists each target that has a description on its rule line, as
+  `run: ## Serve the app.`, under the file that defines it. Extend the two fragments in three ways:
+  - Add the project's own targets.
+  - Give a target of theirs one more prerequisite, as `gate: my-check`. That check runs in
+    `make gate` only, not in CI.
+  - Set a variable of theirs after the include, as `CLAUDE_FLAGS =`, which starts Claude without
+    Remote Control.
+
+  Never write a second recipe for a target of theirs: every `make` call then warns that it
+  overrides the target's commands. A project that has its own `claude` or `help` target deletes it
+  when an update brings the template's.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
