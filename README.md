@@ -21,8 +21,9 @@ The template writes five files once and never updates them, so they are the proj
 `pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. A first copy keeps
 the ones the repository already has. Merge the template's copy into each, from `template/` at the
 release's tag; for `pyproject.toml`, that is its `[tool.ruff]` and `[tool.basedpyright]` tables and
-its `dev` dependency group. Then delete the targets and settings that `python.mk`, `ruff.base.toml`
-and `basedpyright.base.json` hold.
+its `dev` dependency group. Then delete the targets and settings that `python.mk`,
+`.claude/agentic.mk`, `ruff.base.toml` and `basedpyright.base.json` hold. Do the same when an
+update brings a target the `Makefile` already has, such as `claude` or `help`.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
 default branch:
