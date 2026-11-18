@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: '20261115.1'
+_commit: '20261118.1'
 _src_path: https://github.com/BorjaElizalde/template-agentic.git
 agent_merges: false
 deploy_workflow: Build

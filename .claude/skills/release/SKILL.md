@@ -35,11 +35,13 @@ promotion PR for a leg → adopt it rather than opening a second.
 ## 2. Each leg in order, from `develop` to `main`
 
 1. Fetch both branches and group the pending first-parent commits of `origin/<dst>..origin/<src>`
-   into themes, reading enough of the diff. A leg can span more than the previous merge when an
-   earlier release stopped there.
+   into themes. Read each commit's PR (`gh pr view <n>`) for why it exists, and enough of the diff
+   to say what it changes. A leg can span more than the previous merge when an earlier release
+   stopped there.
 2. `gh pr create --head <src> --base <dst>`, title at most 72 characters in the form
-   `Release: <themes> to <dst>`, body with `Summary`, `Included changes`, `Validation` and
-   `Merge strategy` sections. `Validation` states what `gate` proves for this leg.
+   `Release: <themes> to <dst>`, and a body a person can follow without the diffs open: first why
+   these changes ship; then what each theme includes, in plain prose with its PR numbers. Leave out
+   the `gate` check and the merge method.
 3. Run `bash "${CLAUDE_SKILL_DIR}/scripts/await-checks.sh" <pr>` in the background. Exit 3 (no
    check ever registered) is a red.
 4. Merge. After the last leg, read the merge commit:
