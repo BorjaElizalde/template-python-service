@@ -11,7 +11,8 @@ The same steps start a new task and pick up an existing one.
 1. Find the issue. Given a number, use it. Otherwise search the open issues with
    `gh issue list -R BorjaElizalde/template-python-service --state open --search "<keywords>"` and reuse one that
    covers the task. Otherwise create one with `gh issue create -R BorjaElizalde/template-python-service`, written as
-   "Write an issue" below says. On an existing issue, add what was settled since as a comment.
+   "Write an issue" below says. On an existing issue, add what was settled since as a comment,
+   written the same way.
 2. Pick the branch type. It is the task's mode, for the task's life:
    - **Execution**, the default: `feat`, `fix`, `refactor` or `chore` for a change, `research`
      for a task whose result is an answer. Its session works alone and never waits for a person.
@@ -41,16 +42,20 @@ The same steps start a new task and pick up an existing one.
 
 ## Write an issue
 
-An issue states the problem; the PR that closes it states the solution. A reader who has only the
-issue must see why the work exists, whether it is worth doing, and when it is done. The session
-reads it to find the simplest design, and to find its way back when a design fails: a problem
-leaves it free to do both, where a prescribed solution ties it to one design.
+An issue states the problem; the task that starts from it finds the solution, and the PR that
+closes it states it. A reader who has only the issue must see why the work exists, whether it is
+worth doing, and when it is done. The session reads it to find the simplest design, and to find
+its way back when a design fails: a problem leaves it free to do both, where a prescribed solution
+ties it to one design.
+
+So an issue holds no part of a solution: no design, no change to make, no option tried and no
+advice on how to build it. The owner's decisions are the one exception.
 
 The title names the problem or the outcome, not a step to take: "A restart wipes a task's input
 files", not "Move task inputs out of /tmp". Its first 40 characters name the task's branch,
 session and status line, so they must tell the task apart.
 
-The body opens with the first two parts below, in this order. The other three follow, in this
+The body opens with the first two parts below, in this order. The other two follow, in this
 order, only when there is something to put in them:
 
 ```markdown
@@ -60,24 +65,21 @@ an error, a number, the owner's words quoted. For a research task, the question 
 answer is needed.
 
 ## What is true when this is solved
-What the result is checked against, not the steps to reach it. For a research or a design task,
-also where its result goes: a PR, or a comment on the issue.
+What the result is checked against: outcomes that any design which solves the problem meets, not
+a file, a text or a step that only one design has. For a research or a design task, also where
+its result goes: a PR, or a comment on the issue.
 
 ## The owner's decisions
-Only what the owner decided, which the session follows. What anyone else chose goes under the
-proposed solution.
+Only what the owner decided, quoted in the owner's words, which the session follows.
 
 ## Findings
-What the conversation found out, so the session does not find it again.
-
-## Proposed solution (improve it)
-How the work could be done: the session may improve it or replace it.
+What an earlier discussion found out about the problem, so the session does not find it again.
 ```
 
 The issue is the session's whole brief: it sees nothing of the conversation that started it, so
-every decision and every finding goes in the body. Never point a task at a scratchpad, `/tmp` or
-`/private/tmp` path: a restart wipes them, and a consumer project lost a task's input files that
-way. What a task needs goes in the issue, or the task rebuilds it.
+every decision the owner took and every finding goes in the body. Never point a task at a
+scratchpad, `/tmp` or `/private/tmp` path: a restart wipes them, and a consumer project lost a
+task's input files that way. What a task needs goes in the issue, or the task rebuilds it.
 
 ## Issues that must wait
 
@@ -101,8 +103,7 @@ Either issue's body asks its session to:
 
 1. study the code and the open issues;
 2. create one issue per piece of work, written as "Write an issue" in
-   `.claude/skills/task/skills/start/SKILL.md` says: the problem it solves first, then what is
-   true when it is solved;
+   `.claude/skills/task/skills/start/SKILL.md` says;
 3. put them in order, creating each one `--blocked-by` the issues it waits for;
 4. park each one with
    `bash .claude/skills/task/scripts/task.sh park <n> "planned in #<this issue>, waits for the owner's review"`;
