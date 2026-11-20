@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
 # Regression suite for task.sh. Run from any checkout: bash .claude/skills/task/scripts/task.test.sh
-# Two clones of one throwaway origin, named backend and frontend, stand in for two repositories.
+# Two clones of one throwaway origin, named backend and frontend, stand in for two repositories,
+# each with a real tmux server of its own on a private socket folder.
 # Stub gh answers issue state and title, labels, blockers and comments, the open issues, and PRs,
 # from files under $TASK_TEST_STATE, keeps the labels, the comments and the pin it is given there,
-# and can't answer while $TASK_TEST_STATE/gh-down exists; stub osascript logs each call, runs the
-# line it types into a new tab as the tab's shell would, and ends or brings to the front the
-# session in a tab; stub claude lists a session running in each folder named in
-# $TASK_TEST_STATE/running, and a session it launches keeps its arguments and runs there until a
-# test or a finish ends it; stub ps gives a session's tty; stub sleep returns at once.
+# and can't answer while $TASK_TEST_STATE/gh-down exists; stub window-shell is each tmux window's
+# shell; stub claude lists the sessions of $TASK_TEST_STATE/running whose process still runs, and
+# a session it launches keeps its arguments and runs in its window until it is killed or its window
+# closes; stub sleep waits a tenth of a second, as a window's shell takes real time to start.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
-trap 'rm -rf "$WORK"' EXIT
 export TASK_TEST_STATE="$WORK/state"
 export CLAUDE_CONFIG_DIR="$WORK/claude"
 unset CLAUDE_PID  # a start runs from no session, unless a check names the pid of one
+# tmux talks to the server that TMUX names before any other, and keeps its sockets in TMUX_TMPDIR.
+unset TMUX TMUX_PANE
+export TMUX_TMPDIR="$WORK"
+# The pid of a session this suite lists without launching it: a process of its own, never this
+# suite's, and out of its jobs, so its end prints nothing.
+LISTED_PID=$(sleep 3600 >/dev/null 2>&1 & echo $!)
+trap 'kill "$LISTED_PID"; for socket in "$WORK"/tmux-*/*; do tmux -S "$socket" kill-server; done; rm -rf "$WORK"' EXIT
 pass=0; fail=0
 
 mkdir -p "$WORK/bin" "$TASK_TEST_STATE" "$WORK/seed/.claude/skills/task/scripts" "$WORK/repos"
@@ -100,38 +106,21 @@ case "$1 $2" in
   *) exit 1 ;;
 esac
 EOF
-cat >"$WORK/bin/osascript" <<'EOF'
+# A tmux window's login shell, as zsh is with a chpwd hook: it runs each line typed on its tty,
+# where a line past MAX_CANON never arrives whole, and each cd it runs exports HOOK_FOLDER, the
+# folder it entered.
+cat >"$WORK/bin/window-shell" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >>"$TASK_TEST_STATE/osascript.log"
-# A line typed into a tab past 1024 bytes, newline included, never runs: its tty drops it.
-# $TASK_TEST_STATE/tab keeps the pid of the line's process. The tab's shell has a folder hook, as
-# zsh's chpwd is: each cd it runs exports TAB_HOOK_FOLDER, the folder it entered.
-if [ $# -eq 2 ]; then
-  rm -f "$TASK_TEST_STATE/launched" "$TASK_TEST_STATE/claude-pid" "$TASK_TEST_STATE/hook-folder"
-  if [ "$(printf '%s\n' "$2" | wc -c)" -le 1024 ]; then
-    bash -s <<<"cd() { builtin cd \"\$@\" && export TAB_HOOK_FOLDER=\$PWD; }
-$2" &
-    echo $! >"$TASK_TEST_STATE/tab"
-    wait
-  fi
-fi
-# The session in a tab told to exit stops and its window closes. While $TASK_TEST_STATE/stuck exists
-# the session never stops, and the script fails as session_tab's does after 30 seconds.
-if [ "${3:-}" = exit ]; then
-  [ ! -f "$TASK_TEST_STATE/stuck" ] || exit 1
-  # Its session's line goes: the session on /dev/ttys042 is on line 1, /dev/ttys043 on line 2.
-  awk -v n=$((10#${2#/dev/ttys} - 41)) 'NR != n' "$TASK_TEST_STATE/running" >"$TASK_TEST_STATE/running.next"
-  mv "$TASK_TEST_STATE/running.next" "$TASK_TEST_STATE/running"
-fi
-exit 0
+cd() { builtin cd "$@" && export HOOK_FOLDER=$PWD; }
+while IFS= read -r line; do eval "$line"; done
 EOF
 # claude agents --json, as Claude Code prints it. Each line of $TASK_TEST_STATE/running,
-# "<folder> [<status>]", is a background session, then an interactive one, busy unless the line
-# says else, with pid 4242 on line 1, 4243 on line 2. While $TASK_TEST_STATE/claude-down exists,
-# it can't answer. Any other call launches a session, which fails while $TASK_TEST_STATE/no-start
-# exists, else adds its folder to running: its arguments go to $TASK_TEST_STATE/launched, each ended
-# by a NUL, since the system prompt spans lines, and joined on one line of launches; its pid to
-# claude-pid; the folder its tab's hook exported to hook-folder.
+# "<folder> <pid> [<status>]", is a background session, then an interactive one, busy unless the
+# line says else, listed while its process runs. While $TASK_TEST_STATE/claude-down exists, it
+# can't answer. Any other call launches a session, which fails while $TASK_TEST_STATE/no-start
+# exists, else adds its folder and pid to running: its arguments go to $TASK_TEST_STATE/launched,
+# each ended by a NUL, since the system prompt spans lines, and joined on one line of launches; its
+# pid to claude-pid; the folder its window's hook exported to hook-folder.
 cat >"$WORK/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 if [ "$*" != "agents --json" ]; then
@@ -139,25 +128,22 @@ if [ "$*" != "agents --json" ]; then
   printf '%s\0' "$@" >"$TASK_TEST_STATE/launched"
   echo "${*//$'\n'/ }" >>"$TASK_TEST_STATE/launches"
   echo $$ >"$TASK_TEST_STATE/claude-pid"
-  echo "${TAB_HOOK_FOLDER:-}" >"$TASK_TEST_STATE/hook-folder"
-  pwd -P >>"$TASK_TEST_STATE/running"
+  echo "${HOOK_FOLDER:-}" >"$TASK_TEST_STATE/hook-folder"
+  echo "$(pwd -P) $$" >>"$TASK_TEST_STATE/running"
+  while read -r _; do :; done
   exit 0
 fi
 [ ! -f "$TASK_TEST_STATE/claude-down" ] || exit 1
 [ -f "$TASK_TEST_STATE/running" ] || { echo '[]'; exit 0; }
-jq -Rn '[inputs | capture("^(?<cwd>[^ ]+)( (?<status>.+))?$")] | to_entries | map(
-  {id: "b0b0b0b0", cwd: .value.cwd, kind: "background", name: "a background session", state: "blocked"},
-  {pid: (4242 + .key), cwd: .value.cwd, kind: "interactive", name: "a task session", status: (.value.status // "busy")})' \
-  "$TASK_TEST_STATE/running"
+while read -r folder pid status; do
+  if kill -0 "$pid" 2>/dev/null; then echo "$folder $pid $status"; fi
+done <"$TASK_TEST_STATE/running" | jq -Rn '[inputs | capture("^(?<cwd>[^ ]+) (?<pid>[0-9]+) (?<status>.*)$")] | map(
+  {id: "b0b0b0b0", cwd: .cwd, kind: "background", name: "a background session", state: "blocked"},
+  {pid: (.pid | tonumber), cwd: .cwd, kind: "interactive", name: "a task session", status: (if .status == "" then "busy" else .status end)})'
 EOF
-# The tty of pid 4242 is ttys042, of 4243 ttys043.
-cat >"$WORK/bin/ps" <<'EOF'
-#!/usr/bin/env bash
-[ "$1 $2 $3" = "-o tty= -p" ] && printf 'ttys%03d    \n' $(($4 - 4200))
-EOF
-printf '#!/usr/bin/env bash\n' >"$WORK/bin/sleep"
-chmod +x "$WORK/bin/gh" "$WORK/bin/osascript" "$WORK/bin/claude" "$WORK/bin/ps" "$WORK/bin/sleep"
-export PATH="$WORK/bin:$PATH"
+printf '#!/usr/bin/env bash\nexec %s 0.1\n' "$(command -v sleep)" >"$WORK/bin/sleep"
+chmod +x "$WORK/bin/gh" "$WORK/bin/window-shell" "$WORK/bin/claude" "$WORK/bin/sleep"
+export PATH="$WORK/bin:$PATH" SHELL="$WORK/bin/window-shell"
 echo CLOSED >"$TASK_TEST_STATE/issue-5"
 
 cp "$HERE/task.sh" "$WORK/seed/.claude/skills/task/scripts/"
@@ -182,8 +168,21 @@ task() { bash "$1/.claude/skills/task/scripts/task.sh" "${@:2}"; }
 branch_of() { git -C "$1" rev-parse --abbrev-ref HEAD; }
 memory_of() { jq -r .autoMemoryDirectory "$1/.claude/settings.local.json"; }
 sessions() { grep -c -F "$1" "$TASK_TEST_STATE/launches"; }
-last_osascript() { tail -n 1 "$TASK_TEST_STATE/osascript.log"; }
-sessions_exit() { rm -f "$TASK_TEST_STATE/running"; }  # every running session exits
+tmux_main() { tmux -L "$(basename "$1")" new-session -d -s "$(basename "$1")" -n main -c "$1"; }  # repository $1's tmux, as make claude starts it
+has_window() { tmux -L "$1" list-windows -F '#{window_name}' | grep -qxF "$2"; }  # has_window <repository> <window>: in its tmux
+in_view() { test "$(tmux -L "$1" list-windows -f '#{window_active}' -F '#{window_name}')" = main; }  # main is the window in view
+closes() {  # closes <repository> <window>: that window of the repository's tmux closes within 3 seconds
+  for _ in {1..30}; do
+    has_window "$@" || return 0
+    sleep
+  done
+  return 1
+}
+sessions_exit() {  # every running session exits, and its window closes; each repository's main window stays
+  local socket
+  for socket in "$WORK"/tmux-*/*; do tmux -S "$socket" kill-window -a -t main; done
+  rm -f "$TASK_TEST_STATE/running"
+}
 launched() { jq -e -Rs 'split("\u0000")[:-1] | '"$1" "$TASK_TEST_STATE/launched"; }  # launched <jq filter>: over the last launch's arguments
 launched_arg() { launched ".[index(\"$1\") + 1]" | jq -r .; }  # the value the launch gave option $1
 # launches_in execution|design: the session last opened launches in that mode. Every session has its
@@ -202,10 +201,11 @@ launches_in() {
     [ "$(launched_arg --disallowed-tools)" = AskUserQuestion ] && jq -e '.hooks.Stop' <<<"$settings"
   fi
 }
-# The session last opened runs claude interactively, with no -p or --print, as its tab's only process.
+# The session last opened runs claude interactively, with no -p or --print, as its window's only
+# process: claude is the process tmux started in the window's pane.
 interactive() {
   launched 'all(.[]; . != "-p" and . != "--print")' &&
-    [ "$(cat "$TASK_TEST_STATE/claude-pid")" = "$(cat "$TASK_TEST_STATE/tab")" ]
+    tmux -L backend list-panes -a -F '#{pane_pid}' | grep -qxF "$(cat "$TASK_TEST_STATE/claude-pid")"
 }
 transcript() {  # transcript <folder> [<name> <[CC]YYMMDDhhmm>]: a claude session in that folder writes it, now or then
   local dir; dir="$CLAUDE_CONFIG_DIR/projects/$(printf '%s' "$1" | tr -c 'a-zA-Z0-9' '-')"
@@ -233,6 +233,7 @@ ISSUE42="$WORK/repos/worktrees/42-name-make-close-claude-session-in"
 ISSUE7="$WORK/repos/worktrees/7-second-task"
 
 echo "-- start: one folder per issue, one subfolder per repository"
+tmux_main "$BACKEND"
 check "backend starts issue 42"                run_in "$BACKEND" start 42
 check "the worktree is <root>/<n>-<slug>/backend" test -d "$ISSUE42/backend"
 check "its branch is feat/<n>-<slug>"          test "$(branch_of "$ISSUE42/backend")" = feat/42-name-make-close-claude-session-in
@@ -243,15 +244,21 @@ check "its session opens with the issue name"  test "$(sessions '#42 backend: Na
 check "and the start names its mode"           grep -qxF '✓ session opened in execution mode: #42 backend: Name make close_claude_session in' "$WORK/out"
 check "with a first prompt that reads its issue" bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'gh issue view 42 -R acme/tasks --json title,body,comments'"
 check "and names no orchestrator, as no session runs the start" bash -c "! tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Your orchestrator'"
-check "an interactive claude, never -p or --print, the tab's only process" interactive
-check "with the folder hooks of its tab's shell run in its worktree" test "$(cat "$TASK_TEST_STATE/hook-folder")" = "$ISSUE42/backend"
+check "an interactive claude, never -p or --print, its window's only process" interactive
+check "in window #42 of backend's tmux"        has_window backend '#42'
+check "behind the main window, still in view"  in_view backend
+check "with the folder hooks of its window's shell run in its worktree" test "$(cat "$TASK_TEST_STATE/hook-folder")" = "$ISSUE42/backend"
 check "in execution mode: no question tool, a Stop hook, permission prompts denied" launches_in execution
 sessions_exit
 check "starting again resumes, creates nothing" task "$BACKEND" start 42
 check "the session opens a second time"        test "$(sessions '#42 backend:')" -eq 2
 check "both fresh: no transcript exists yet"   bash -c "! grep -q -- --continue '$TASK_TEST_STATE/launches'"
+refuses "a start where the repository's tmux does not run" 'start the main session with make claude' "$FRONTEND" start 42
+check "starts no tmux of its own"              bash -c "! tmux -L frontend has-session"
+tmux_main "$FRONTEND"
 check "frontend joins the same issue folder"   task "$FRONTEND" start 42
 check "side by side, no collision"             test -d "$ISSUE42/frontend"
+check "in window #42 of frontend's own tmux"   has_window frontend '#42'
 check "a start inside a worktree"              task "$ISSUE42/backend" start 7 fix
 check "resolves from the main checkout"        test -d "$ISSUE7/backend"
 check "and takes the branch type"              test "$(branch_of "$ISSUE7/backend")" = fix/7-second-task
@@ -261,17 +268,17 @@ refuses "a closed issue does not start"          'is CLOSED'            "$BACKEN
 echo "-- start: an existing issue picks up its session"
 transcript "$ISSUE42/backend"
 sessions_exit
-echo "$BACKEND" >"$TASK_TEST_STATE/running"
-CLAUDE_PID=4242 check "a session with a transcript, started from a session in the main checkout" task "$BACKEND" start 42
+echo "$BACKEND $LISTED_PID" >"$TASK_TEST_STATE/running"
+CLAUDE_PID=$LISTED_PID check "a session with a transcript, started from a session in the main checkout" task "$BACKEND" start 42
 check "resumes it with --continue"             launched 'index("--continue") != null'
 check "and the same first prompt"              bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Work on issue #42 in acme/tasks.'"
 check "which names that session its orchestrator" bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Your orchestrator, the session that started this task, is \`a task session\`.'"
 check "still interactive"                      interactive
-echo "$ISSUE42/backend" >"$TASK_TEST_STATE/running"
-check "a running session"                      task "$BACKEND" start 42
-check "is brought to the front"                test "$(last_osascript)" = "- /dev/ttys042 focus"
+check "a running session"                      run_in "$BACKEND" start 42
+check "is left where it runs"                  grep -qxF '✓ session already running in execution mode: #42 backend: Name make close_claude_session in' "$WORK/out"
 check "and never opened twice"                 test "$(sessions '#42 backend:')" -eq 3
-rm "$TASK_TEST_STATE/running"
+check "while the main window stays in view"    in_view backend
+sessions_exit
 
 echo "-- start: an existing issue picks up its branch"
 commit "$ISSUE7/backend"
@@ -297,13 +304,12 @@ sessions_exit
 check "a start with no type"                   run_in "$BACKEND" start 25
 check "resumes it in design mode"              grep -qxF '✓ session resumed in design mode: #25 backend: Design the next step' "$WORK/out"
 check "and launches it so"                     launches_in design
-echo "$ISSUE25/backend" >"$TASK_TEST_STATE/running"
 check "a start with another type"              run_in "$BACKEND" start 25 feat
-check "brings the running session forward, still in design mode" grep -qxF '✓ session already running in design mode, brought to the front: #25 backend: Design the next step' "$WORK/out"
+check "finds the running session, still in design mode" grep -qxF '✓ session already running in design mode: #25 backend: Design the next step' "$WORK/out"
 run_in "$BACKEND" status
 check "the status line of a design task says so" test "$(status_line 25)" = '#25 Design the next step: design mode, session busy, no PR, active 0 min ago'
 check "and an execution task's names no mode"  bash -c "grep -q '^#42 ' '$WORK/out' && ! grep -q '^#42 .*mode' '$WORK/out'"
-rm "$TASK_TEST_STATE/running"
+sessions_exit
 commit "$ISSUE25/backend"
 rm -rf "$ISSUE25/backend"
 check "a design branch whose folder was deleted" run_in "$BACKEND" start 25
@@ -316,19 +322,22 @@ echo CLOSED >"$TASK_TEST_STATE/issue-25"
 check "a design task finishes as any other"    task "$BACKEND" finish 25
 
 echo "-- start: a session launched by a command longer than the 1024 bytes a tty line holds"
-LONG="$WORK/repos/$(printf 'long-%.0s' {1..30})backend"
-ISSUE26="$WORK/repos/worktrees/26-design-a-launch-longer-than-a-tty-line/$(basename "$LONG")"
+# The length comes from the folders above the repository: a tmux socket's path, which holds the
+# repository's name, holds about 100 bytes.
+LONG="$WORK/$(printf 'long-%.0s' {1..30})/backend"
+ISSUE26="$(dirname "$LONG")/worktrees/26-design-a-launch-longer-than-a-tty-line/backend"
 git clone -q "$WORK/origin.git" "$LONG"
-check "a design task in a repository with a long name" run_in "$LONG" start 26 design
+check "a design task in a repository with a long path" run_in "$LONG" start 26 design
 check "has a command over 1024 bytes"          test "$(wc -c <"$(git -C "$ISSUE26" rev-parse --absolute-git-dir)/task-session.sh")" -gt 1024
-check "and its session runs"                   grep -qxF "✓ session opened in design mode: #26 $(basename "$LONG"): Design a launch longer than a tty line" "$WORK/out"
+check "and its session runs"                   grep -qxF "✓ session opened in design mode: #26 backend: Design a launch longer than a tty line" "$WORK/out"
 check "in design mode"                         launches_in design
-check "the tab's only process"                 interactive
+check "its window's only process"              interactive
 sessions_exit
 touch "$TASK_TEST_STATE/no-start"
 check "a start whose session never runs fails" bash -c "! (cd '$LONG' && bash .claude/skills/task/scripts/task.sh start 26) >'$WORK/out' 2>&1"
 check "says why, and never that a session opened" bash -c "
   tail -n 1 '$WORK/out' | grep -q '^no session runs in .* 30 seconds after its launch: ' && ! grep -q '^✓ session' '$WORK/out'"
+check "and its window has closed"              closes backend '#26'
 rm "$TASK_TEST_STATE/no-start"
 
 echo "-- finish: refused while anything would be lost"
@@ -341,15 +350,13 @@ rm "$ISSUE42/backend/notes.md"
 commit "$ISSUE42/backend"
 refuses "unpushed commits block it"              'push them first'      "$BACKEND" finish 42
 git -C "$ISSUE42/backend" push -q origin HEAD 2>/dev/null
-echo "$ISSUE42/backend" >"$TASK_TEST_STATE/running"
-touch "$TASK_TEST_STATE/stuck"
-refuses "a session that never exits blocks it"    'did not exit'         "$BACKEND" finish 42
-check "and the worktree stays"                 test -d "$ISSUE42/backend"
-rm "$TASK_TEST_STATE/stuck"
 
 echo "-- finish: closed issue, nothing unshipped"
+rm "$TASK_TEST_STATE/issue-42"  # open for a moment, for a start
+check "with its session started again"         task "$BACKEND" start 42
+echo CLOSED >"$TASK_TEST_STATE/issue-42"
 check "a pushed branch finishes"               task "$BACKEND" finish 42
-check "its session ended and its window closed" test "$(last_osascript)" = "- /dev/ttys042 exit"
+check "its session ended, and its window closed" closes backend '#42'
 check "its worktree is gone"                   test ! -e "$ISSUE42/backend"
 check "its local branch is gone"               bash -c "! git -C '$BACKEND' rev-parse -q --verify feat/42-name-make-close-claude-session-in"
 check "the issue folder stays for frontend"    test -d "$ISSUE42/frontend"
@@ -422,7 +429,7 @@ check "backend starts issue 13"                task "$BACKEND" start 13
 check "and issue 14"                           task "$BACKEND" start 14
 check "and issue 17"                           task "$BACKEND" start 17
 echo CLOSED >"$TASK_TEST_STATE/issue-14"
-echo "$ISSUE11/backend idle" >"$TASK_TEST_STATE/running"
+echo "$ISSUE11/backend $LISTED_PID idle" >"$TASK_TEST_STATE/running"
 transcript "$ISSUE11/backend" old 200001010000
 transcript "$ISSUE11/backend"
 PENDING='{"__typename": "CheckRun", "name": "gate", "status": "IN_PROGRESS", "conclusion": ""}'
@@ -465,10 +472,10 @@ run_in "$BACKEND" status
 check "not a session idle, nor one gone, for less than 10 minutes" bash -c "
   grep -q '^#11 Task 11: session idle,' '$WORK/out' && grep -q '^#13 Task 13: no session,' '$WORK/out' &&
   ! grep -qE '^#1[13] .*needs attention' '$WORK/out'"
-echo "$ISSUE11/backend waiting" >"$TASK_TEST_STATE/running"
+echo "$ISSUE11/backend $LISTED_PID waiting" >"$TASK_TEST_STATE/running"
 run_in "$BACKEND" status
 check "a waiting session at once"              bash -c "grep -qE '^#11 Task 11: session waiting, .*, needs attention$' '$WORK/out' && ! grep -qE '^#13 .*needs attention' '$WORK/out'"
-echo "$ISSUE11/backend" >"$TASK_TEST_STATE/running"
+echo "$ISSUE11/backend $LISTED_PID" >"$TASK_TEST_STATE/running"
 transcript "$ISSUE11/backend" session 200001010000
 transcript "$ISSUE11/backend" old 200001010000
 run_in "$BACKEND" status
