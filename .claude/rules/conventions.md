@@ -1,3 +1,21 @@
+## Readable code
+
+Code is readable when a person who knows the problem can follow it from the code alone, and finds
+there what their intuition expects. A person who reads code that plans a schedule with an optimizer
+looks for five steps: define the decision variables, build the objective, build the constraints,
+solve, and turn the solution into a schedule. Readable code for that problem has one function that
+names those steps in that order and a function for each step, and no block that mixes them.
+
+1. The code is what the reader expects to see.
+2. Each function does one task, at one level.
+3. Names say what the thing is in the problem's words.
+4. The path through the code is straight: little nesting, positive conditions.
+5. Nothing extra: no unused code, no boilerplate, no custom version of what the language already
+   has.
+
+Comments, docstrings and documents do not count toward readable: where code misses a property,
+change the code.
+
 ## Code style
 
 - Adapt to the existing code: before you extend a module, and above all before you create a file,

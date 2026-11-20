@@ -3,12 +3,12 @@
 # Regression suite for task.sh. Run from any checkout: bash .claude/skills/task/scripts/task.test.sh
 # Two clones of one throwaway origin, named backend and frontend, stand in for two repositories.
 # Stub gh answers issue state and title, labels, blockers and comments, the open issues, and PRs,
-# from files under $TASK_TEST_STATE, keeps the labels and comments it is given there, and can't
-# answer while $TASK_TEST_STATE/gh-down exists; stub osascript logs each call, runs the line it
-# types into a new tab as the tab's shell would, and ends or brings to the front the session in a
-# tab; stub claude lists a session running in each folder named in $TASK_TEST_STATE/running, and a
-# session it launches keeps its arguments and runs there until a test or a finish ends it; stub ps
-# gives a session's tty; stub sleep returns at once.
+# from files under $TASK_TEST_STATE, keeps the labels, the comments and the pin it is given there,
+# and can't answer while $TASK_TEST_STATE/gh-down exists; stub osascript logs each call, runs the
+# line it types into a new tab as the tab's shell would, and ends or brings to the front the
+# session in a tab; stub claude lists a session running in each folder named in
+# $TASK_TEST_STATE/running, and a session it launches keeps its arguments and runs there until a
+# test or a finish ends it; stub ps gives a session's tty; stub sleep returns at once.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
@@ -36,19 +36,23 @@ title() {
   esac
 }
 state() { cat "issue-$1" 2>/dev/null || echo OPEN; }
-# Issue $1 as JSON: its number and title, its labels and comments, one per line of labels-<n> and
-# comments-<n>, and the issues it is blocked by, one number per line of blocked-by-<n>, each in the
-# state its issue-<n> file gives.
+# Issue $1 as JSON: its number and title, its labels, one per line of labels-<n>, its comments,
+# each with its URL, and the issues it is blocked by, one number per line of blocked-by-<n>, each
+# in the state its issue-<n> file gives.
 issue() {
-  local blockers
+  local blockers comments
   blockers=$(for m in $(cat "blocked-by-$1" 2>/dev/null); do echo "$m $(state "$m")"; done)
+  comments=$(for f in "comment-$1"???; do [ ! -f "$f" ] || jq -Rs --arg url "$(comment_url "${f#comment-}")" '{url: $url, body: .}' "$f"; done | jq -s .)
   jq -n --argjson number "$1" --arg title "$(title "$1")" --arg labels "$(cat "labels-$1" 2>/dev/null)" \
-    --arg comments "$(cat "comments-$1" 2>/dev/null)" --arg blockers "$blockers" '
+    --argjson comments "$comments" --arg blockers "$blockers" '
     def lines: split("\n") | map(select(. != ""));
     {number: $number, title: $title, labels: ($labels | lines | map({name: .})),
       blockedBy: {nodes: ($blockers | lines | map(split(" ") | {number: (.[0] | tonumber), state: .[1]}))},
-      comments: ($comments | lines | map({body: .}))}'
+      comments: $comments}'
 }
+# A comment is the file comment-<id>, which holds its text. Its id is its issue's number, then
+# three digits that count the issue's comments from 000.
+comment_url() { echo "https://github.com/acme/tasks/issues/${1%???}#issuecomment-$1"; }
 case "$1 $2" in
   "issue view")
     title "$3" >/dev/null || exit 1
@@ -58,7 +62,11 @@ case "$1 $2" in
     # The open issues, newest first, as gh lists them for --state open.
     for n in 42 {24..7} 5; do [ "$(state "$n")" != OPEN ] || issue "$n"; done | jq -s . ;;
   "issue comment")
-    n=$3; while [ $# -gt 0 ]; do [ "$1" != --body ] || echo "$2" >>"$TASK_TEST_STATE/comments-$n"; shift; done ;;
+    # Like gh, it prints the URL of the comment it posts.
+    n=$3; while [ $# -gt 0 ]; do [ "$1" != --body ] || body=$2; shift; done
+    id=$n$(printf '%03d' "$(find . -name "comment-$n???" | wc -l)")
+    printf '%s' "$body" >"comment-$id"
+    comment_url "$id" ;;
   "issue edit")
     # Like gh, it adds no label the repository lacks.
     n=$3; while [ $# -gt 0 ]; do
@@ -71,6 +79,15 @@ case "$1 $2" in
   "label create")
     # --force updates a label that exists, so the repository lists it once.
     grep -qxF "$3" "$TASK_TEST_STATE/repo-labels" 2>/dev/null || echo "$3" >>"$TASK_TEST_STATE/repo-labels" ;;
+  "api -X")
+    # PATCH gives a comment the text of -f body=<text>, and PUT of its /pin makes it its issue's
+    # one pinned comment, which pinned-<n> names.
+    id=${4#repos/acme/tasks/issues/comments/}
+    case "$3 $id" in
+      "PATCH "*) printf '%s' "${6#body=}" >"comment-$id" ;;
+      "PUT "*/pin) id=${id%/pin}; echo "$id" >"pinned-${id%???}" ;;
+      *) exit 1 ;;
+    esac ;;
   "pr list")
     while [ $# -gt 0 ]; do case "$1" in --head) branch=$2 ;; --state) state=$2 ;; esac; shift; done
     # --state merged asks whether a PR from the branch merged; --state all, for its newest PR.
@@ -500,10 +517,10 @@ echo "-- park and block: a start refuses an issue that must wait, and says why"
 check "an issue parks where the label never was" task "$BACKEND" park 18 "planned in #19"
 check "which creates the label"                grep -qx backlog "$TASK_TEST_STATE/repo-labels"
 check "labels the issue"                       grep -qx backlog "$TASK_TEST_STATE/labels-18"
-check "and gives the reason in a comment"      grep -qx 'Parked: planned in #19' "$TASK_TEST_STATE/comments-18"
+check "and gives the reason in a comment"      test "$(cat "$TASK_TEST_STATE/comment-18000")" = 'Parked: planned in #19'
 refuses "a start refuses a parked issue, naming the reason" '^issue 18 is parked: planned in #19$' "$BACKEND" start 18
 check "and creates nothing"                    test ! -e "$WORK/repos/worktrees/18-task-18"
-echo "A comment of the owner's" >>"$TASK_TEST_STATE/comments-18"
+printf '%s' "A comment of the owner's" >"$TASK_TEST_STATE/comment-18001"
 check "a park where the label is"              task "$BACKEND" park 18 "waits for the review"
 refuses "the reason named is the last one given" '^issue 18 is parked: waits for the review$' "$BACKEND" start 18
 printf '18\n5\n' >"$TASK_TEST_STATE/blocked-by-19"
@@ -521,9 +538,9 @@ echo "-- status: every open issue, under the first heading that fits"
 # By now 11, 13, 15 and 19 have a task worktree in backend, and every other issue up to 19 is closed.
 echo backlog >"$TASK_TEST_STATE/labels-11"
 echo backlog >"$TASK_TEST_STATE/labels-20"
-echo 'Parked: planned in #19' >"$TASK_TEST_STATE/comments-20"
+printf '%s' 'Parked: planned in #19' >"$TASK_TEST_STATE/comment-20000"
 echo backlog >"$TASK_TEST_STATE/labels-21"
-echo 'Parked: waits for the review' >"$TASK_TEST_STATE/comments-21"
+printf '%s' 'Parked: waits for the review' >"$TASK_TEST_STATE/comment-21000"
 echo 22 >"$TASK_TEST_STATE/blocked-by-21"
 printf '20\n5\n' >"$TASK_TEST_STATE/blocked-by-22"
 check "a look runs"                            run_in "$BACKEND" status
@@ -548,9 +565,30 @@ check "a session start in the main checkout"   run_in "$BACKEND" on-session-star
 check "prints the task lines, and no heading or backlog line" \
   test "$(sed '$d' "$WORK/out" | cut -d ' ' -f 1 | sort | tr '\n' ' ')" = '#11 #13 #15 #19 '
 
+echo "-- plan: a task's design, the one pinned comment of its issue"
+# The heading of the owner's comment only starts like a plan's.
+OWNERS="$(printf '## Planning, in the words of the owner\n\nA note.')"
+printf '%s' "$OWNERS" >"$TASK_TEST_STATE/comment-24000"
+printf 'Build one thing.\n' >"$ISSUE11/backend/plan.md"
+check "a session posts its plan, from a path relative to its folder" run_in "$ISSUE11/backend" plan 24 plan.md
+check "as a comment headed Plan, which says whose words it holds, then the file's text" test "$(cat "$TASK_TEST_STATE/comment-24001")" = \
+  "$(printf '%s\n\n%s\n\n%s' '## Plan' '_The design this task builds. Its session chose it and keeps it current here; it is not a decision of the owner._' 'Build one thing.')"
+check "the issue's pinned comment"             test "$(cat "$TASK_TEST_STATE/pinned-24")" = 24001
+rm "$TASK_TEST_STATE/pinned-24"
+printf 'Build another thing.\n\n### Changes\n\n- Another thing: the first one failed.\n' >"$WORK/plan.md"
+check "a plan posted again"                    task "$BACKEND" plan 24 "$WORK/plan.md"
+check "replaces the text of that comment"      grep -qx -- '- Another thing: the first one failed.' "$TASK_TEST_STATE/comment-24001"
+check "under the same two lines"               test "$(head -n 1 "$TASK_TEST_STATE/comment-24001")" = '## Plan'
+check "adds no second comment"                 test ! -e "$TASK_TEST_STATE/comment-24002"
+check "and pins it again, where the pin was lost" test "$(cat "$TASK_TEST_STATE/pinned-24")" = 24001
+check "the owner's comment stays as it was"    test "$(cat "$TASK_TEST_STATE/comment-24000")" = "$OWNERS"
+refuses "a file that is not there posts no plan" 'No such file'         "$BACKEND" plan 23 "$WORK/none.md"
+check "not even an empty one"                  test ! -e "$TASK_TEST_STATE/comment-23000"
+
 echo "-- usage"
 refuses "no command is refused"                  '^usage:'              "$BACKEND"
 refuses "a park with no reason is refused"       '^usage:'              "$BACKEND" park 18
+refuses "a plan with no file is refused"         '^usage:'              "$BACKEND" plan 24
 
 echo "== $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

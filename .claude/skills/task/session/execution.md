@@ -7,17 +7,44 @@ continue. Before you choose, you may spend another turn thinking or spawn subage
 you may not stop to wait for an answer. Stop only when the task is done, or when it waits on
 `Owner steps`.
 
-For a task that ends in a PR, open the PR with `/pull-request` once the work is done. Then
-run the steps below, and give each agent the command that reads the task's issue,
+For a task that ends in a PR, plan before you build. Work out the smallest design that meets
+everything the issue asks: hold each thing it adds against the Design Philosophy. Write the plan
+to a file, for a reader who has the issue and not the code:
+
+- what you will build, and where;
+- each thing it adds, such as a file, a command, a setting or a name, with the reason the issue
+  needs it;
+- each choice between designs: the one you took, and why.
+
+Post it with `bash .claude/skills/task/scripts/task.sh plan <n> <file>`, which makes it the
+issue's one pinned comment, headed `Plan`. A plan the issue already has is the task's own, from an
+earlier session or from its session in another repository: go on from it.
+
+Three agents review the task, and each gets the command that reads its issue,
 `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`.
-Skip steps 1 and 3 when the change is small, a bug fix or a small extension. Judge that by what
-the change does, not by its line count: a mirrored copy doubles the count, and a wide mechanical
-rename is large but low risk.
+A small change, a bug fix or a small extension, gets none of them. Judge that by what the change
+does, not by its line count: a mirrored copy doubles the count, and a wide mechanical rename is
+large but low risk.
+
+Each reviewer posts its report as a comment, then returns it to you: `plan-reviewer` on the issue,
+the other two on the PR. Before you act on any finding of a review, post your reply beside it: a
+comment headed with the review's heading followed by `reply`, as in `## Plan review reply`, then
+one line per finding, what you do about it or why you do nothing. Post it from a file with
+`--body-file <file>`: the Bash guard reads a heredoc as part of the command, and blocks a git
+command it finds there. A review that found nothing gets no reply.
+
+Before you build, spawn the `plan-reviewer` agent on the issue's plan. It only reports: you decide
+on its designs, and you alone change the plan. Take a design it presents unless a reason stands
+against it, and post the plan again before you build any code. Then build: no person answers a
+plan. Each time the design changes, by that review or during the build, post the plan with the
+same command: the design as it stands and, under `Changes`, every change since the first plan,
+each with its reason.
+
+Open that PR with `/pull-request` once the work is done, and stop before the step that marks it
+ready: it stays a draft, which nobody can merge, until the steps below end. Then run them:
 
 1. Spawn the `code-reviewer` agent. Fix each **Must change** finding, and each **Optional** one
    unless a reason stands against it, then push.
-2. Spawn the `code-trimmer` agent. Audit its report and its commit, and take back each cut that
-   removed what the issue needs.
-3. Spawn one `simplicity-reviewer`, and decide on its designs: take one it shows simpler unless a
-   reason stands against it. Rebuild to the design you take and push it. When the rebuild adds
-   code, run steps 1 and 2 again on the result; a line it only shortens or rewraps adds none.
+2. Spawn the `readability-reviewer` agent. Settle each finding with a change to the code, unless a
+   reason stands against the finding, then push.
+3. Pass `/gate`, then run `/pull-request` again, to its end.
