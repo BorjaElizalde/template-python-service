@@ -54,6 +54,7 @@ case "$pr" in
   25) pr_json develop feat/x "$GATE,$(ctx legacy/ci PENDING)" ;;
   26) pr_json develop feat/x "" ;;
   27) pr_json develop feat/x "$GATE,$(run test COMPLETED '')" ;;
+  28) pr_json develop feat/x "$GATE,$(run up-to-date COMPLETED SUCCESS),$(ctx up-to-date FAILURE)" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -163,7 +164,7 @@ t 2 "promotion with --merge=false"                      'gh pr merge 12 --merge=
 echo "-- agent_merges: the agent's own PR into develop, squashed, pinned to a head whose every check"
 echo "   passed with gate among them (PR 21 green; 22 gate running; 23 no gate; 24 a check failed;"
 echo "   25 a status pending; 26 no checks; 27 a check completed with no conclusion;"
-echo "   16 bugfix→staging)"
+echo "   28 develop moved on after its checks passed; 16 bugfix→staging)"
 t_on 0 "own green PR, squash, pinned head"   "gh pr merge 21 --squash --match-head-commit $H"
 t_on 0 "pin given with ="                    "gh pr merge 21 --squash --match-head-commit=$H"
 t_on 0 "short -s in a cluster with -d"       "gh pr merge 21 -sd --match-head-commit $H"
@@ -182,6 +183,7 @@ t_on 2 "a status still pending"              "gh pr merge 25 --squash --match-he
 t_on 2 "no checks at all"                    "gh pr merge 26 --squash --match-head-commit $H"
 # An empty conclusion is not a pass, even on a check that says it completed.
 t_on 2 "a check completed with no conclusion" "gh pr merge 27 --squash --match-head-commit $H"
+t_on 2 "a failed up-to-date status, though the checks passed" "gh pr merge 28 --squash --match-head-commit $H"
 t_on 2 "another repository named with -R"    "gh pr merge 21 -R other/app --squash --match-head-commit $H"
 t_on 2 "another repository after cd"         "cd $STUB/other && gh pr merge 21 --squash --match-head-commit $H"
 t_on 2 "bugfix into staging stays the owner's" "gh pr merge 16 --squash --match-head-commit $H"

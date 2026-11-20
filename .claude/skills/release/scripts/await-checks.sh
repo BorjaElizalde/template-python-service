@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# Poll one PR's checks until none are pending, then print each as "<bucket>\t<name>\t<link>".
+# Poll one promotion PR's checks until branch-protection has registered and none are pending, then
+# print each as "<bucket>\t<name>\t<link>". A skipped gate is complete as it registers, so a poll
+# that falls before branch-protection registers sees none pending.
 #   0  every check passed or was skipped
 #   1  a check failed or was cancelled
 #   2  usage, or checks still pending at the deadline
-#   3  no check ever registered — the caller decides whether that is correct for this PR
+#   3  branch-protection never registered
 # Resumable: a run cut short mid-poll can simply be started again.
 set -u -o pipefail
 
@@ -19,11 +21,12 @@ seen=0
 while :; do
   checks=$(gh pr checks "$pr" --json name,bucket,link 2>/dev/null)
 
-  if ! jq -e 'type == "array" and length > 0' <<<"${checks:-null}" >/dev/null 2>&1; then
-    # A transient gh failure must never read as "this PR has no checks", so grace applies
+  if ! jq -e 'type == "array" and any(.[]; .name == "branch-protection")' <<<"${checks:-null}" \
+    >/dev/null 2>&1; then
+    # A transient gh failure must never read as "this PR has no branch-protection", so grace applies
     # only until the first sighting.
     if (( seen == 0 && SECONDS > grace )); then
-      printf 'No check registered on PR #%s within %ss.\n' "$pr" "$grace"
+      printf 'No branch-protection check registered on PR #%s within %ss.\n' "$pr" "$grace"
       exit 3
     fi
   else

@@ -13,10 +13,11 @@ allowed-tools: Bash(bash:*), Bash(git fetch:*), Bash(git log:*), Bash(git diff:*
 - `staging` → `main` pending: !`git fetch origin staging main --quiet 2>/dev/null; git --no-pager log origin/main..origin/staging --first-parent --oneline`
 - `staging` → `main` open PR: !`gh pr list --base main --head staging --state open --json url --jq '.[].url'`
 
-Every promotion PR carries one check, `gate`: it checks the PR comes from the branch below its
-base (`develop` into `staging`, `staging` into `main`), then runs the project's checks on the merge
-result.
-The rulesets require it, so a promotion PR with no check is a red.
+Every promotion PR carries the `branch-protection` check: it passes only a PR from the branch below
+its base (`develop` into `staging`, `staging` into `main`). The project's checks don't run on a
+promotion, whose code passed them before it reached its source branch: `gate` shows as skipped on
+the PR into `staging`, and no `gate` runs on the PR into `main`. The PR into `staging` also shows
+`up-to-date`, the run that the last push to `develop` started to mark the PRs it left behind.
 
 Run every leg unattended for as long as everything is green: never pause to confirm a green step.
 **Stop at the first red** — a failed or cancelled check, a merge that will not apply, a failed
@@ -41,9 +42,9 @@ promotion PR for a leg → adopt it rather than opening a second.
 2. `gh pr create --head <src> --base <dst>`, title at most 72 characters in the form
    `Release: <themes> to <dst>`, and a body a person can follow without the diffs open: first why
    these changes ship; then what each theme includes, in plain prose with its PR numbers. Leave out
-   the `gate` check and the merge method.
-3. Run `bash "${CLAUDE_SKILL_DIR}/scripts/await-checks.sh" <pr>` in the background. Exit 3 (no
-   check ever registered) is a red.
+   the checks and the merge method.
+3. Run `bash "${CLAUDE_SKILL_DIR}/scripts/await-checks.sh" <pr>` in the background. Exit 3
+   (`branch-protection` never registered) is a red.
 4. Merge. After the last leg, read the merge commit:
    `gh pr view <pr> --json mergeCommit --jq .mergeCommit.oid`.
 
