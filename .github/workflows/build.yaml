@@ -48,4 +48,3 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           make release-tag TAG="$VERSION_TAG"
-          git push origin "$VERSION_TAG"

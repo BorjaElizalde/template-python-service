@@ -10,13 +10,7 @@ include .claude/agentic.mk
 gate: ## Copy the template the way a project gets it, then run every rendered suite.
 	@bash tests/render-and-test.sh
 
-# Tags TAG on this tree plus that version's files, a commit no branch holds. Its second parent is
-# origin's newest tag, so a compare of two releases shows only what changed. Build runs it.
-release-tag: ## Tag TAG as a release that bundles template-agentic.
-	@previous="$$(git ls-remote --tags --refs --sort=-v:refname origin | sed -n '1s#.*refs/tags/##p')" && \
-	  git fetch --quiet --depth 1 origin tag "$$previous" && \
-	  clone="$$(mktemp -d)" && trap 'rm -rf "$$clone"' EXIT && \
+release-tag: ## Push TAG, a release of this tree with template-agentic bundled in.
+	@clone="$$(mktemp -d)" && trap 'rm -rf "$$clone"' EXIT && \
 	  git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$$AGENTIC_REF" "$$AGENTIC_SRC" "$$clone" && \
-	  bash "$$clone/bundle.sh" . && git add --force -- agentic template && \
-	  git tag "$(TAG)" "$$(git commit-tree "$$(git write-tree)" -p HEAD -p "$$previous" \
-	    -m "Release $(TAG), with template-agentic $$AGENTIC_REF")"
+	  bash "$$clone/release.sh" "$(TAG)"
