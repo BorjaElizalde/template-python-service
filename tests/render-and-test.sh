@@ -40,7 +40,7 @@ commit "$V" main
 build() {  # build <tag> [<make variable>...]: what Build does on a merge to main
   rm -rf "$OUT/build"
   git clone --quiet --depth 1 --branch main "file://$V" "$OUT/build"
-  make -s -C "$OUT/build" release-tag TAG="$1" "${@:2}" && git -C "$OUT/build" push --quiet origin "$1"
+  make -s -C "$OUT/build" release-tag TAG="$1" "${@:2}"
 }
 build v1
 
