@@ -22,7 +22,7 @@ On Windows, install WSL2 with Ubuntu from a PowerShell run as administrator, the
 wsl --install
 ```
 
-On Ubuntu, or in WSL2's Ubuntu, install these, then gh from
+On Ubuntu, or in WSL2's Ubuntu, install these, with tmux 3.2 or later, then gh from
 [GitHub's apt repository](https://github.com/cli/cli/blob/trunk/docs/install_linux.md#debian):
 Ubuntu's own `gh` package is too old.
 
@@ -102,11 +102,16 @@ Pick a release of this template, then:
    uvx copier update --defaults -a .copier-answers.python-service.yaml --vcs-ref <release>
    ```
 
-## Move between tasks
+## Run the sessions
 
-Each task's session runs in its own tmux window, beside the main session. Press `Ctrl-b`, then `w`
-to pick any window from a list, or `n` and `p` for the next and the previous one. Closing the
-terminal stops no session: `tmux attach` brings them back.
+Start the main session with `make claude` in the repository. It runs in the repository's own tmux,
+and each task's session runs in another window of it. Press `Ctrl-b`, then `w` to pick any window
+from a list, or `n` and `p` for the next and the previous one.
+
+Closing the terminal stops no session: `make claude` in the repository brings them back. On WSL2,
+if they stop anyway, set `instanceIdleTimeout=-1` under `[general]` in `%UserProfile%\.wslconfig`.
+If the main session exits while task windows remain, open a window with `Ctrl-b`, then `c`, and
+run `make claude` in the repository.
 
 ## Extend
 
