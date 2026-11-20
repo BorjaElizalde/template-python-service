@@ -5,6 +5,47 @@ service. Each release bundles the Claude Code harness of `template-agentic` and 
 layer: the Python rules and practice checks, a ruff format hook, `make gate`, the checks CI runs on
 each PR, commit hooks, and the ruff, basedpyright and jscpd settings every Python service shares.
 
+## Set up the machine
+
+Set up each machine once, before the first copy. Windows works through WSL2 only.
+
+On a Mac, install [Homebrew](https://brew.sh), which also installs Apple's command line tools with
+git and make, then:
+
+```bash
+brew install jq gh tmux
+```
+
+On Windows, install WSL2 with Ubuntu from a PowerShell run as administrator, then restart:
+
+```powershell
+wsl --install
+```
+
+On Ubuntu, or in WSL2's Ubuntu, install these, with tmux 3.2 or later, then gh from
+[GitHub's apt repository](https://github.com/cli/cli/blob/trunk/docs/install_linux.md#debian):
+Ubuntu's own `gh` package is too old.
+
+```bash
+sudo apt update && sudo apt install -y git make jq tmux
+```
+
+In WSL2, keep repositories in the Linux home folder, such as `~/projects`: under `/mnt/c` every
+tool is slow. Keep Windows awake while sessions run: in Settings > System > Power & battery >
+Screen, sleep & hibernate timeouts, set it never to sleep when plugged in, or use
+[PowerToys Awake](https://learn.microsoft.com/windows/powertoys/awake).
+
+Then, on every machine, install uv and Claude Code, give git your name and email, and sign in to
+GitHub:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -fsSL https://claude.ai/install.sh | bash
+git config --global user.name "Your Name"
+git config --global user.email you@example.com
+gh auth login
+```
+
 ## Apply and update
 
 Apply this template alone, never `template-agentic` beside it. Copy the newest release, then update
@@ -60,6 +101,17 @@ Pick a release of this template, then:
    git commit -qam 'Keep one answers file'
    uvx copier update --defaults -a .copier-answers.python-service.yaml --vcs-ref <release>
    ```
+
+## Run the sessions
+
+Start the main session with `make claude` in the repository. It runs in the repository's own tmux,
+and each task's session runs in another window of it. Press `Ctrl-b`, then `w` to pick any window
+from a list, or `n` and `p` for the next and the previous one.
+
+Closing the terminal stops no session: `make claude` in the repository brings them back. On WSL2,
+if they stop anyway, set `instanceIdleTimeout=-1` under `[general]` in `%UserProfile%\.wslconfig`.
+If the main session exits while task windows remain, open a window with `Ctrl-b`, then `c`, and
+run `make claude` in the repository.
 
 ## Extend
 
