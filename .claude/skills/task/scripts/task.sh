@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
 # The task lifecycle behind /task:start and /task:finish: one issue, one worktree, one session. And
-# the parking of an issue that must not start yet.
+# the parking of an issue that must not start yet, and the plan a task's session posts on its issue.
 set -euo pipefail
 
-usage="usage: task.sh start <issue> [type] | finish <issue> | park <issue> <reason> | cleanup | status | on-session-start | point-memory"
+usage="usage: task.sh start <issue> [type] | finish <issue> | park <issue> <reason> | plan <issue> <file> | cleanup | status | on-session-start | point-memory"
 
 CALLER=$(pwd -P)
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -55,6 +55,29 @@ park() {
 	gh issue comment "$1" -R "$ISSUES_REPO" --body "Parked: $2" >/dev/null
 	gh issue edit "$1" -R "$ISSUES_REPO" --add-label backlog >/dev/null
 	echo "✓ issue $1 parked: $2"
+}
+
+# The two lines that open an issue's plan comment. The second says whose words they are: the
+# session posts under the owner's account.
+PLAN_HEADING='## Plan'
+PLAN_AUTHOR='_The design this task builds. Its session chose it and keeps it current here; it is not a decision of the owner._'
+
+# plan <issue> <file>: an issue holds one plan, so a run that finds the comment under PLAN_HEADING
+# gives it the file's text and posts none. Every run pins it: GitHub keeps one pinned comment per
+# issue, and a pin on a pinned comment changes nothing. A comment's URL ends in the id the REST API
+# knows it by.
+plan() {
+	local text body comments url
+	text=$(cd "$CALLER" && cat "$2")
+	body=$PLAN_HEADING$'\n\n'$PLAN_AUTHOR$'\n\n'$text
+	comments=$(gh issue view "$1" -R "$ISSUES_REPO" --json comments)
+	if url=$(jq -re --arg heading "$PLAN_HEADING" '[.comments[] | select(.body | startswith($heading + "\n")) | .url] | last // empty' <<<"$comments"); then
+		gh api -X PATCH "repos/$ISSUES_REPO/issues/comments/${url##*-}" -f body="$body" >/dev/null
+	else
+		url=$(gh issue comment "$1" -R "$ISSUES_REPO" --body "$body")
+	fi
+	gh api -X PUT "repos/$ISSUES_REPO/issues/comments/${url##*-}/pin" >/dev/null
+	echo "✓ issue $1: plan posted and pinned"
 }
 
 # A title cut at a word boundary to 40 characters.
@@ -474,6 +497,7 @@ case ${1:-} in
 start) [ $# -ge 2 ] || die "$usage"; start_task "$2" "${3:-feat}" ;;
 finish) [ $# -ge 2 ] || die "$usage"; finish_task "$2" ;;
 park) [ $# -ge 3 ] || die "$usage"; park "$2" "$3" ;;
+plan) [ $# -ge 3 ] || die "$usage"; plan "$2" "$3" ;;
 cleanup) cleanup ;;
 status) status ;;
 on-session-start) on_session_start ;;

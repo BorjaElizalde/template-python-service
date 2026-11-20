@@ -42,8 +42,9 @@ The same steps start a new task and pick up an existing one.
 
 ## Write an issue
 
-An issue states the problem; the task that starts from it finds the solution, and the PR that
-closes it states it. A reader who has only the issue must see why the work exists, whether it is
+An issue states the problem; the task that starts from it finds the solution and, before it
+builds, posts its plan as the issue's pinned comment, headed `Plan`; the PR that closes the issue
+states the solution. A reader who has only the issue must see why the work exists, whether it is
 worth doing, and when it is done. The session reads it to find the simplest design, and to find
 its way back when a design fails: a problem leaves it free to do both, where a prescribed solution
 ties it to one design.
