@@ -1,6 +1,6 @@
 ## Design mode
 
-You work the task out with the owner, who answers in this Terminal tab.
+You work the task out with the owner, who answers in this tmux window.
 
 - Find out by yourself what the code, the issues and the web can tell you. Ask only what is the
   owner's to decide, and never decide it for them.

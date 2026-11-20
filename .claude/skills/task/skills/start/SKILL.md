@@ -18,7 +18,7 @@ The same steps start a new task and pick up an existing one.
      for a task whose result is an answer. Its session works alone and never waits for a person.
    - **Design**: `design`, only when the owner asks to work the task out together ("with me",
      "let's design", "let's discuss"), never on your own guess. Its session asks the owner, in
-     its Terminal tab, what is the owner's to decide, and builds nothing: its result, delivered
+     its tmux window, what is the owner's to decide, and builds nothing: its result, delivered
      as a research task's, is the decisions taken and the issues for the work.
 
    The type names a new branch only: an issue that has a branch keeps it, and its mode. To talk
@@ -32,11 +32,14 @@ The same steps start a new task and pick up an existing one.
    picks up what the issue already has:
    - its worktree, else its branch (left without a worktree, or pushed from another clone), else
      a new branch from `origin/develop`;
-   - its running session, brought to the front and never opened twice, else its last session,
-     resumed, else a new one, in the mode of its branch, which the session line names.
+   - its running session, never opened twice, else its last session, resumed, else a new one, in
+     the mode of its branch, which the session line names.
 
-   A new or resumed session starts with a prompt that sends it to the issue and its comments. A
-   running session gets no prompt: send it what changed with SendMessage.
+   A new or resumed session opens in a new window of the repository's tmux, named `#<n>`, behind
+   the window in view, so the owner keeps the main session in view. It starts with a prompt that
+   sends it to the issue and its comments. A running session gets no prompt: send it what changed
+   with SendMessage. Where the repository's tmux does not run, the script refuses, having made
+   the worktree: tell the owner to start the main session with `make claude`.
 4. Return the issue URL, the worktree path, the session name, its mode and what the script picked
    up. Then report the status through `/task:status`.
 

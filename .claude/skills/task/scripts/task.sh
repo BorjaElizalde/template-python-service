@@ -119,20 +119,13 @@ has_session_transcript() {
 
 # The interactive session running in folder $1, found in $SESSIONS: the output of
 # `claude agents --json`, the supported way to read session state from outside Claude Code.
-session() {
+running_session() {
 	jq -ce --arg cwd "$1" 'first(.[] | select(.kind == "interactive" and .cwd == $cwd))' <<<"$SESSIONS"
-}
-
-# The tty of the session running in folder $1.
-session_tty() {
-	local pid
-	pid=$(session "$1" | jq .pid) || return 1
-	echo "/dev/$(ps -o tty= -p "$pid" | tr -d ' ')"
 }
 
 # "session busy|idle|waiting" of the session running in folder $1, else "no session".
 session_line() {
-	session "$1" | jq -r '"session " + .status' || echo "no session"
+	running_session "$1" | jq -r '"session " + .status' || echo "no session"
 }
 
 # autoMemoryDirectory takes only an absolute or ~/ path, so each checkout's gitignored local
@@ -150,12 +143,12 @@ quoted() {
 	printf "'%s'" "${1//$quote/$escaped}"
 }
 
-# open_session <worktree> <name> <issue> <mode> [--continue]: returns once the session runs.
-open_session() {
+# launch_command <name> <issue> <mode> [--continue]: the command that runs a task's session.
+launch_command() {
 	# A session opened without a first prompt waits at an empty input, so this one sends it to its
 	# issue. One prompt serves a new session and a resumed one.
-	local first="Work on issue #$3 in $ISSUES_REPO. Read its title, body and comments: gh issue view $3 -R $ISSUES_REPO --json title,body,comments. Carry it out until it is done as the issue says; if this session already worked on it, go on from where it stopped."
-	local files=$MAIN/.claude/skills/task/session settings tools=" --disallowed-tools AskUserQuestion" command launcher orchestrator
+	local first="Work on issue #$2 in $ISSUES_REPO. Read its title, body and comments: gh issue view $2 -R $ISSUES_REPO --json title,body,comments. Carry it out until it is done as the issue says; if this session already worked on it, go on from where it stopped."
+	local files=$MAIN/.claude/skills/task/session settings tools=" --disallowed-tools AskUserQuestion" command orchestrator
 	# CLAUDE_PID is the pid of the Claude Code session that runs this start: several sessions can share a folder.
 	if orchestrator=$(jq -re --argjson pid "${CLAUDE_PID:-0}" 'first(.[] | select(.pid == $pid) | .name)' <<<"$SESSIONS"); then
 		first+=" Your orchestrator, the session that started this task, is \`$orchestrator\`."
@@ -165,83 +158,50 @@ open_session() {
 	# person: it has no question tool, and its Stop hook sends it back to work when it ends its turn
 	# on a question. A design session asks the owner, so it keeps the tool and drops the hook:
 	# claude --settings takes one file or JSON string, so it gets the settings less the hook as JSON.
-	if [ "$4" = design ]; then
+	if [ "$3" = design ]; then
 		settings=$(jq -c 'del(.hooks.Stop)' "$settings")
 		tools=
 	fi
-	# claude takes one appended system prompt, so the launcher joins the words both modes share and
+	# claude takes one appended system prompt, so the command joins the words both modes share and
 	# the mode's own. The first prompt comes after -n: --disallowed-tools takes every value up to the
 	# next option.
-	command="exec claude ${5:+$5 }--settings $(quoted "$settings")"
-	command+=" --append-system-prompt \"\$(cat $(quoted "$files/prompt.md") $(quoted "$files/$4.md"))\""
-	command+="$tools -n $(quoted "$2") $(quoted "$first")"
-	# The tty drops a typed line past 1024 bytes (MAX_CANON), so Terminal types only the line that
-	# runs a launcher. The launcher sits in the worktree's git dir, out of the work tree that a
-	# finish needs clean. The tab's own shell enters the worktree, so the folder hooks it runs on a cd
-	# (zsh's chpwd, direnv) give claude the environment of a claude typed there. exec leaves claude
-	# the tab's only process, so the tab is empty once it exits.
-	launcher=$(git -C "$1" rev-parse --absolute-git-dir)/task-session.sh
-	printf '%s\n' "$command" >"$launcher"
-	osascript - "cd $(quoted "$1") && exec bash $(quoted "$launcher")" >/dev/null <<'APPLESCRIPT'
-on run {command}
-	tell application "Terminal"
-		do script command
-		activate
-	end tell
-end run
-APPLESCRIPT
-	# The tab's shell, then claude, take seconds to start.
-	for _ in {1..30}; do
-		SESSIONS=$(claude agents --json)
-		session "$1" >/dev/null && return
-		sleep 1
-	done
-	die "no session runs in $1 30 seconds after its launch: its Terminal tab shows why"
+	command="exec claude ${4:+$4 }--settings $(quoted "$settings")"
+	command+=" --append-system-prompt \"\$(cat $(quoted "$files/prompt.md") $(quoted "$files/$3.md"))\""
+	command+="$tools -n $(quoted "$1") $(quoted "$first")"
+	printf '%s\n' "$command"
 }
 
-# session_tab <tty> exit|focus: ends the session in that Terminal tab and closes its window, or brings
-# the tab to the front.
-session_tab() {
-	osascript - "$1" "$2" >/dev/null <<'APPLESCRIPT'
-on run {sessionTty, action}
-	tell application "Terminal"
-		-- claude sets the window title itself, so the tab is found by its tty.
-		repeat with w in windows
-			set windowTabs to {}
-			-- Terminal can list a window whose tabs can't be read.
-			try
-				set windowTabs to tabs of w
-			end try
-			repeat with t in windowTabs
-				if tty of t is sessionTty then
-					if action is "exit" then
-						-- do script ends the text with the carriage return that Enter sends.
-						do script "/exit" in t
-						-- By id: w is the window's place in the front-to-back order, which can change.
-						set sessionWindow to contents of w
-						-- A profile that closes the window when its shell exits can close it between
-						-- any two of these lines.
-						repeat 30 times
-							try
-								if (count (processes of t)) is 0 then close sessionWindow
-							end try
-							if not (exists sessionWindow) then return
-							delay 1
-						end repeat
-						error "the tab on " & sessionTty & " still runs a process after 30 seconds"
-					else
-						set selected of t to true
-						set index of w to 1
-						activate
-					end if
-					return
-				end if
-			end repeat
-		end repeat
-	end tell
-	error "no Terminal tab on " & sessionTty
-end run
-APPLESCRIPT
+# open_window <worktree> <issue> <launcher>: a new window #<issue> of the repository's tmux, behind
+# the window in view, whose own shell enters the worktree and runs the launcher there. So the folder
+# hooks that shell runs on a cd (zsh's chpwd, direnv) give claude the environment of a claude typed
+# there, and exec leaves claude the window's only process, so the window closes once it exits.
+open_window() {
+	local pane
+	# new-window starts no tmux server: one started here, from a Claude session's Bash tool, would
+	# give every window that session's environment. The server holds one session, which new-window
+	# opens in, and -d leaves the main session's window in view.
+	pane=$(tmux -L "$REPO_NAME" new-window -d -P -F '#{pane_id}' -n "#$2") ||
+		die "no tmux runs for $REPO_NAME: start the main session with make claude, then start the task again"
+	tmux -L "$REPO_NAME" send-keys -t "$pane" "cd $(quoted "$1") && exec bash $(quoted "$3")" Enter
+}
+
+# open_session <worktree> <name> <issue> <mode> [--continue]: returns once the session runs, in a
+# new window #<issue> of the repository's tmux.
+open_session() {
+	local launcher
+	# The tty drops a typed line past 1024 bytes (MAX_CANON), so the window's shell is typed only the
+	# line that runs a launcher. The launcher sits in the worktree's git dir, out of the work tree
+	# that a finish needs clean.
+	launcher=$(git -C "$1" rev-parse --absolute-git-dir)/task-session.sh
+	launch_command "${@:2}" >"$launcher"
+	open_window "$1" "$3" "$launcher"
+	# The window's shell, then claude, take seconds to start.
+	for _ in {1..30}; do
+		SESSIONS=$(claude agents --json)
+		running_session "$1" >/dev/null && return
+		sleep 1
+	done
+	die "no session runs in $1 30 seconds after its launch: run bash $(quoted "$launcher") there to see why"
 }
 
 # Whether branch $1 holds commits that exist nowhere else. They are safe when there are none beyond
@@ -259,7 +219,7 @@ unshipped() {
 # mode of its branch. A mistyped type would fix the wrong mode for the task's life, so an unknown one
 # is refused before anything else.
 start_task() {
-	local issue=$1 type=$2 view title holds short slug worktree branch mode name tty
+	local issue=$1 type=$2 view title holds short slug worktree branch mode name
 	case $type in
 	feat | fix | refactor | chore | research | design) ;;
 	*) die "unknown type $type: a task is feat, fix, refactor, chore or research, in execution mode, or design, in design mode" ;;
@@ -300,9 +260,8 @@ start_task() {
 	point_memory "$worktree"
 	mode=$(task_mode "$branch")
 	name="#$issue $REPO_NAME: $short"
-	if tty=$(session_tty "$worktree"); then
-		session_tab "$tty" focus
-		echo "✓ session already running in $mode mode, brought to the front: $name"
+	if running_session "$worktree" >/dev/null; then
+		echo "✓ session already running in $mode mode: $name"
 	elif has_session_transcript "$worktree"; then
 		# claude --continue refuses to start where no session exists yet.
 		open_session "$worktree" "$name" "$issue" "$mode" --continue
@@ -314,7 +273,7 @@ start_task() {
 }
 
 finish_task() {
-	local issue=$1 view worktree branches branch tty
+	local issue=$1 view worktree branches branch pid
 	worktree=$(issue_worktree "$issue") || die "no worktree for issue $issue"
 	case "$CALLER/" in "$worktree"/*)
 		die "finish issue $issue from outside its worktree: from inside, it would close its own session and delete its own folder" ;;
@@ -332,8 +291,9 @@ finish_task() {
 		fi
 	done
 	SESSIONS=$(claude agents --json)
-	if tty=$(session_tty "$worktree"); then
-		session_tab "$tty" exit || die "the session in $worktree did not exit; close it, then finish again"
+	# The session is its window's only process, so its window closes with it.
+	if pid=$(running_session "$worktree" | jq .pid); then
+		kill "$pid"
 	fi
 	git worktree remove "$worktree" ||
 		die "$worktree has uncommitted or untracked files: commit them, or move what matters to the PR or the issue"
