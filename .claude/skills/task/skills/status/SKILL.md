@@ -16,7 +16,7 @@ allowed-tools: Bash(bash:*), Bash(gh issue view:*)
 3. A line that ends in `needs attention` asks for a move. Make it by the first case that fits, and
    give the task's card its mark:
    - a design task, waiting, or idle with a question in its last message: the question is the
-     owner's, who answers it in its Terminal tab, which `/task:start <n>` brings to the front.
+     owner's, who answers it in its tmux window, `#<n>`.
      Never answer it for the owner, and never send the session back to work past it. ✋
    - idle, PR open and checks passed: review the PR; the owner merges it. 👀
    - checks failed: send the session back to work with SendMessage, saying what failed. ⏳
@@ -24,8 +24,7 @@ allowed-tools: Bash(bash:*), Bash(gh issue view:*)
      Send the session back to them with SendMessage. ⏳
    - idle, no PR: its last message holds a result to close the issue on, a blocker, or a
      question. Pick what to do. 💬
-   - waiting: the owner answers it in its Terminal tab, which `/task:start <n>` brings to the
-     front. ✋
+   - waiting: the owner answers it in its tmux window, `#<n>`. ✋
    - no session: resume it with `/task:start <n>`. ⏳
 
    `Owner steps` the owner has not taken yet make the mark ✋. Every other task is running: ⏳.
