@@ -175,17 +175,6 @@ fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's c
 passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
   make_with "$1" "$2" gate && ci_with "$1" "$2"
 }
-
-# Both gates fail when the tests cover less than the template's coverage floor. The project's own
-# fail_under in pyproject.toml replaces that floor in both, with its reason on its line, where the
-# practices hook asks for it. The probes after these add code no test covers to check the other
-# tools, so the project keeps its floor of 0.
-UNCOVERED='def triple(x: int) -> int:\n    return x * 3\n'
-expect "code no test covers fails make test and CI" fails_both test app/uncovered.py "$UNCOVERED"
-printf '\n[tool.coverage.report]\nfail_under = 0  # %s\n' \
-  "The probes add code to check other tools. Tried a test per probe, but none checks behaviour." >>"$D/pyproject.toml"
-expect "a fail_under in pyproject.toml, its reason on its line, replaces the floor in make gate and CI" \
-  passes_both app/uncovered.py "$UNCOVERED"
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
   cp "$f" "$OUT/relaxed.bak"
@@ -196,6 +185,21 @@ relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the comman
   cp "$OUT/relaxed.bak" "$f"
   return "$status"
 }
+
+# Both gates fail when the tests cover less than the template's coverage floor. The project's own
+# fail_under in pyproject.toml replaces that floor in both, with its reason on its line, where the
+# practices hook asks for it.
+UNCOVERED='def triple(x: int) -> int:\n    return x * 3\n'
+expect "code no test covers fails make test and CI" fails_both test app/uncovered.py "$UNCOVERED"
+LOW_FLOOR='fail_under = 40  # Half the package drives hardware. Tried a fake device, but it hides the faults.'
+expect "a fail_under in pyproject.toml, its reason on its line, replaces the floor in make gate and CI" \
+  relaxed pyproject.toml '[tool.coverage.run]' "[tool.coverage.report]\n$LOW_FLOOR\n\n[tool.coverage.run]" \
+  passes_both app/uncovered.py "$UNCOVERED"
+
+# The probes below add code that no test covers, to check the other tools: the project's own floor
+# of 0 keeps coverage out of their results.
+printf '\n[tool.coverage.report]\nfail_under = 0  # %s\n' \
+  "The probes add code to check other tools. Tried a test per probe, but none checks behaviour." >>"$D/pyproject.toml"
 local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's checks fail it
   make_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
 }

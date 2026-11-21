@@ -370,7 +370,7 @@ echo "-- config: a lower coverage floor stops; with no fail_under, the floor is 
 COV=$'[tool.coverage.report]\nfail_under = 99\n'
 NOCOV=$'[tool.coverage.run]\nomit = ["tests/*"]\n'
 edit_in 2 "coverage floor lowered"         "$PY" "$COV" 'fail_under = 99' 'fail_under = 98'
-edit_in 2 "coverage floor lowered above a comment line" "$PY" "$COV"$'# note x = ...\n' 'fail_under = 99' 'fail_under = 50'
+edit_in 2 "coverage floor lowered, a comment under it that reads like a setting" "$PY" "$COV"$'# note x = ...\n' 'fail_under = 99' 'fail_under = 50'
 edit_in 2 "coverage floor set below the template's" "$PY" "$NOCOV" "$NOCOV" "$NOCOV"$'\n[tool.coverage.report]\nfail_under = 96\n'
 says yes "lowered the coverage floor from 97 to 96" "the stop names the template's floor it lowers" "$PY" \
   "$NOCOV" "$NOCOV"$'\n[tool.coverage.report]\nfail_under = 96\n'
