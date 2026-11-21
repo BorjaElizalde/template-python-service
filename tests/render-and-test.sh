@@ -161,6 +161,8 @@ expect "the CI action is a valid action" uvx --quiet check-jsonschema --builtin-
 expect "CI's copies of the shared settings match the project's" bash -c "
   cmp -s '$D/ruff.base.toml' '$CI/ruff.base.toml' && cmp -s '$D/basedpyright.base.json' '$CI/basedpyright.base.json' &&
   cmp -s '$D/.jscpd.json' '$CI/.jscpd.json'"
+expect "CI's secret scan pins the commit hook's gitleaks" bash -c "cd '$D' &&
+  diff <(grep -A1 gitleaks/gitleaks .pre-commit-config.yaml) <(grep -A1 gitleaks/gitleaks '$CI/gitleaks.pre-commit.yaml')"
 ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds the content
   printf '%b' "$2" >"$D/$1"
   (cd "$D" && bash .github/actions/stack-gate/gate.sh) >/dev/null 2>&1
@@ -169,6 +171,20 @@ ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds t
   return "$status"
 }
 expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
+# The secrets are made at run time, so this file holds none for a scanner to find.
+TOKEN="ghp_$(od -An -tx1 -N18 /dev/urandom | tr -d ' \n')"
+PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n$(head -c 900 /dev/urandom | base64)\n-----END RSA PRIVATE KEY-----\n"
+deleted_secret_fails_ci() {  # a commit made without the hooks adds a token, the next deletes it
+  local branch="$OUT/leaked" out
+  git clone -q "$D" "$branch"
+  printf 'TOKEN = "%s"\n' "$TOKEN" >"$branch/settings.py"
+  commit "$branch" leak
+  git -C "$branch" rm -q settings.py
+  commit "$branch" unleak
+  git clone -q --depth 1 "file://$branch" "$OUT/checkout"
+  ! out="$(cd "$OUT/checkout" && bash .github/actions/stack-gate/gate.sh 2>&1)" && grep -q 'leaks found' <<<"$out"
+}
+expect "a secret that a later commit deletes fails CI's checks, from a one-commit checkout" deleted_secret_fails_ci
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
   cp "$f" "$OUT/relaxed.bak"
@@ -261,9 +277,10 @@ git -C "$D" add -A
 expect "pre-commit passes on a new project" bash -c "cd '$D' && uv run pre-commit run --all-files"
 hook_with() {  # hook_with <file> <content> <hook>: runs one hook on the file while it holds the content
   printf '%b' "$2" >"$D/$1"
+  git -C "$D" add "$1"  # as a commit would: gitleaks reads only what is staged
   (cd "$D" && uv run pre-commit run "$3" --files "$1") >/dev/null 2>&1
   local status=$?
-  rm "$D/$1"
+  git -C "$D" rm -qf "$1"
   return "$status"
 }
 fails_hook() { ! hook_with "$@"; }
@@ -272,6 +289,9 @@ expect "pre-commit's ruff passes a typed file" hook_with app/typed.py 'def g(x: 
 expect "pre-commit's ruff applies the base's rules" fails_hook app/untyped.py "$UNTYPED" ruff-check
 expect "pre-commit passes a trimmed file" hook_with app/trimmed.py 'x = 1\n' trailing-whitespace
 expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   \n' trailing-whitespace
+expect "pre-commit's gitleaks passes a file with no secret" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' gitleaks
+expect "pre-commit's gitleaks stops a token in a Python file" fails_hook app/settings.py "TOKEN = \"$TOKEN\"\n" gitleaks
+expect "pre-commit's gitleaks stops a private key in a file of another type" fails_hook deploy.pem "$PRIVATE_KEY" gitleaks
 
 # The seeded .gitignore keeps secrets and the gate's output out of git; the gate above left both.
 expect "git ignores .env files and what the gate leaves" bash -c "cd '$D' &&
