@@ -127,3 +127,6 @@ there, not in the project.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
   redefining `gate`. It runs in `make gate` only, not in CI.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
+- **Coverage**: `make gate` and CI fail when the tests cover less of the code than the template's
+  floor. `fail_under` under `[tool.coverage.report]` in `pyproject.toml` sets the project's own
+  floor in its place; a lower one needs the reason `.claude/rules/skipped-checks.md` asks for.

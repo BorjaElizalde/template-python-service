@@ -6,9 +6,11 @@
 # Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
 # and a Makefile tool line only if no added line runs the same tool. A select added to a ruff config
 # that extends another counts as switching checks off: ruff takes it as the whole rule list and
-# drops the extended one; so does a removed extend line. Every edit to the shared base files stops,
-# reason or not: each update rewrites them, so a change goes to the template. CI workflows are not
-# checked here: the owner reviews CI changes in the PR, which only the owner merges.
+# drops the extended one; so does a removed extend line. So does an edit that lowers the coverage
+# floor: pyproject.toml's fail_under, or the template's floor when it sets none. Every edit to the
+# shared base files stops, reason or not: each update rewrites them, so a change goes to the
+# template. CI workflows are not checked here: the owner reviews CI changes in the PR, which only
+# the owner merges.
 include "lib";
 include "python";
 
@@ -39,6 +41,14 @@ def extends_ruff($ctx):
   any($ctx.new | annotate[]; .key == "extend"
     and ((.section | test("^\\s*\\[tool\\.ruff\\]")) or ($ctx.rel | ruff_file)));
 
+# The template's coverage floor, which python.mk and gate.sh apply when pyproject.toml sets none.
+def template_floor: 97;
+
+# The coverage floor a file's lines set: their fail_under, else the template's.
+def coverage_floor:
+  [annotate[] | select(.key == "fail_under") | .line | capture("=\\s*(?<n>[0-9.]+)").n | tonumber]
+  | first // template_floor;
+
 # The opening line of a select, the one place a ruff rule list starts.
 def opens_select($rel):
   (.line | test("^\\s*select\\s*="))
@@ -57,7 +67,7 @@ def toml_findings($ctx):
          or (.key | test("^(extend-)?(ignore|exclude|force-exclude|omit|exclude_lines|exclude_also|norecursedirs|skips)$"))
          or (.line | has("^\\s*report\\w+\\s*=\\s*(false|\"(none|warning|information|hint)\")"))
          or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic)\"|check-typed-exception\\s*=\\s*false|--exit-zero"))
-         or ((.key == "addopts") and (.line | has("-p\\s*no:|--deselect|\\s-k\\s|--ignore"))))
+         or ((.key == "addopts") and (.line | has("-p\\s*no:|--deselect|\\s-k\\s|--ignore|--no-cov"))))
      | {text: "added `\(.line | short)`", at: $at}),
     ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section($ctx.rel))
      | select(((.key | test("^(extend-)?select$")) and (.line | dropped($kept_rules)))
@@ -65,6 +75,10 @@ def toml_findings($ctx):
          or ((.key | test("^extends?$")) and (.line | dropped($kept_bases)))
          or (.line | has("^\\s*report\\w+\\s*=\\s*(true|\"error\")|check-typed-exception\\s*=\\s*true")))
      | {text: "removed `\(.line | short)`", at: null}),
+    (($ctx.old | coverage_floor) as $was | ($ctx.new | coverage_floor) as $is
+     | select($is < $was)
+     | {text: "lowered the coverage floor from \($was) to \($is)",
+        at: ([$ctx.added[] | select(.line | test("^\\s*fail_under\\s*=")) | .at] | first)}),
     (if extends_ruff($ctx) then
        $ctx.added[] | .at as $at | $notes[$at] | select(opens_select($ctx.rel))
        | {text: ("added `\(.line | short)`: in a config that extends another, select replaces its"

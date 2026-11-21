@@ -168,7 +168,24 @@ ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds t
   rm "$D/$1"
   return "$status"
 }
-expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
+expect "CI's checks pass a new project" bash -c "cd '$D' && bash .github/actions/stack-gate/gate.sh"
+fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
+  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
+}
+passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
+  make_with "$1" "$2" gate && ci_with "$1" "$2"
+}
+
+# Both gates fail when the tests cover less than the template's coverage floor. The project's own
+# fail_under in pyproject.toml replaces that floor in both, with its reason on its line, where the
+# practices hook asks for it. The probes after these add code no test covers to check the other
+# tools, so the project keeps its floor of 0.
+UNCOVERED='def triple(x: int) -> int:\n    return x * 3\n'
+expect "code no test covers fails make test and CI" fails_both test app/uncovered.py "$UNCOVERED"
+printf '\n[tool.coverage.report]\nfail_under = 0  # %s\n' \
+  "The probes add code to check other tools. Tried a test per probe, but none checks behaviour." >>"$D/pyproject.toml"
+expect "a fail_under in pyproject.toml, its reason on its line, replaces the floor in make gate and CI" \
+  passes_both app/uncovered.py "$UNCOVERED"
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
   cp "$f" "$OUT/relaxed.bak"
@@ -195,9 +212,6 @@ expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
 # Both gates check every Python file in the repository, not only the package: in a second
 # top-level folder, each tool fails the file that breaks its rule, and only its rule.
 mkdir -p "$D/commons"
-fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
-  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
-}
 INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
 expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
 expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/cast.py "$CAST"
@@ -205,9 +219,6 @@ expect "bandit checks a second top-level folder, locally and in CI" fails_both s
 # The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
 NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
   "source": ["import os\\n", "x: int = None\\n"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
-passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
-  make_with "$1" "$2" gate && ci_with "$1" "$2"
-}
 expect "a bad notebook leaves make gate and CI green" passes_both explore.ipynb "$NOTEBOOK"
 expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
   relaxed ruff.base.toml 'extend-exclude = ["*.ipynb"]' '' fails_with explore.ipynb "$NOTEBOOK" lint-check
