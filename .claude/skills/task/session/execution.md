@@ -8,8 +8,9 @@ you may not stop to wait for an answer. Stop only when the task is done, or when
 `Owner steps`.
 
 For a task that ends in a PR, plan before you build. Work out the smallest design that meets
-everything the issue asks: hold each thing it adds against the Design Philosophy. Write the plan
-to a file, for a reader who has the issue and not the code:
+everything the issue asks: hold each thing it adds against the Design Philosophy. Read
+`.claude/published-text-clarity.md`, then write the plan to a file as it says, for a reader who
+has the issue and not the code:
 
 - what you will build, and where;
 - each thing it adds, such as a file, a command, a setting or a name, with the reason the issue
