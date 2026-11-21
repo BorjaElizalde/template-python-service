@@ -255,7 +255,8 @@ expect "a minLines raised in the project's .jscpd.json relaxes duplication, not 
 expect "ruff.base.toml's jscpd task tag is what keeps the markers out of ERA001" \
   relaxed ruff.base.toml ', "jscpd"]' ']' fails_with app/copies.py "$MARKED" lint-check
 
-# A project may have no tests/: both gates skip pytest, with the seeded pyproject.toml unchanged.
+# A project may have no tests/: both gates skip pytest, with the seeded pyproject.toml's pytest
+# settings.
 # An empty tests/ fails both; the passing runs before it show that pytest is what fails them.
 mv "$D/tests" "$OUT/tests"
 expect "a project with no tests/ passes make gate, which says it skipped pytest" \

@@ -46,7 +46,7 @@ def template_floor: 97;
 
 # The coverage floor a file's lines set: their fail_under, else the template's.
 def coverage_floor:
-  [annotate[] | select(.key == "fail_under") | .line | capture("=\\s*(?<n>[0-9.]+)").n | tonumber]
+  [.[] | select(test("^\\s*fail_under\\s*=")) | capture("=\\s*(?<n>[0-9.]+)").n | tonumber]
   | first // template_floor;
 
 # The opening line of a select, the one place a ruff rule list starts.

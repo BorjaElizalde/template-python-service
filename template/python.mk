@@ -29,7 +29,8 @@ duplication: ## Fail on a block of code written twice, with jscpd.
 
 # pytest-cov's --cov-fail-under replaces the fail_under that pyproject.toml sets, so the floor
 # passed is the project's own when it sets one, else the template's, as in gate.sh and config.jq.
-coverage_floor = $(or $(shell sed -n 's/^ *fail_under *= *\([0-9.]*\).*/\1/p' pyproject.toml),97)
+fail_under_value = s/^[[:space:]]*fail_under[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p
+coverage_floor = $(or $(shell sed -n '$(fail_under_value)' pyproject.toml),97)
 
 # No tests/ skips pytest. An empty tests/ still fails it, with exit 5: a mistake, not a choice.
 test: ## Run pytest with the coverage floor, or skip it when there is no tests/ folder.

@@ -38,7 +38,8 @@ uv run jscpd . || {
 # replaces the fail_under that pyproject.toml sets, so the floor passed is the project's own when it
 # sets one, else the template's, as in python.mk and config.jq.
 if [ -d tests ]; then
-  floor="$(sed -n 's/^ *fail_under *= *\([0-9.]*\).*/\1/p' pyproject.toml)"
+  floor="$(sed -n 's/^[[:space:]]*fail_under[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' \
+    pyproject.toml)"
   uv run pytest tests --cov --cov-fail-under="${floor:-97}"
 else
   echo "::notice::pytest skipped: no tests/ folder"
