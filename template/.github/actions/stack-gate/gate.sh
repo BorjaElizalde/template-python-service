@@ -22,7 +22,7 @@ uv sync --all-groups
 if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
   git fetch --quiet --unshallow
 fi
-uv run pre-commit run --config "$HERE/gitleaks.pre-commit.yaml" --all-files
+uv run pre-commit run --config "$HERE/gitleaks-history.pre-commit.yaml" --all-files
 uv run ruff check .
 uv run ruff format --check .
 # basedpyright resolves a config's paths from that file's folder, so CI's config sits at the root

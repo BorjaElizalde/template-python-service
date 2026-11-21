@@ -162,7 +162,7 @@ expect "CI's copies of the shared settings match the project's" bash -c "
   cmp -s '$D/ruff.base.toml' '$CI/ruff.base.toml' && cmp -s '$D/basedpyright.base.json' '$CI/basedpyright.base.json' &&
   cmp -s '$D/.jscpd.json' '$CI/.jscpd.json'"
 expect "CI's secret scan pins the commit hook's gitleaks" bash -c "cd '$D' &&
-  diff <(grep -A1 gitleaks/gitleaks .pre-commit-config.yaml) <(grep -A1 gitleaks/gitleaks '$CI/gitleaks.pre-commit.yaml')"
+  diff <(grep -A1 gitleaks/gitleaks .pre-commit-config.yaml) <(grep -A1 gitleaks/gitleaks '$CI/gitleaks-history.pre-commit.yaml')"
 ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds the content
   printf '%b' "$2" >"$D/$1"
   (cd "$D" && bash .github/actions/stack-gate/gate.sh) >/dev/null 2>&1
@@ -175,13 +175,13 @@ expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> i
 TOKEN="ghp_$(od -An -tx1 -N18 /dev/urandom | tr -d ' \n')"
 PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n$(head -c 900 /dev/urandom | base64)\n-----END RSA PRIVATE KEY-----\n"
 deleted_secret_fails_ci() {  # a commit made without the hooks adds a token, the next deletes it
-  local branch="$OUT/leaked" out
-  git clone -q "$D" "$branch"
-  printf 'TOKEN = "%s"\n' "$TOKEN" >"$branch/settings.py"
-  commit "$branch" leak
-  git -C "$branch" rm -q settings.py
-  commit "$branch" unleak
-  git clone -q --depth 1 "file://$branch" "$OUT/checkout"
+  local clone="$OUT/leaked" out
+  git clone -q "$D" "$clone"
+  printf 'TOKEN = "%s"\n' "$TOKEN" >"$clone/settings.py"
+  commit "$clone" leak
+  git -C "$clone" rm -q settings.py
+  commit "$clone" unleak
+  git clone -q --depth 1 "file://$clone" "$OUT/checkout"
   ! out="$(cd "$OUT/checkout" && bash .github/actions/stack-gate/gate.sh 2>&1)" && grep -q 'leaks found' <<<"$out"
 }
 expect "a secret that a later commit deletes fails CI's checks, from a one-commit checkout" deleted_secret_fails_ci
