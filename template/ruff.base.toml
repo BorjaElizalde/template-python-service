@@ -35,14 +35,10 @@ select = [
     "ARG",  # flake8-unused-arguments
     "SIM",  # flake8-simplify
 ]
-# ANN401: Any is the honest type where a signature takes or returns whatever a file, a request or
-# a library hands over: JSON and YAML loaders, pydantic before-validators, framework internals that
-# publish no type, and **kwargs forwarded to APIs that take Any themselves.
-# Tried a narrower type, the rule's documented fix, but `object` from a loader needs a cast at
-# every caller, and a framework internal with no published type has nothing narrower to name.
-# Tried allow-star-arg-any, but it clears only the **kwargs hits.
-# Tried per-file-ignores for the files that hold an honest Any, but every new loader or validator
-# would need its own entry.
+# ANN401: basedpyright's reportExplicitAny reports every Any that this rule reports, so with this
+# rule off, an Any that must stay takes one skipped check, not two.
+# Tried a narrower type, the rule's documented fix, but where one fits, reportExplicitAny asks for
+# it too.
 ignore = ["ANN401"]
 # ERA001: jscpd's markers, `# jscpd:ignore-start` and `# jscpd:ignore-end`, parse as Python, so
 # eradicate reads them as commented-out code; it never reads a comment that starts with a task tag
@@ -53,12 +49,13 @@ ignore = ["ANN401"]
 task-tags = ["TODO", "FIXME", "XXX", "jscpd"]
 
 [lint.per-file-ignores]
-# ANN: in tests the rule asks mostly for `-> None` on test functions and for types on fixture
-# parameters, which pytest injects by name: noise on every test for little checking.
+# ANN: in tests the rule asks mostly for `-> None` on test functions: noise on every test for
+# little checking. Its parameter codes ask for the types that basedpyright's
+# reportMissingParameterType asks for in tests too.
 # Tried annotating the tests, but suppress-none-returning, which drops the `-> None` hits, would
-# stop requiring `-> None` in the package too, and every fixture parameter would still need a type.
-# Tried listing only the ANN codes tests hit, but they hit nearly every code, so the list would be
-# a longer ANN.
+# stop requiring `-> None` in the package too.
+# Tried listing only the return-type codes, but the parameter codes add nothing to basedpyright's
+# check, so the list would be a longer ANN.
 # Tried ignore-fully-untyped, but it leaves most test hits and exempts untyped package code.
 # Tried mypy-init-return, suppress-dummy-args and allow-star-arg-any, but they clear no test hit.
 "tests/**" = ["ANN"]

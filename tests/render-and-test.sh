@@ -149,10 +149,7 @@ make_with() {  # make_with <file> <content> <target>: runs the target while the 
 fails_with() { ! make_with "$@"; }
 UNTYPED='def f(x):\n    return x\n'
 expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED" lint-check
-# basedpyright's own default mode is stricter than the base's and rejects an unannotated parameter.
-expect "typecheck applies the base's checking mode" make_with app/untyped.py "$UNTYPED" typecheck
 CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
-expect "typecheck applies the base's added errors" fails_with app/cast.py "$CAST" typecheck
 
 # CI's checks call each tool directly with CI's own copy of the shared settings, so a change that
 # relaxes the local gate, or the project's copies of the settings, can't relax them.
@@ -169,6 +166,13 @@ ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds t
   return "$status"
 }
 expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
+fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
+  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
+}
+# Strict mode passes a call result left unused; recommended warns, and a warning fails the check.
+UNUSED='def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n'
+expect "make typecheck and CI check types in basedpyright's recommended mode" \
+  fails_both typecheck app/unused.py "$UNUSED"
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
   cp "$f" "$OUT/relaxed.bak"
@@ -195,9 +199,6 @@ expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
 # Both gates check every Python file in the repository, not only the package: in a second
 # top-level folder, each tool fails the file that breaks its rule, and only its rule.
 mkdir -p "$D/commons"
-fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
-  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
-}
 INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
 expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
 expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/cast.py "$CAST"
@@ -221,7 +222,7 @@ copy() {  # copy <name> <lines> <returned>: a block of <lines> lines, from the d
   local adds=(amount tax fee tip)
   printf 'def %s(orders: list[dict[str, int]]) -> dict[int, int]:\n' "$1"
   printf '    totals: dict[int, int] = {}\n    for order in orders:\n'
-  printf '        key = order["customer"]\n        totals.setdefault(key, 0)\n'
+  printf '        key = order["customer"]\n        totals[key] = totals.get(key, 0)\n'
   printf '        totals[key] += order["%s"]\n' "${adds[@]:0:$(($2 - 6))}"
   printf '    return %s\n' "$3"
 }

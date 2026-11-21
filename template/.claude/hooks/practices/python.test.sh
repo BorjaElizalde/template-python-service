@@ -317,13 +317,16 @@ write 0 "write test in the email templates check" "$REPO/tests/contracts/test_em
 
 echo "-- config: switching a check off stops until a reason in the form sits next to it"
 PY="$REPO/pyproject.toml"
-BASE=$'[project]\ndependencies = ["fastapi"]\n\n[tool.ruff.lint]\nselect = [\n    "F",  # Pyflakes\n    "E",  # pycodestyle\n]\n\n[tool.basedpyright]\ntypeCheckingMode = "basic"\ninclude = ["app"]\n\n[tool.pytest.ini_options]\naddopts = "-v"\n'
+BASE=$'[project]\ndependencies = ["fastapi"]\n\n[tool.ruff.lint]\nselect = [\n    "F",  # Pyflakes\n    "E",  # pycodestyle\n]\n\n[tool.basedpyright]\ntypeCheckingMode = "recommended"\ninclude = ["app"]\n\n[tool.pytest.ini_options]\naddopts = "-v"\n'
 edit_in 2 "ruff ignore added"             "$PY" "$BASE" $'select = [' $'ignore = ["E501"]\nselect = ['
 edit_in 2 "per-file-ignores entry"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.per-file-ignores]\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
 edit_in 2 "item added to multi-line ignore" "$PY" $'[tool.ruff.lint]\nignore = [\n    "E501",\n]\n' '    "E501",' $'    "E501",\n    "E712",'
 edit_in 2 "rule removed from select"      "$PY" "$BASE" $'    "E",  # pycodestyle\n' ''
-edit_in 2 "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "basic"' $'typeCheckingMode = "basic"\nreportUnusedImport = false'
-edit_in 2 "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "off"'
+edit_in 2 "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "recommended"' $'typeCheckingMode = "recommended"\nreportUnusedImport = false'
+edit_in 2 "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "off"'
+edit_in 2 "type-check mode lowered to standard" "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "standard"'
+edit_in 2 "type-check mode lowered to strict" "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "strict"'
+edit_in 2 "type-check warnings let pass"  "$PY" "$BASE" 'typeCheckingMode = "recommended"' $'typeCheckingMode = "recommended"\nfailOnWarnings = false'
 edit_in 2 "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'include = []'
 edit_in 2 "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
 edit_in 2 "typed except check off"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
@@ -340,7 +343,9 @@ edit_in R "rule removed from select, reason where it was" "$PY" "$BASE" $'    "E
   "    # E: ruff format owns layout. $TRIED"$'\n'
 edit_in 0 "rule added to select"          "$PY" "$BASE" $'    "E",  # pycodestyle\n' $'    "E",  # pycodestyle\n    "BLE001",\n'
 edit_in R "select entry comment reworded (no stop, the comment reminds)" "$PY" "$BASE" '    "E",  # pycodestyle' '    "E",  # pycodestyle errors'
-edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "standard"'
+edit_in R "type-check mode lowered, reason above" "$PY" "$BASE" 'typeCheckingMode = "recommended"' \
+  "# This tool's generated stubs hold no types. $TRIED"$'\ntypeCheckingMode = "standard"'
+edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "all"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
 
