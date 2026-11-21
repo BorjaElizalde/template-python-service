@@ -103,8 +103,9 @@ expect "copier update across a release that bundles an agentic change delivers i
 # A project's own commit hooks sit in a file the template seeds once. An update to a release that
 # changes the template's hooks and that seed changes only the template's hooks, with no conflict.
 commit "$D" v2
-printf '%s\n' 'repos:' '  - repo: local' '    hooks:' '      - id: no-todo' '        name: no TODO' \
-  '        entry: TODO' '        language: pygrep' '        types: [python]' >"$D/.pre-commit-project.yaml"
+NO_TODO_HOOKS="$(printf '%s\n' 'repos:' '  - repo: local' '    hooks:' '      - id: no-todo' \
+  '        name: no TODO' '        entry: TODO' '        language: pygrep' '        types: [python]')"
+printf '%s\n' "$NO_TODO_HOOKS" >"$D/.pre-commit-project.yaml"
 commit "$D" own-hook
 TEMPLATE_HOOKS="$V/template/.pre-commit-config.yaml"
 sed 's/trailing-whitespace-fixer$/& --markdown-linebreak-ext=md/' "$TEMPLATE_HOOKS" >"$OUT/hooks.yaml"
@@ -289,7 +290,7 @@ expect "pre-commit's ruff passes a typed file" hook_with app/typed.py 'def g(x: 
 expect "pre-commit's ruff applies the base's rules" fails_hook app/untyped.py "$UNTYPED" ruff-check
 expect "pre-commit passes a trimmed file" hook_with app/trimmed.py 'x = 1\n' trailing-whitespace
 expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   \n' trailing-whitespace
-# The project's own hook, which the update above kept, rejects a TODO in a Python file.
+printf '%s\n' "$NO_TODO_HOOKS" >"$D/.pre-commit-project.yaml"
 expect "pre-commit's project hooks pass a file the project's own hook accepts" hook_with app/done.py 'x = 1\n' project-hooks
 expect "pre-commit runs the project's own hook" fails_hook app/todo.py '# TODO: x\n' project-hooks
 
