@@ -85,6 +85,9 @@ every decision the owner took and every finding goes in the body. Never point a 
 scratchpad, `/tmp` or `/private/tmp` path: a restart wipes them, and a consumer project lost a
 task's input files that way. What a task needs goes in the issue, or the task rebuilds it.
 
+Before you write an issue, or a comment written the same way, read
+`.claude/published-text-clarity.md`, and write the text as it says.
+
 ## Issues that must wait
 
 No agent starts an issue that is blocked or parked. GitHub holds both facts:

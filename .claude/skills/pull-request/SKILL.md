@@ -26,7 +26,8 @@ allowed-tools: Bash(git branch:*), Bash(git rev-parse:*), Bash(git status:*), Ba
 5. Push with `git push -u origin HEAD`: a new worktree's branch tracks its base,
    `origin/develop`, until then.
 6. Read `git diff origin/develop...HEAD` and, when the branch is named `<type>/<n>-<slug>`, its
-   task issue: `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`. Then run
+   task issue: `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`. Read
+   `.claude/published-text-clarity.md`, and write the PR's text as it says. Then run
    `gh pr create --base develop --draft`, or `gh pr edit <n>` on the PR that step 3 found, with an
    imperative title (≤72 characters) and a body a person can follow without the diff open:
    - Open with why the PR exists: the problem it solves, or the need behind it.
