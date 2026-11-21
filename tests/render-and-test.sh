@@ -149,7 +149,6 @@ make_with() {  # make_with <file> <content> <target>: runs the target while the 
 fails_with() { ! make_with "$@"; }
 UNTYPED='def f(x):\n    return x\n'
 expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED" lint-check
-CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 
 # CI's checks call each tool directly with CI's own copy of the shared settings, so a change that
 # relaxes the local gate, or the project's copies of the settings, can't relax them.
@@ -173,6 +172,7 @@ fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's c
 UNUSED='def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n'
 expect "make typecheck and CI check types in basedpyright's recommended mode" \
   fails_both typecheck app/unused.py "$UNUSED"
+CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
   cp "$f" "$OUT/relaxed.bak"
