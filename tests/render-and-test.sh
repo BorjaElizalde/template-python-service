@@ -100,6 +100,23 @@ expect "copier update across a release that bundles an agentic change delivers i
   uvx --quiet copier update --quiet --skip-answered --defaults -a .copier-answers.python-service.yaml --vcs-ref v2 &&
   [ -f update-probe.txt ] && grep -qx '_commit: v2' .copier-answers.python-service.yaml"
 
+# A project's own commit hooks sit in a file the template seeds once. An update to a release that
+# changes the template's hooks and that seed changes only the template's hooks, with no conflict.
+commit "$D" v2
+printf '%s\n' 'repos:' '  - repo: local' '    hooks:' '      - id: no-todo' '        name: no TODO' \
+  '        entry: TODO' '        language: pygrep' '        types: [python]' >"$D/.pre-commit-project.yaml"
+commit "$D" own-hook
+TEMPLATE_HOOKS="$V/template/.pre-commit-config.yaml"
+sed 's/trailing-whitespace-fixer$/& --markdown-linebreak-ext=md/' "$TEMPLATE_HOOKS" >"$OUT/hooks.yaml"
+mv "$OUT/hooks.yaml" "$TEMPLATE_HOOKS"
+printf '# A line the next release adds to the seed.\n' >>"$V/template/.pre-commit-project.yaml"
+commit "$V" hooks
+build v3 AGENTIC_SRC="file://$OUT/agentic-next" AGENTIC_REF=next
+expect "an update that changes the template's hooks keeps the project's own, with no conflict" bash -c "cd '$D' &&
+  uvx --quiet copier update --quiet --skip-answered --defaults -a .copier-answers.python-service.yaml --vcs-ref v3 &&
+  grep -q 'trailing-whitespace-fixer --markdown-linebreak-ext=md$' .pre-commit-config.yaml &&
+  git diff --quiet HEAD -- .pre-commit-project.yaml && ! grep -rIl --exclude-dir=.git '^<<<<<<< ' ."
+
 expect "stack.json carries the test boundaries" bash -c "[ \"\$(jq -c .boundaries '$D/.claude/hooks/practices/stack.json')\" = '[\"release.run\"]' ]"
 expect "no Jinja left in rendered files" bash -c "! grep -rIl -E '(^|[^\$])\\{\\{|\\{%' --exclude-dir=.git '$D'"
 expect "stack.json names the package" bash -c "[ \"\$(jq -r .package '$D/.claude/hooks/practices/stack.json')\" = app ]"
@@ -272,6 +289,9 @@ expect "pre-commit's ruff passes a typed file" hook_with app/typed.py 'def g(x: 
 expect "pre-commit's ruff applies the base's rules" fails_hook app/untyped.py "$UNTYPED" ruff-check
 expect "pre-commit passes a trimmed file" hook_with app/trimmed.py 'x = 1\n' trailing-whitespace
 expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   \n' trailing-whitespace
+# The project's own hook, which the update above kept, rejects a TODO in a Python file.
+expect "pre-commit's project hooks pass a file the project's own hook accepts" hook_with app/done.py 'x = 1\n' project-hooks
+expect "pre-commit runs the project's own hook" fails_hook app/todo.py '# TODO: x\n' project-hooks
 
 # The seeded .gitignore keeps secrets and the gate's output out of git; the gate above left both.
 expect "git ignores .env files and what the gate leaves" bash -c "cd '$D' &&
