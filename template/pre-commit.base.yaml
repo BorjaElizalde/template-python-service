@@ -1,0 +1,49 @@
+# From the python-service template: change the template, not this copy.
+# The template's commit hooks, which the template-hooks hook in .pre-commit-config.yaml runs.
+# Every local hook runs the project's own pinned tool through uv, so a commit and make gate never
+# run two versions of one tool. gitleaks has no Python package: pre-commit builds it from the
+# commit its rev pins. CI's secret scan pins the same commit, in
+# .github/actions/stack-gate/gitleaks-history.pre-commit.yaml.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --exit-non-zero-on-fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: bandit
+        name: bandit (make security)
+        entry: make security
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: check-yaml
+        name: check yaml
+        entry: uv run check-yaml
+        language: system
+        types: [yaml]
+      - id: check-toml
+        name: check toml
+        entry: uv run check-toml
+        language: system
+        types: [toml]
+      - id: end-of-file-fixer
+        name: fix end of files
+        entry: uv run end-of-file-fixer
+        language: system
+        types: [text]
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+        entry: uv run trailing-whitespace-fixer
+        language: system
+        types: [text]
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      - id: gitleaks

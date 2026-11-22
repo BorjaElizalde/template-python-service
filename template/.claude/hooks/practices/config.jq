@@ -4,11 +4,14 @@
 # comment or on the comment lines above it; a removed line leaves no place, so the edit adds the
 # reason as a comment.
 # Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
-# and a Makefile tool line only if no added line runs the same tool. A select added to a ruff config
-# that extends another counts as switching checks off: ruff takes it as the whole rule list and
-# drops the extended one; so does a removed extend line. Every edit to the shared base files stops,
-# reason or not: each update rewrites them, so a change goes to the template. CI workflows are not
-# checked here: the owner reviews CI changes in the PR, which only the owner merges.
+# a Makefile tool line only if no added line runs the same tool, and a commit hook the edit adds
+# may name its files or exclude. A select added to a ruff config that extends another counts as
+# switching checks off: ruff takes it as the whole rule list and drops the extended one; so does a
+# removed extend line. Every edit to the shared base files stops, reason or not: each update
+# rewrites them, so a change goes to the template. pre-commit.base.yaml is checked like
+# .pre-commit-config.yaml instead: no project config can leave out a hook that another config
+# runs, so a project switches a template hook off there. CI workflows are not checked here: the
+# owner reviews CI changes in the PR, which only the owner merges.
 include "lib";
 include "python";
 
@@ -71,9 +74,16 @@ def toml_findings($ctx):
            + " whole rule list; extend-select adds to it"), at: $at}
      else empty end);
 
+# Whether new line $at sits inside a hook the edit adds: indented, under an added `- id:` line. A
+# top-level files or exclude is not indented, and it narrows every hook.
+def in_added_hook($ctx; $at):
+  ([range(0; $at) | select($ctx.new[.] | test("^\\s*-\\s*id:"))] | last) as $id
+  | ($ctx.new[$at] | test("^\\s")) and $id != null and any($ctx.added[]; .at == $id);
+
 def precommit_findings($ctx):
   ($ctx.added[]
    | select(.line | has("^\\s*(exclude|files):|stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]"))
+   | select(((.line | has("^\\s*(exclude|files):")) and in_added_hook($ctx; .at)) | not)
    | {text: "added `\(.line | short)`", at}),
   ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):")) | {text: "removed `\(short)`", at: null});
 
@@ -110,7 +120,7 @@ def check($ctx):
   else
     ([$ctx.added[].line | comment | select(. != null)] | join("\n")) as $added_comments
     | [if ($ctx.rel | test("(^|/)(pyproject\\.toml|\\.?ruff\\.toml)$")) then toml_findings($ctx)
-       elif ($ctx.rel | test("(^|/)\\.pre-commit-config\\.yaml$")) then precommit_findings($ctx)
+       elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
        elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
        else empty end
        | select(reasoned($ctx; $added_comments) | not) | "- \(.text)"]

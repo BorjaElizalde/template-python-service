@@ -9,7 +9,6 @@ _answers_file: .copier-answers.python-service.yaml
 # Seeded once, then project-owned: updates skip them, and a first copy keeps an existing file.
 _skip_if_exists:
   - .gitignore
-  - .pre-commit-project.yaml
   - Makefile
   - pyproject.toml
 

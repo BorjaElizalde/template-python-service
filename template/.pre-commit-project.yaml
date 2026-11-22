@@ -1,4 +1,0 @@
-# Seeded once by the python-service template; the project owns it from here.
-# The project's own commit hooks: each commit runs them after the template's, through the last hook
-# in .pre-commit-config.yaml.
-repos: []

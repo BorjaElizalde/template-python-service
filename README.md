@@ -58,14 +58,15 @@ uvx copier update -a .copier-answers.python-service.yaml
 
 With Renovate, each release comes as an update PR.
 
-The template writes six files once and never updates them, so they are the project's: `Makefile`,
-`pyproject.toml`, `.gitignore`, `.pre-commit-project.yaml`, `renovate.json` and
-`.claude/memory/MEMORY.md`. A first copy keeps the ones the repository already has. Merge the
-template's copy into each, from `template/` at the release's tag; for `pyproject.toml`, that is its
-`[tool.ruff]` and `[tool.basedpyright]` tables and its `dev` dependency group. Then delete the
-targets and settings that `python.mk`, `.claude/agentic.mk`, `ruff.base.toml` and
-`basedpyright.base.json` hold. Do the same when an update brings a target the `Makefile` already
-has, such as `claude` or `help`.
+The template writes five files once and never updates them, so they are the project's: `Makefile`,
+`pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. A first copy keeps
+the ones the repository already has. Merge the template's copy into each, from `template/` at the
+release's tag; for `pyproject.toml`, that is its `[tool.ruff]` and `[tool.basedpyright]` tables and
+its `dev` dependency group. Then delete the targets and settings that `python.mk`,
+`.claude/agentic.mk`, `ruff.base.toml` and `basedpyright.base.json` hold. Do the same when an
+update brings a target the `Makefile` already has, such as `claude` or `help`. A first copy writes
+the template's `.pre-commit-config.yaml`: put the repository's own hooks back after
+`template-hooks`, and leave out those that `pre-commit.base.yaml` already runs.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
 default branch:
@@ -116,8 +117,8 @@ run `make claude` in the repository.
 
 ## Extend
 
-Apart from the project's six files, every file the template writes is the template's: change it
-there, not in the project.
+Apart from the project's five files and its own hooks in `.pre-commit-config.yaml`, every file the
+template writes is the template's: change it there, not in the project.
 
 - **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select`, and the
   project's exceptions with `ignore` and `extend-per-file-ignores`, each with the reason
@@ -131,6 +132,6 @@ there, not in the project.
   the code no longer holds it.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
   redefining `gate`. It runs in `make gate` only, not in CI.
-- **Commit hooks**, in `.pre-commit-project.yaml`: each commit runs them after the template's
-  hooks. A repository that already has hooks of its own moves them there.
+- **Commit hooks**, in `.pre-commit-config.yaml`: add the project's own hooks after
+  `template-hooks`, which runs the template's hooks from `pre-commit.base.yaml`.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
