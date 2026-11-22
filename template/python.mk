@@ -27,12 +27,17 @@ duplication: ## Fail on a block of code written twice, with jscpd.
 	  "that must stay goes between # jscpd:ignore-start and # jscpd:ignore-end, with its reason" \
 	  "(.claude/rules/skipped-checks.md). No jscpd? uv add --dev jscpd"; exit 1; }
 
+# pytest-cov's --cov-fail-under replaces the fail_under that pyproject.toml sets, so the floor
+# passed is the project's own when it sets one, else the template's, as in gate.sh and config.jq.
+print_fail_under = s/^[[:space:]]*fail_under[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p
+coverage_floor = $(or $(shell sed -n '$(print_fail_under)' pyproject.toml),97)
+
 # No tests/ skips pytest. An empty tests/ still fails it, with exit 5: a mistake, not a choice.
-test: ## Run pytest with coverage, or skip it when there is no tests/ folder.
+test: ## Run pytest with the coverage floor, or skip it when there is no tests/ folder.
 ifeq ($(wildcard tests),)
 	@echo "pytest skipped: no tests/ folder"
 else
-	uv run pytest tests/ -v --cov
+	uv run pytest tests/ -v --cov --cov-fail-under=$(coverage_floor)
 endif
 
 gate: lint-check typecheck security duplication test ## Run every local check.

@@ -363,6 +363,24 @@ edit_in R "ruff extend removed, reason where it was" "$PY" "$EXT" $'extend = "ru
 edit_in 0 "ruff extend kept as its section grows" "$PY" "$EXT" $'[tool.ruff]\nextend = "ruff.base.toml"' \
   $'[tool.ruff]\nline-length = 100\nextend = "ruff.base.toml"'
 
+echo "-- config: a lower coverage floor stops; with no fail_under, the floor is the template's 97"
+COV=$'[tool.coverage.report]\nfail_under = 99\n'
+NOCOV=$'[tool.coverage.run]\nomit = ["tests/*"]\n'
+edit_in 2 "coverage floor lowered"         "$PY" "$COV" 'fail_under = 99' 'fail_under = 98'
+edit_in 2 "coverage floor lowered, a comment under it that reads like a setting" "$PY" "$COV"$'# note x = ...\n' 'fail_under = 99' 'fail_under = 50'
+edit_in 2 "coverage floor set below the template's" "$PY" "$NOCOV" "$NOCOV" "$NOCOV"$'\n[tool.coverage.report]\nfail_under = 96\n'
+says yes "lowered the coverage floor from 97 to 96" "the stop names the template's floor it lowers" "$PY" \
+  "$NOCOV" "$NOCOV"$'\n[tool.coverage.report]\nfail_under = 96\n'
+edit_in 2 "coverage floor above the template's removed" "$PY" "$COV" $'fail_under = 99\n' ''
+edit_in R "coverage floor lowered with a reason" "$PY" "$COV" 'fail_under = 99' \
+  "fail_under = 80  # Half the package drives hardware the tests can't reach. $TRIED"
+edit_in R "coverage floor removed, reason where it was" "$PY" "$COV" $'fail_under = 99\n' \
+  "# The template's floor fits this service. $TRIED"$'\n'
+edit_in 0 "coverage floor raised"          "$PY" "$COV" 'fail_under = 99' 'fail_under = 100'
+edit_in 0 "coverage floor set at the template's" "$PY" "$NOCOV" "$NOCOV" "$NOCOV"$'\n[tool.coverage.report]\nfail_under = 97\n'
+edit_in 0 "coverage floor below the template's removed" "$PY" $'[tool.coverage.report]\nfail_under = 90\n' $'fail_under = 90\n' ''
+edit_in 2 "coverage switched off, and with it the floor" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --no-cov"'
+
 echo "-- config: the shared base files stop every edit, reason or not: each update rewrites them"
 RB="$REPO/ruff.base.toml"
 edit_in 2 "a rule dropped from ruff.base.toml" "$RB" $'[lint]\nselect = ["F", "E"]\n' 'select = ["F", "E"]' 'select = ["F"]'

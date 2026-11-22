@@ -34,9 +34,13 @@ uv run jscpd . || {
     "(.claude/rules/skipped-checks.md). No jscpd? uv add --dev jscpd"
   exit 1
 }
-# As in python.mk: no tests/ skips pytest, an empty tests/ fails it.
+# As in python.mk: no tests/ skips pytest, an empty tests/ fails it. pytest-cov's --cov-fail-under
+# replaces the fail_under that pyproject.toml sets, so the floor passed is the project's own when it
+# sets one, else the template's, as in python.mk and config.jq.
 if [ -d tests ]; then
-  uv run pytest tests --cov
+  floor="$(sed -n 's/^[[:space:]]*fail_under[[:space:]]*=[[:space:]]*\([0-9.]*\).*/\1/p' \
+    pyproject.toml)"
+  uv run pytest tests --cov --cov-fail-under="${floor:-97}"
 else
   echo "::notice::pytest skipped: no tests/ folder"
 fi
