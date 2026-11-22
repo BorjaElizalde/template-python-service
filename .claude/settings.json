@@ -5,7 +5,6 @@
     "VIRTUAL_ENV": ""
   },
   "permissions": {
-    "defaultMode": "auto",
     "allow": [
       "WebSearch",
       "WebFetch",
@@ -63,7 +62,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write",
         "hooks": [
           { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/worktree-guard.sh\"" },
           { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/practices/guard.sh\"" }
@@ -72,10 +71,9 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stack/format.sh\"; [ ! -f \"$f\" ] || bash \"$f\"" },
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/memory/guard.sh\"" }
+          { "type": "command", "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stack/format.sh\"; [ ! -f \"$f\" ] || bash \"$f\"" }
         ]
       }
     ]
