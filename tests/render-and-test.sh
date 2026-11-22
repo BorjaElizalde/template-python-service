@@ -151,8 +151,11 @@ UNTYPED='def f(x):\n    return x\n'
 expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED" lint-check
 # basedpyright's own default mode is stricter than the base's and rejects an unannotated parameter.
 expect "typecheck applies the base's checking mode" make_with app/untyped.py "$UNTYPED" typecheck
+# Ruff takes any module path as a banned-api key, so only a banned call shows that the key is right.
 CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
-expect "typecheck applies the base's added errors" fails_with app/cast.py "$CAST" typecheck
+expect "lint-check applies the base's ban on typing.cast" fails_with app/cast.py "$CAST" lint-check
+ISINSTANCE='def k(x: int) -> bool:\n    return isinstance(x, int)\n'
+expect "typecheck applies the base's added errors" fails_with app/isinstance.py "$ISINSTANCE" typecheck
 
 # CI's checks call each tool directly with CI's own copy of the shared settings, so a change that
 # relaxes the local gate, or the project's copies of the settings, can't relax them.
@@ -183,14 +186,14 @@ local_only() {  # local_only <target> <file> <content>: make <target> passes the
   make_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
 }
 expect "a no-op typecheck target in python.mk relaxes make gate, not CI" \
-  relaxed python.mk 'uv run basedpyright' 'true' local_only gate app/cast.py "$CAST"
+  relaxed python.mk 'uv run basedpyright' 'true' local_only gate app/isinstance.py "$ISINSTANCE"
 expect "a rule dropped from the project's ruff.base.toml relaxes lint-check, not CI" \
   relaxed ruff.base.toml '"ANN",' '' local_only lint-check app/untyped.py "$UNTYPED"
 expect "pyproject.toml that stops extending ruff's base relaxes lint-check, not CI" \
   relaxed pyproject.toml 'extend = "ruff.base.toml"' '' local_only lint-check app/untyped.py "$UNTYPED"
 expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
-  relaxed pyproject.toml 'extends = "basedpyright.base.json"' 'extends = "basedpyright.base.json"\nreportUnnecessaryCast = false' \
-  local_only typecheck app/cast.py "$CAST"
+  relaxed pyproject.toml 'extends = "basedpyright.base.json"' 'extends = "basedpyright.base.json"\nreportUnnecessaryIsInstance = false' \
+  local_only typecheck app/isinstance.py "$ISINSTANCE"
 
 # Both gates check every Python file in the repository, not only the package: in a second
 # top-level folder, each tool fails the file that breaks its rule, and only its rule.
@@ -200,7 +203,7 @@ fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's c
 }
 INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
 expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
-expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/cast.py "$CAST"
+expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/isinstance.py "$ISINSTANCE"
 expect "bandit checks a second top-level folder, locally and in CI" fails_both security commons/insecure.py "$INSECURE"
 # The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
 NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
