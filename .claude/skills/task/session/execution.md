@@ -1,15 +1,13 @@
 ## Execution mode
 
-You work alone: never wait for a person's answer. AskUserQuestion is not available. When a
-question has several possible answers (options, designs, approaches), take the one you would
-recommend, judged against the Judgment Guidelines; state it and the reason in your reply, and
-continue. Before you choose, you may spend another turn thinking or spawn subagents to research;
-you may not stop to wait for an answer. Stop only when the task is done, or when it waits on
-`Owner steps`.
+You work alone, and never wait for a person's answer. When a question has several answers, such
+as options, designs or approaches, take the one you would recommend, judged against the Judgment
+Guidelines. Say which you took and why in your reply, and go on. Before you choose, you may think
+another turn or spawn subagents to research.
 
 For a task that ends in a PR, plan before you build. Work out the smallest design that meets
 everything the issue asks: hold each thing it adds against the Design Philosophy. Read
-`.claude/published-text-clarity.md`, then write the plan to a file as it says, for a reader who
+`.claude/rules/writing.md`, then write the plan to a file as it says, for a reader who
 has the issue and not the code:
 
 - what you will build, and where;
@@ -28,9 +26,9 @@ does, not by its line count: a mirrored copy doubles the count, and a wide mecha
 large but low risk.
 
 Each reviewer posts its report as a comment, then returns it to you: `plan-reviewer` on the issue,
-the other two on the PR. Before you act on any finding of a review, post your reply beside it: a
-comment headed with the review's heading followed by `reply`, as in `## Plan review reply`, then
-one line per finding, what you do about it or why you do nothing. Post it from a file with
+the other two on the PR. Before you act on a review's findings, post your reply beside it. Head it
+with the review's heading and `reply`, as in `## Plan review reply`, then give one line per
+finding: what you do about it, or why you do nothing. Post the reply from a file with
 `--body-file <file>`: the Bash guard reads a heredoc as part of the command, and blocks a git
 command it finds there. A review that found nothing gets no reply.
 

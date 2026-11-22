@@ -3,22 +3,22 @@
 # PreToolUse Bash guard — language-agnostic git/shell policy:
 #   * block rm -rf  / | ~ | $HOME
 #   * block git reset --hard onto origin|upstream main/staging/develop (protects local work)
-#   * block force-push to a protected branch (allow --force-with-lease)
 #   * block switching to an EXISTING branch (allow `-c/-b` new branch + file restore)
-#   * block direct push to a protected branch
-#   * block merging a PR into a protected branch, except the promotion hops develop→staging and
-#     staging→main as merge commits, and, in a project that answered agent_merges, its own PR into
-#     develop as a squash pinned to a head whose every check has passed; block the API merge routes
+#   * block direct push to a protected branch, forced or not
+#   * block merging a PR in any form but the two the skills write, and into a protected branch
+#     except the promotion hops develop→staging and staging→main as merge commits and, in a project
+#     that answered agent_merges, its own PR into develop as a squash pinned to a head whose every
+#     check has passed; block the API merge routes
 #   * block committing in the primary working tree / main checkout (any branch) — worktree workflow
 #   * block skipping the commit hooks: --no-verify, commit -n, SKIP=/HUSKY= env, core.hooksPath
+#   * check the command that bash -c, sh -c or eval runs, as if it were sent on its own
 # Protected branches: develop, staging, main. Nothing lands on them without the owner.
 # PR creation (gh pr create) is unrestricted — PRs may target any base branch.
 # Pure bash 3.2 regex via [[ =~ ]] — NO grep (grep can be a ugrep shim, which
 # mis-parses flags like --force-with-lease). jq reads the command from the stdin payload; gh
 # looks up the base branch of a PR being merged.
-# Fails OPEN (exit 0) on an empty/unparseable command, EXCEPT the rm-rf / reset-hard /
-# force-push checks, which run before the empty-command short-circuit. A PR merge whose base
-# cannot be looked up is blocked.
+# Fails OPEN (exit 0) on an empty/unparseable command. A PR merge whose base cannot be looked up
+# is blocked.
 # Every function here runs: any_segment calls each segment_* check by the name it is given, and the
 # checks call the rest. Tried one directive on each segment_* check, but their helpers stay flagged.
 # shellcheck disable=SC2329
@@ -37,30 +37,34 @@ if [ -f "$HERE/../agentic.conf" ]; then
 fi
 
 RE_PUSH='(^|[[:space:]&;|])git[[:space:]]+([^&|;]*[[:space:]])?push([[:space:]]|$)'
-RE_SWITCH='(^|[[:space:]&;|])git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(switch|checkout)([[:space:]]|$)'
+# git's -c <key=value> and -C <dir> before a subcommand. Push reads any words there, a shape that
+# for switch, reset or commit would also match `git help checkout`.
+RE_GIT_OPTS='(-[Cc][[:space:]]+[^[:space:]]+[[:space:]]+)*'
+RE_SWITCH="(^|[[:space:]&;|])git[[:space:]]+$RE_GIT_OPTS(switch|checkout)([[:space:]]|$)"
 RE_NEWBRANCH='(switch|checkout)[[:space:]]+(-[a-zA-Z]*[[:space:]]+)*(-c|-b|-C|-B)([[:space:]]|$)'
 RE_FILEISH='checkout[[:space:]]+(--([[:space:]]|$)|\.([[:space:]]|$)|--[[:space:]])'
 RE_PROT_TOKEN='(^|[[:space:]:=])(develop|staging|main)([[:space:]:]|$)'
 RE_PROT_BRANCH='^(develop|staging|main)$'
-RE_FORCE='(-f([[:space:]]|$)|--force([^a-zA-Z0-9_=-]|$))'
-RE_LEASE='--force-with-lease'
-RE_RMRF='(^|[[:space:]&;|])rm[[:space:]]+(-[a-zA-Z]*[rR][a-zA-Z]*[fF]|-[a-zA-Z]*[fF][a-zA-Z]*[rR])([[:space:]]+--)?[[:space:]]+(/|~|[$]HOME)([[:space:]]*$|/[[:space:]]*$|/?[[:space:]])'
-RE_RESET='git[[:space:]]+reset[[:space:]]+--hard[[:space:]]+(origin|upstream)/(main|staging|develop)'
+RE_RMRF='(^|[[:space:]&;|])rm[[:space:]]+(-[a-zA-Z]*[rR][a-zA-Z]*[fF]|-[a-zA-Z]*[fF][a-zA-Z]*[rR])([[:space:]]+--)?[[:space:]]+"?(/|~|[$]HOME|[$][{]HOME[}])"?/?[*]?"?([[:space:]]|$)'
+RE_RESET="git[[:space:]]+${RE_GIT_OPTS}reset[[:space:]]+--hard[[:space:]]+(origin|upstream)/(main|staging|develop)"
 RE_DIR_C='git[[:space:]]+-C[[:space:]]+([^[:space:]]+)'
 RE_DIR_CD='(^|[;&|])[[:space:]]*cd[[:space:]]+([^[:space:];&|]+)'
 RE_TWOTOKENS='[[:space:]]+[^[:space:]-][^[:space:]]*[[:space:]]+[^[:space:]-][^[:space:]]*'
-RE_COMMIT='(^|[[:space:]&;|])git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?commit([[:space:]]|$)'
+RE_COMMIT="(^|[[:space:]&;|])git[[:space:]]+${RE_GIT_OPTS}commit([[:space:]]|$)"
 RE_NO_VERIFY='(^|[[:space:]])--no-verify([[:space:]=]|$)'
 RE_SHORT_N='(^|[[:space:]])-[a-zA-Z]*n[a-zA-Z]*([[:space:]]|$)'
 RE_HOOK_ENV='(^|[[:space:]])(SKIP|HUSKY)=[^[:space:]]'
 RE_HOOK_ENV_EXPORT='(^|[[:space:];&|])export[[:space:]]+(SKIP|HUSKY)='
 RE_HOOKS_PATH='(^|[[:space:]&;|])git[[:space:]].*core\.hooksPath'
 RE_PR_MERGE='(^|[[:space:]&;|])gh[[:space:]]+([^&|;]*[[:space:]])?pr[[:space:]]+merge([[:space:]]|$)'
+RE_MERGE_COMMIT='^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge[[:space:]]+([^[:space:]-][^[:space:]]*)[[:space:]]+--merge[[:space:]]*$'
+RE_MERGE_SQUASH='^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge[[:space:]]+([^[:space:]-][^[:space:]]*)[[:space:]]+--squash[[:space:]]+--match-head-commit[[:space:]]+([^[:space:]]+)[[:space:]]*$'
 RE_GH_API='(^|[[:space:]&;|])gh[[:space:]]+api([[:space:]]|$)'
 RE_API_REST_MERGE='pulls/[^[:space:]/]+/merge([^a-zA-Z_-]|$)'
 RE_API_PUT='(-X|--method)[[:space:]=]*(PUT|put)'
 RE_API_GRAPHQL_MERGE='mergePullRequest|enablePullRequestAutoMerge'
 RE_GH_URL='github\.com[:/]+([^/]+/[^/]+)$'
+RE_WRAPPER='(^|[[:space:]])((ba)?sh[[:space:]]+-c|eval)[[:space:]]+'
 
 # One PR lookup answers every merge question: "<base> <head> <head sha> <owner/name> <verdict>".
 # The verdict is green when every check on the head has passed (succeeded, or was neutral or
@@ -119,16 +123,14 @@ own_repo() {
 }
 
 # In a project that answered agent_merges, may the agent merge this PR into develop? It reads the
-# caller's lookup and flags. Every condition must hold, else MERGE_WHY names the first that fails.
+# caller's lookup and form. Every condition must hold, else MERGE_WHY names the first that fails.
 agent_may_merge() {
   local own
   own="$(own_repo)"
   if [ -z "$own" ] || [ "$prrepo" != "$own" ]; then
     MERGE_WHY="merging a PR of '$prrepo' into develop. This project lets the agent merge only its own repository's PRs${own:+ ($own)}: leave this merge to the owner."
-  elif [ "$squash" = 0 ] || [ "$merge" = 1 ] || [ "$rebase" = 1 ]; then
-    MERGE_WHY="merging into develop without --squash as the only strategy: develop takes squash merges."
-  elif [ "$auto" = 1 ] || [ "$admin" = 1 ]; then
-    MERGE_WHY="merging into develop with --auto or --admin, which merge without the checks the guard read. Wait for the checks, then merge with --squash --match-head-commit <sha>."
+  elif [ "$strategy" != squash ]; then
+    MERGE_WHY="merging into develop as a merge commit: develop takes squash merges."
   elif [ "$match" != "$oid" ]; then
     MERGE_WHY="merging into develop without pinning the head the checks ran on: pass --match-head-commit $oid, the PR's head, so a later push cannot land unchecked."
   elif [ "$verdict" != green ]; then
@@ -139,77 +141,34 @@ agent_may_merge() {
   return 1
 }
 
-# gh reads a bool flag given as --flag=<value> true for 1, t, T, true, TRUE or True.
-truthy() { case "$1" in 1|t|T|true|TRUE|True) return 0 ;; *) return 1 ;; esac; }
-
-# Does ONE shell segment merge a PR into a protected branch? Only GitHub knows the base, so the
-# PR is looked up, and a failed lookup blocks. The words are read on `bare`, where a quoted value
-# is one `_` word, so a flag's value is never taken for the PR. A short-flag cluster is read
-# letter by letter, as gh reads it: a letter that takes a value (A, b, F, t, R) takes the rest of
-# the cluster, or the next word when it ends the cluster, so `-tsubject` holds no `s` flag. A
-# promotion passes only with --merge as its one strategy: a squash or rebase gives the target
-# commits the source never had. With agent_merges, agent_may_merge decides a PR into develop.
+# Does ONE shell segment merge a PR into a protected branch? The guard reads a merge only in the
+# two forms the skills write, word for word, and blocks any other form. Only GitHub knows the
+# base, so the PR is looked up, and a failed lookup blocks. A promotion passes only as a merge
+# commit: a squash gives the target commits the source never had. With agent_merges,
+# agent_may_merge decides a PR into develop.
 segment_merges_protected() {
-  local bare="$1" i=0 pr="" repo="" merge=0 squash=0 rebase=0 auto=0 admin=0 match="" out
-  local base head oid prrepo verdict word letters c
-  local -a words view
+  local bare="$1" pr strategy match="" out base head oid prrepo verdict
   [[ "$bare" =~ $RE_PR_MERGE ]] || return 1
-  read -ra words <<<"${bare#*"${BASH_REMATCH[0]}"}"
-  while [ "$i" -lt "${#words[@]}" ]; do
-    word="${words[$i]}"
-    case "$word" in
-      --repo) i=$((i + 1)); repo="${words[$i]:-}" ;;
-      --repo=*) repo="${word#--repo=}" ;;
-      --match-head-commit) i=$((i + 1)); match="${words[$i]:-}" ;;
-      --match-head-commit=*) match="${word#--match-head-commit=}" ;;
-      --author-email|--body|--body-file|--subject) i=$((i + 1)) ;;
-      --merge) merge=1 ;;
-      --squash) squash=1 ;;
-      --rebase) rebase=1 ;;
-      --auto) auto=1 ;;
-      --admin) admin=1 ;;
-      --merge=*) truthy "${word#*=}" && merge=1 ;;
-      --squash=*) truthy "${word#*=}" && squash=1 ;;
-      --rebase=*) truthy "${word#*=}" && rebase=1 ;;
-      --auto=*) truthy "${word#*=}" && auto=1 ;;
-      --admin=*) truthy "${word#*=}" && admin=1 ;;
-      --*) ;;
-      -?*)
-        letters="${word#-}"
-        while [ -n "$letters" ]; do
-          c="${letters:0:1}"
-          letters="${letters:1}"
-          case "$c" in
-            m) merge=1 ;;
-            s) squash=1 ;;
-            r) rebase=1 ;;
-            R|A|b|F|t)
-              if [ -z "$letters" ]; then i=$((i + 1)); letters="${words[$i]:-}"; fi
-              [ "$c" != R ] || repo="$letters"
-              letters=""
-              ;;
-          esac
-        done
-        ;;
-      *) [ -n "$pr" ] || pr="$word" ;;
-    esac
-    i=$((i + 1))
-  done
-  view=(gh pr view)
-  [ -z "$pr" ] || view+=("$pr")
-  [ -z "$repo" ] || view+=(--repo "$repo")
-  out="$(cd "$DIR" 2>/dev/null && "${view[@]}" --json baseRefName,headRefName,headRefOid,url,statusCheckRollup \
+  if [[ "$bare" =~ $RE_MERGE_COMMIT ]]; then
+    pr="${BASH_REMATCH[1]}" strategy=merge
+  elif [[ "$bare" =~ $RE_MERGE_SQUASH ]]; then
+    pr="${BASH_REMATCH[1]}" strategy=squash match="${BASH_REMATCH[2]}"
+  else
+    MERGE_WHY="merging a PR in a form the guard does not read. Merge as 'gh pr merge <pr> --merge' or 'gh pr merge <n> --squash --match-head-commit <sha>', word for word."
+    return 0
+  fi
+  out="$(cd "$DIR" 2>/dev/null && gh pr view "$pr" --json baseRefName,headRefName,headRefOid,url,statusCheckRollup \
     2>/dev/null | jq -r "$JQ_PR" 2>/dev/null)" || out=""
   read -r base head oid prrepo verdict <<<"$out"
   if [ -z "$base" ]; then
-    MERGE_WHY="merging a PR whose base branch could not be looked up; it may be develop, staging or main. Name the PR by number, or leave the merge to the owner."
+    MERGE_WHY="merging a PR whose base branch could not be looked up; it may be develop, staging or main. Leave the merge to the owner."
     return 0
   fi
   [[ "$base" =~ $RE_PROT_BRANCH ]] || return 1
   case "$head>$base" in
     "develop>staging"|"staging>main")
-      [ "$merge" = 1 ] && [ "$squash" = 0 ] && [ "$rebase" = 0 ] && return 1
-      MERGE_WHY="merging the promotion $head → $base without --merge as its one strategy. A squash or rebase gives $base commits $head never had, so the branches drift apart and the next promotion conflicts."
+      [ "$strategy" = merge ] && return 1
+      MERGE_WHY="merging the promotion $head → $base as a squash. A squash gives $base commits $head never had, so the branches drift apart and the next promotion conflicts: merge it with --merge."
       return 0
       ;;
   esac
@@ -226,6 +185,15 @@ segment_api_merges() {
   [[ "$bare" =~ $RE_GH_API ]] || return 1
   [[ "$lit" =~ $RE_API_GRAPHQL_MERGE ]] ||
     { [[ "$lit" =~ $RE_API_REST_MERGE ]] && [[ "$lit" =~ $RE_API_PUT ]]; }
+}
+
+# Does ONE shell segment hand a blocked command to bash -c, sh -c or eval? `bare` hides the quoted
+# command, so the guard runs itself on `lit` after the wrapper: the text the shell passes on.
+segment_wraps_blocked() {
+  local bare="$1" lit="$2"
+  [[ "$bare" =~ $RE_WRAPPER ]] || return 1
+  jq -n --arg c "${lit#*"${BASH_REMATCH[0]}"}" '{tool_input:{command:$c}}' | bash "$0"
+  [ $? = 2 ]
 }
 
 # Run the segment check named by $1 on every shell segment, via a single left-to-right pass that
@@ -284,17 +252,13 @@ any_segment() {
   done
   "$check" "$bare" "$lit"
 }
-push_targets_protected() { any_segment segment_targets_protected; }
 
-# --- Reliable blocks (evaluated even if COMMAND is empty; regexes just won't match) ---
+# --- Block rm -rf of / or home, and a hard reset onto a protected remote ref ---
 [[ "$COMMAND" =~ $RE_RMRF ]] && block "'rm -rf' targeting filesystem root or home directory."
 [[ "$COMMAND" =~ $RE_RESET ]] && block "'git reset --hard' against a protected remote ref. Use 'git revert' or run it manually outside Claude."
-if [[ "$COMMAND" =~ $RE_PUSH ]] && [[ "$COMMAND" =~ $RE_FORCE ]] && ! [[ "$COMMAND" =~ $RE_LEASE ]]; then
-  push_targets_protected && block "force-push to a protected branch. Run it manually outside Claude if intentional."
-fi
 
-# --- Fail-open boundary ---
-[ -z "$COMMAND" ] && exit 0
+# --- Block a blocked command that bash -c, sh -c or eval runs ---
+any_segment segment_wraps_blocked && exit 2
 
 # --- Block switching to an EXISTING branch (allow new-branch -c/-b and file restore) ---
 if [[ "$COMMAND" =~ $RE_SWITCH ]] && ! [[ "$COMMAND" =~ $RE_NEWBRANCH ]] && ! [[ "$COMMAND" =~ $RE_FILEISH ]]; then
@@ -303,7 +267,7 @@ fi
 
 # --- Block direct push to a protected branch ---
 if [[ "$COMMAND" =~ $RE_PUSH ]]; then
-  push_targets_protected && block "direct push to a protected branch (develop/staging/main). Open a PR instead."
+  any_segment segment_targets_protected && block "direct push to a protected branch (develop/staging/main). Open a PR instead."
   AFTER="${COMMAND#*push}"
   if ! [[ "$AFTER" =~ $RE_TWOTOKENS ]]; then
     DIR="."
@@ -315,7 +279,7 @@ if [[ "$COMMAND" =~ $RE_PUSH ]]; then
   fi
 fi
 
-# --- Block merging a PR into a protected branch, and the API merge routes ---
+# --- Block merging a PR in another form or into a protected branch, and the API merge routes ---
 if [[ "$COMMAND" =~ $RE_PR_MERGE ]]; then
   DIR="."
   [[ "$COMMAND" =~ $RE_DIR_CD ]] && DIR="${BASH_REMATCH[2]}"

@@ -1,5 +1,5 @@
 # From the agentic template: change the template, not this copy.
-# Rulesets can't limit a PR's source or size, so the staging and main rulesets require this check.
+# Rulesets can't limit a PR's source, so the staging and main rulesets require this check.
 # Nor does every plan have a ruleset to keep a PR's branch up to date, so a PR into develop that
 # lacks develop's newest commits shows a failed up-to-date check: its own run fails, and a push to
 # develop puts a failed status on its head, which a new head leaves behind. That check never
@@ -28,20 +28,16 @@ jobs:
       statuses: write
     steps:
       # A branch name can't hold a colon.
-      - name: Check the PR's source and commits
+      - name: Check the PR's source
         if: github.base_ref == 'staging' || github.base_ref == 'main'
         env:
           BASE: ${{ github.base_ref }}
           HEAD: ${{ github.head_ref }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          COMMITS: ${{ github.event.pull_request.commits }}
         run: |
           case "$BASE:$HEAD" in
             main:staging | staging:develop) ;;
-            staging:bugfix/*)
-              [ "$COMMITS" -eq 1 ] ||
-                { echo "::error::A bugfix/ PR into staging holds one commit, not $COMMITS: amend it into one and push with --force-with-lease."; exit 1; } ;;
-            *) echo "::error::No PR from $HEAD into $BASE: main takes staging, and staging takes develop or bugfix/*."; exit 1 ;;
+            *) echo "::error::No PR from $HEAD into $BASE: main takes staging, and staging takes develop."; exit 1 ;;
           esac
           [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ] ||
             { echo "::error::$BASE takes PRs from this repository's own branches, not from $HEAD_REPO."; exit 1; }
