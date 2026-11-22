@@ -7,5 +7,10 @@ runs:
     - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       with:
         enable-cache: true
+    # pre-commit's build of gitleaks, for CI's secret scan.
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ runner.os }}-${{ hashFiles('.github/actions/stack-gate/gitleaks-history.pre-commit.yaml') }}
     - run: bash "$GITHUB_ACTION_PATH/gate.sh"
       shell: bash
