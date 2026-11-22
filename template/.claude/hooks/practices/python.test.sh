@@ -447,6 +447,9 @@ write 2 "new file with a rule, no useDefault" "$GL" '' $'[[rules]]\nid = "acme-k
 write 2 "new file with only a comment"    "$GL" '' $'# The scan settings.\n'
 edit_in 2 "useDefault removed"            "$GL" "$OWN" $'useDefault = true\n' ''
 edit_in 2 "useDefault turned off"         "$GL" "$OWN" 'useDefault = true' 'useDefault = false'
+edit_in 2 "the [extend] header removed"   "$GL" "$OWN" $'[extend]\n' ''
+write 2 "new file with useDefault outside [extend]" "$GL" '' $'useDefault = true\n'
+write 2 "new file with useDefault under a rule" "$GL" '' $'[[rules]]\nid = "acme-key"\nuseDefault = true\n'
 says yes "tool's docs (gitleaks)" "the stop sends the agent to gitleaks's docs first" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
 says yes "revoke a real secret" "the stop says a real secret is revoked, not skipped" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
 says yes "Write it in this form: gitleaks:allow <reason>" "the stop shows the inline form" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
@@ -472,6 +475,12 @@ edit_in 0 "an allowlist description added" "$GL" "$OWN"$'\n[[allowlists]]\npaths
   $'[[allowlists]]\ndescription = "Fixtures"'
 edit_in 0 "an allowlist path removed"     "$GL" "$OWN"$'\n[[allowlists]]\npaths = ["x"]\n' $'paths = ["x"]\n' ''
 write 0 "new file that keeps useDefault"  "$GL" '' "$OWN"
+write 0 "new file with extend.useDefault outside any table" "$GL" '' $'extend.useDefault = true\n'
+edit R "gitleaks:allow + reason above that names gitleaks" "$APP" 'KEY = "k"' \
+  "# gitleaks flags a fixture key. $TRIED"$'\nKEY = "k"  # gitleaks:allow'
+write 0 "fingerprint + reason above that names gitleaks" "$IGNORE" '' \
+  "# gitleaks flags a fixture key. $TRIED"$'\ntests/a.py:github-pat:3\n'
+edit R "noqa + reason above that names gitleaks" "$APP" 'x = 1' "# gitleaks flags the URL. $TRIED"$'\nx = 1  # noqa: E501'
 mkdir -p "$REPO/docs"
 write 0 "a .gitleaks.toml below the root" "$REPO/docs/.gitleaks.toml" '' $'[[allowlists]]\npaths = ["x"]\n'
 write 0 "a .gitleaksignore below the root" "$REPO/docs/.gitleaksignore" '' $'tests/a.py:github-pat:3\n'

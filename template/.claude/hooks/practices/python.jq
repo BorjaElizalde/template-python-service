@@ -7,7 +7,7 @@ import "stack" as $stack;
 
 def package: $stack[0].package;
 def outside_tests: startswith("tests/") | not;
-def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff|jscpd|gitleaks)\\b|^\\s*#!";
+def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff|jscpd|gitleaks:allow)\\b|^\\s*#!";
 def plain_comment: has("^\\s*#\\s*[a-z0-9]") and (has(directive) | not);
 
 # The tools whose docs a stop for a skipped check or a loosened config sends the agent to first.

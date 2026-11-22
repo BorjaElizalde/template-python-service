@@ -22,7 +22,11 @@ def fingerprint_findings($ctx):
 
 def skip_key: has("(^|\\.)(commits|paths|regexes|stopwords|disabledrules)$");
 def holds_value: (test("^\\s*#") | not) and test("[\"']");
-def sets_use_default: any(.[]; has("^\\s*(extend\\.)?usedefault\\s*=\\s*true\\b"));
+# gitleaks reads useDefault only under [extend], or as extend.useDefault outside any table.
+def sets_use_default:
+  any(annotate[];
+    ((.section | has("^\\s*\\[extend\\]")) and (.line | has("^\\s*usedefault\\s*=\\s*true\\b")))
+    or (.section == "" and (.line | has("^\\s*extend\\.usedefault\\s*=\\s*true\\b"))));
 
 # gitleaks reads its own rules when .gitleaks.toml is missing, or sets useDefault under [extend].
 def drops_own_rules($ctx):
