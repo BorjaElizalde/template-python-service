@@ -1,8 +1,10 @@
 # The template-agentic version this repository applies to itself and a release bundles: the one its
-# answers record, or AGENTIC_SRC at AGENTIC_REF, to test an unreleased change from a local clone.
+# answers record, or AGENTIC_SRC at AGENTIC_REF on make's command line, to test an unreleased change
+# from a local clone. Not ?=: export puts both in the environment of every session make claude
+# starts, which would then render the version current at its start.
 answer = $(shell sed -n "s/^$(1): '\{0,1\}\([^']*\)'\{0,1\}$$/\1/p" .copier-answers.agentic.yaml)
-export AGENTIC_SRC ?= $(call answer,_src_path)
-export AGENTIC_REF ?= $(call answer,_commit)
+export AGENTIC_SRC := $(call answer,_src_path)
+export AGENTIC_REF := $(call answer,_commit)
 
 include .claude/agentic.mk
 
