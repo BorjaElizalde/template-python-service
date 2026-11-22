@@ -292,6 +292,13 @@ expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   
 expect "pre-commit's gitleaks passes a file with no secret" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' gitleaks
 expect "pre-commit's gitleaks stops a token in a Python file" fails_hook app/settings.py "TOKEN = \"$TOKEN\"\n" gitleaks
 expect "pre-commit's gitleaks stops a private key in a file of another type" fails_hook deploy.pem "$PRIVATE_KEY" gitleaks
+# The practices hook asks for a skip's reason in these places, so gitleaks must still skip there.
+REASON='A fixture GitHub never issued. Tried a stub, but it hides the token format.'
+expect "pre-commit's gitleaks skips a line that holds gitleaks:allow and its reason" hook_with app/fixture.py \
+  "TOKEN = \"$TOKEN\"  # gitleaks:allow $REASON\n" gitleaks
+printf '# %s\napp/fixture.py:github-pat:1\n' "$REASON" >"$D/.gitleaksignore"
+expect "pre-commit's gitleaks skips a fingerprint listed under its reason" hook_with app/fixture.py "TOKEN = \"$TOKEN\"\n" gitleaks
+rm "$D/.gitleaksignore"
 
 # The seeded .gitignore keeps secrets and the gate's output out of git; the gate above left both.
 expect "git ignores .env files and what the gate leaves" bash -c "cd '$D' &&
