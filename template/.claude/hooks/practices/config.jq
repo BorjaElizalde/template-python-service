@@ -9,9 +9,9 @@
 # switching checks off: ruff takes it as the whole rule list and drops the extended one; so does a
 # removed extend line. Every edit to the shared base files stops, reason or not: each update
 # rewrites them, so a change goes to the template. pre-commit.base.yaml is checked like
-# .pre-commit-config.yaml instead: no project config can leave out a hook that another config
-# runs, so a project switches a template hook off there. CI workflows are not checked here: the
-# owner reviews CI changes in the PR, which only the owner merges.
+# .pre-commit-config.yaml instead, as the place a project switches a template hook off; a changed
+# entry that runs pre-commit, such as template-hooks, can switch them off too. CI workflows are not
+# checked here: the owner reviews CI changes in the PR, which only the owner merges.
 include "lib";
 include "python";
 
@@ -85,7 +85,7 @@ def precommit_findings($ctx):
    | select(.line | has("^\\s*(exclude|files):|stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]"))
    | select(((.line | has("^\\s*(exclude|files):")) and in_added_hook($ctx; .at)) | not)
    | {text: "added `\(.line | short)`", at}),
-  ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):")) | {text: "removed `\(short)`", at: null});
+  ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):|pre-commit\\s+run")) | {text: "removed `\(short)`", at: null});
 
 def makefile_findings($ctx):
   ($ctx.added | map(.line)) as $added
