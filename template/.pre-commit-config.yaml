@@ -1,6 +1,8 @@
 # From the python-service template: change the template, not this copy.
-# Every hook runs the project's own pinned tool through uv, so a commit and make gate never run two
-# versions of one tool, and this file holds no version to bump.
+# Every local hook runs the project's own pinned tool through uv, so a commit and make gate never
+# run two versions of one tool. gitleaks has no Python package: pre-commit builds it from the
+# commit its rev pins. CI's secret scan pins the same commit, in
+# .github/actions/stack-gate/gitleaks-history.pre-commit.yaml.
 repos:
   - repo: local
     hooks:
@@ -40,3 +42,7 @@ repos:
         entry: uv run trailing-whitespace-fixer
         language: system
         types: [text]
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      - id: gitleaks
