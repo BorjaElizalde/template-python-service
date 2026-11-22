@@ -317,13 +317,15 @@ commit "$RELEASES" v2 && git -C "$RELEASES" tag v2
 SERVICE="$OUT/service"
 uvx --quiet copier copy --quiet --defaults --vcs-ref v1 "${PYTHON_ANSWERS[@]}" "$RELEASES" "$SERVICE"
 git -C "$SERVICE" init -q
-commit "$SERVICE" copy
-update_service() {  # update_service <release>: updates the service, and fails on a conflict it writes
-  (cd "$SERVICE" && uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml --vcs-ref "$1") &&
+# update_with_no_conflict <release>: commits the service as it is, since Copier updates only a clean
+# tree, updates it to the release, and fails if a file holds a conflict marker.
+update_with_no_conflict() {
+  commit "$SERVICE" "before $1" &&
+    (cd "$SERVICE" && uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml --vcs-ref "$1") &&
     ! grep -rIl --exclude-dir=.git '^<<<<<<< ' "$SERVICE"
 }
 moves_template_hooks() {
-  update_service v2 && cmp -s "$RELEASES/template/.pre-commit-config.yaml" "$SERVICE/.pre-commit-config.yaml" &&
+  update_with_no_conflict v2 && cmp -s "$RELEASES/template/.pre-commit-config.yaml" "$SERVICE/.pre-commit-config.yaml" &&
     cmp -s "$RELEASES/template/pre-commit.base.yaml" "$SERVICE/pre-commit.base.yaml"
 }
 expect "an update moves an older service's template hooks to pre-commit.base.yaml" moves_template_hooks
@@ -332,8 +334,8 @@ sed 's/trailing-whitespace-fixer$/& --markdown-linebreak-ext=md/' "$BASE_HOOKS" 
 mv "$OUT/base.yaml" "$BASE_HOOKS"
 commit "$RELEASES" v3 && git -C "$RELEASES" tag v3
 keeps_own_hook() {
-  commit "$SERVICE" v2 && printf '%s\n' "${OWN_HOOK[@]}" >>"$SERVICE/.pre-commit-config.yaml" &&
-    commit "$SERVICE" own-hook && update_service v3 && git -C "$SERVICE" diff --quiet HEAD -- .pre-commit-config.yaml &&
+  printf '%s\n' "${OWN_HOOK[@]}" >>"$SERVICE/.pre-commit-config.yaml" &&
+    update_with_no_conflict v3 && git -C "$SERVICE" diff --quiet HEAD -- .pre-commit-config.yaml &&
     grep -q 'trailing-whitespace-fixer --markdown-linebreak-ext=md$' "$SERVICE/pre-commit.base.yaml"
 }
 expect "an update that changes a template hook keeps the project's own hook, with no conflict" keeps_own_hook

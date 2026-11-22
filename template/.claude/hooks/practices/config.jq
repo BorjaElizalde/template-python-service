@@ -74,16 +74,16 @@ def toml_findings($ctx):
            + " whole rule list; extend-select adds to it"), at: $at}
      else empty end);
 
-# Whether new line $at sits inside a hook the edit adds: indented, under an added `- id:` line. A
-# top-level files or exclude is not indented, and it narrows every hook.
-def in_added_hook($ctx; $at):
+# Whether new line $at narrows checks that were there before the edit: it is top-level, so it
+# narrows every hook, or it sits in a hook whose `- id:` line the edit did not add.
+def narrows_old_checks($ctx; $at):
   ([range(0; $at) | select($ctx.new[.] | test("^\\s*-\\s*id:"))] | last) as $id
-  | ($ctx.new[$at] | test("^\\s")) and $id != null and any($ctx.added[]; .at == $id);
+  | ($ctx.new[$at] | test("^\\S")) or $id == null or all($ctx.added[]; .at != $id);
 
 def precommit_findings($ctx):
   ($ctx.added[]
-   | select(.line | has("^\\s*(exclude|files):|stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]"))
-   | select(((.line | has("^\\s*(exclude|files):")) and in_added_hook($ctx; .at)) | not)
+   | select(((.line | has("^\\s*(exclude|files):")) and narrows_old_checks($ctx; .at))
+       or (.line | has("stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]")))
    | {text: "added `\(.line | short)`", at}),
   ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):|pre-commit\\s+run")) | {text: "removed `\(short)`", at: null});
 
