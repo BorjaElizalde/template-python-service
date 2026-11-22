@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # REMIND: every new prose comment in Python, TOML, YAML and the Makefile (conventions.md), with
 # one more line when it reads like history. A comment is new when its text was not in the file
 # before: moving or re-indenting an old one is not new.

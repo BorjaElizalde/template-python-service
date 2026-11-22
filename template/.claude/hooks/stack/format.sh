@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # The agentic layer's after-edit hook point: format a Python file or stub after Claude edits it. A
 # file left unformatted fails `ruff format --check` when `make gate` runs mid-turn.
 

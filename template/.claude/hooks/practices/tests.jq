@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # STOP: a new test that goes through no boundary, or that calls a write endpoint and does not use
 # `db_session` after it (testing.md); REMIND on the others. A test is new when its name was not in
 # the file before: moving, re-indenting or editing one is not new. Its text runs from the def to

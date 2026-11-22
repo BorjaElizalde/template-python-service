@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # STOP: a skip of the secret scan without a reason in the form conventions.md gives. gitleaks skips
 # a finding whose line holds `gitleaks:allow`, in a file of any type; one whose fingerprint the
 # root .gitleaksignore lists; and one the root .gitleaks.toml allowlists or whose rule it disables.

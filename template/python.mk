@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # The local gate, included by the project's Makefile: /gate runs make gate. The project's CI runs
 # its checks itself, never through make, so relaxing a target here can't relax CI.
 # The include is here, not in the project's Makefile, which an update never changes.

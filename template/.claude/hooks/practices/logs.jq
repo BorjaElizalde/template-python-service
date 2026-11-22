@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # REMIND: a new log call outside tests/ (python-conventions.md, Logging). Where a log belongs is
 # judgment no linter makes, so the question comes at the moment one is written. A call is new when
 # its code, comment stripped, was not there before: moving or re-indenting one is not.

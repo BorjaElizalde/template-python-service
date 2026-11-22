@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # STOP: an edit that switches a check off in the lint, type-check, duplication, test or pre-commit
 # setup without a reason in the form conventions.md gives. An added line's reason sits in its
 # comment or on the comment lines above it; a removed line leaves no place, so the edit adds the

@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # The template's commit hooks, which the template-hooks hook in .pre-commit-config.yaml runs.
 # Every local hook runs the project's own pinned tool through uv, so a commit and make gate never
 # run two versions of one tool. gitleaks has no Python package: pre-commit builds it from the

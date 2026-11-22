@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # STOP: a skipped check (a suppression such as `# noqa`) without its rule code, or without a reason
 # in the form conventions.md gives, after the directive or on the comment lines above it. The
 # hook checks the form; review judges whether the reason holds. Reason places were checked against

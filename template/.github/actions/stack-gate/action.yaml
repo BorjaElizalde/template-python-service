@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 name: Python checks
 description: The checks a project's CI runs, each tool called directly, never through make
 runs:

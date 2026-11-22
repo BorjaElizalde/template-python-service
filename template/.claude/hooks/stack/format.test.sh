@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # Table-driven regression suite for format.sh, the after-edit hook beside it. Run from any
 # checkout: bash .claude/hooks/stack/format.test.sh
 # Each case writes a file, then feeds the hook an edit of it. Expect F = formatted, U = left as

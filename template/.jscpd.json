@@ -1,6 +1,6 @@
 {
   "//": [
-    "From the python-service template: change the template, not this copy.",
+    "From the python-service template: change the template, not a project's copy.",
     "The jscpd settings the gate and CI share: a block of Python written twice fails both.",
     "jscpd keeps a copy when its last line minus its first is minLines or more, so 9 fails a",
     "copy of 10 lines or more. It at times counts the blank lines after a copy too, which makes",

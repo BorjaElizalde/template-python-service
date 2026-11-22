@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # REMIND on every new docstring: on the outside surface to write for that reader, elsewhere to ask
 # whether better code would say it instead. STOP on a module docstring anywhere but in a migration
 # (Alembic shows it as the revision message), and on a docstring that lists parameters, return

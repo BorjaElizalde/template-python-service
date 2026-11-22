@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # Helpers for the modules that check a config's entries, which include it after lib.jq and
 # python.jq: what each TOML line sits under, and whether an entry's reason is in the form.
 include "lib";

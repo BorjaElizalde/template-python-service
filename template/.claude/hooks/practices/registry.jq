@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # The python-service layer's practices, which the agentic guard.sh runs on every edit.
 import "skipped_checks" as skipped_checks;
 import "secret_scan_skips" as secret_scan_skips;

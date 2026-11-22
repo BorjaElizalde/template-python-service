@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # Table-driven regression suite for the python-service practices behind the agentic guard.sh (the
 # copies beside it). Run from any checkout: bash .claude/hooks/practices/python.test.sh
 # Each case writes the file's current content into a throwaway git repo, then feeds the guard the

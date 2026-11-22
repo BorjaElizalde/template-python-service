@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # The checks a project's CI runs, from the repository root. Each tool is called here, never through
 # make gate, so a change that relaxes the local gate (python.mk, the Makefile) can't relax CI. CI
 # holds its own copy of the shared settings, beside this script: the project's copies must match

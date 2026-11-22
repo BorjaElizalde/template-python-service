@@ -1,4 +1,4 @@
-# From the python-service template: change the template, not this copy.
+# From the python-service template: change the template, not a project's copy.
 # Python helpers for the practice modules, which include it after lib.jq (jq includes do not pass
 # on the definitions they bring in). stack.json, rendered from the template answers, names
 # the application package.
