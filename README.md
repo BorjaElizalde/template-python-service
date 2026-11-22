@@ -118,9 +118,10 @@ run `make claude` in the repository.
 Apart from the project's five files, every file the template writes is the template's: change it
 there, not in the project.
 
-- **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select`, and the
-  project's exceptions with `ignore` and `extend-per-file-ignores`, each with the reason
-  `.claude/rules/skipped-checks.md` asks for. Never use `select`: it replaces the shared rule list.
+- **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select` and
+  banned APIs with `extend-banned-api`, and the project's exceptions with `ignore` and
+  `extend-per-file-ignores`, each with the reason `.claude/rules/skipped-checks.md` asks for. Never
+  use `select` or `banned-api`: each replaces the shared list.
 - **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only, not to CI.
 - **jscpd**: a copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,
   with the reason `.claude/rules/skipped-checks.md` asks for.
