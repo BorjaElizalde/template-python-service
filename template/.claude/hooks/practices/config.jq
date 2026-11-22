@@ -35,8 +35,13 @@ def extends_ruff($ctx):
 def opens_select:
   (.line | test("^\\s*select\\s*=")) and (.section | test("^\\s*\\[tool\\.ruff(\\.lint)?\\]\\s*$"));
 
+# An addopts line that turns a pytest plugin off: a list item can hold `no:x` apart from its `-p`.
+def plugin_off: has("-p\\s*no:|(^|[\\s\"'])no:");
+
+def drops_tests: has("(^|[\\s\"'])-k|--deselect|--ignore");
+
 # Each finding is {text, at}: `at` is an added line's index in the new file, null for a removed line.
-def toml_findings($ctx):
+def pyproject_findings($ctx):
   ($ctx.removed | line_set) as $removed
   | kept($ctx; "^(extend-)?select$") as $kept_rules
   | kept($ctx; "^(include|testpaths)$") as $kept_paths
@@ -49,7 +54,7 @@ def toml_findings($ctx):
          or (.line | has("^\\s*report\\w+\\s*=\\s*(false|\"(none|warning|information|hint)\")"))
          or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic|standard|strict)\""))
          or (.line | has("failOnWarnings\\s*=\\s*false|check-typed-exception\\s*=\\s*false|--exit-zero"))
-         or ((.key == "addopts") and (.line | has("-p\\s*no:|(^|[\\s\"'])(no:|-k)|--deselect|--ignore"))))
+         or ((.key == "addopts") and (.line | plugin_off or drops_tests)))
      | {text: "added `\(.line | short)`", at: $at}),
     ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section)
      | select(((.key | test("^(extend-)?select$")) and (.line | dropped($kept_rules)))
@@ -91,6 +96,8 @@ def makefile_findings($ctx):
            | length > 0)))
      | {text: "removed `\(short)`", at: null});
 
+def reason_on_own_lines($ctx): [$ctx.added[].line | select(test("^\\s*#"))] | join("\n") | reason_form;
+
 def check($ctx):
   if $ctx.rel | test("(^|/)(ruff\\.base\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json)$") then
     {level: "stop", text: ("Stopped by the practices hook: \($ctx.rel) holds the settings every"
@@ -101,7 +108,7 @@ def check($ctx):
            + " with its reason (.claude/rules/skipped-checks.md)."
          else ", or add this project's own settings in pyproject.toml, which extends this file." end))}
   elif $ctx.rel | test("(^|/)(\\.bandit|\\.?pytest\\.(ini|toml)|\\.?ruff\\.toml)$") then
-    select([$ctx.added[].line | select(test("^\\s*#"))] | join("\n") | reason_form | not)
+    select(reason_on_own_lines($ctx) | not)
     | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
         + " (.claude/rules/skipped-checks.md). The gate's bandit, pytest or ruff can read its"
         + " settings from \($ctx.rel), and pytest and ruff then ignore those in pyproject.toml. The"
@@ -112,7 +119,7 @@ def check($ctx):
         + " the rule code where there is one (`# B101: ...`): bandit and pytest read a `#` after"
         + " an INI entry as part of its value.")}
   else
-    [if ($ctx.rel | test("(^|/)pyproject\\.toml$")) then toml_findings($ctx)
+    [if ($ctx.rel | test("(^|/)pyproject\\.toml$")) then pyproject_findings($ctx)
      elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
      elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
      else empty end

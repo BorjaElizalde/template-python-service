@@ -328,6 +328,7 @@ edit_in 2 "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'inc
 edit_in 2 "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
 edit_in 2 "pytest deselect=, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
   '    "-v",' $'    "-v",\n    "--deselect=tests/test_x.py::test_y",'
+edit_in 2 "pytest plugin turned off, glued to its -p" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -pno:warnings"'
 edit_in 2 "pytest plugin turned off, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-p", "no:warnings"]'
 edit_in 2 "pytest plugin turned off, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
   '    "-v",' $'    "-v",\n    "-p",\n    "no:warnings",'
