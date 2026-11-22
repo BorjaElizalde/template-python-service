@@ -119,8 +119,9 @@ run `make claude` in the repository.
 
 Apart from the project's five files and its own hooks in `.pre-commit-config.yaml`, every file the
 template writes is the template's: change it there, not in the project. CI checks with the
-template's settings alone: a setting the project adds for ruff, basedpyright, bandit, jscpd or
-pytest applies to `make gate` only.
+template's settings, not the project's: a setting the project adds for ruff, basedpyright, bandit,
+jscpd or pytest applies to `make gate` only. Coverage is the one exception: its settings in
+`pyproject.toml`, a floor among them, apply in CI too.
 
 - **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select` and
   banned APIs with `extend-banned-api`. Never use `select` or `banned-api`: each replaces the
@@ -138,3 +139,6 @@ pytest applies to `make gate` only.
 - **Commit hooks**, in `.pre-commit-config.yaml`: add the project's own hooks after
   `template-hooks`, which runs the template's hooks from `pre-commit.base.yaml`.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
+  A pytest setting the tests need, such as a custom mark, goes in `tests/conftest.py`, which CI
+  also runs: for a mark, `config.addinivalue_line("markers", "<name>: <meaning>")` in
+  `pytest_configure`.

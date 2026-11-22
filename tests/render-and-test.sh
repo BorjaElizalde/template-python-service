@@ -275,6 +275,14 @@ expect "a basedpyright baseline relaxes typecheck, not CI" baselined app/isinsta
 WARNS='import warnings\n\n\ndef test_warns():\n    warnings.warn("old", DeprecationWarning, stacklevel=1)\n'
 expect "a filterwarnings in pyproject.toml relaxes test, not CI" \
   relaxed pyproject.toml 'filterwarnings = ["error"]' 'filterwarnings = ["ignore"]' local_only test tests/test_warns.py "$WARNS"
+pytest_settings_linked_to_null() {  # CI's pytest fails a warning while the project commits CI's settings path as a link to /dev/null
+  ln -s /dev/null "$D/.pytest-ci.ini"
+  ci_fails_at test tests/test_warns.py "$WARNS"
+  local status=$?
+  rm -f "$D/.pytest-ci.ini"
+  return "$status"
+}
+expect "a committed .pytest-ci.ini that links to /dev/null leaves CI's pytest settings in place" pytest_settings_linked_to_null
 
 # Both gates check every Python file in the repository, not only the package: in a second
 # top-level folder, each tool fails the file that breaks its rule, and only its rule.

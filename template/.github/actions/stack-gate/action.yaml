@@ -50,7 +50,8 @@ runs:
           exit 1
         }
     # As in python.mk: no tests/ skips pytest, an empty tests/ fails it. pytest resolves pythonpath
-    # from its settings file's folder, so CI's copy goes to the root.
+    # from its settings file's folder, so CI's copy goes to the root. The rm comes first: cp writes
+    # through a symlink, and a committed link to /dev/null would leave pytest an empty file.
     - name: Run tests with pytest
       shell: bash
       run: |
@@ -58,5 +59,6 @@ runs:
           echo "::notice::pytest skipped: no tests/ folder"
           exit 0
         fi
+        rm -f .pytest-ci.ini
         cp "$GITHUB_ACTION_PATH/pytest.ini" .pytest-ci.ini
         uv run pytest -c .pytest-ci.ini tests --cov
