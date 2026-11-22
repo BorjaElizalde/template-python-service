@@ -397,6 +397,17 @@ edit_in 2 "bandit skip arg"               "$PC" "$PCBASE" 'args: ["-ll"]' 'args:
 edit_in R "pre-commit exclude, reason above" "$PC" "$PCBASE" '      - id: ruff' \
   $'      - id: ruff\n        # The tests hold generated code.\n        # '"$TRIED"$'\n        exclude: ^tests/'
 edit_in 0 "pre-commit hook added"         "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n      - id: check-json'
+edit_in 0 "pre-commit hook added with its files" "$PC" "$PCBASE" '      - id: ruff' \
+  $'      - id: ruff\n      - id: check-json\n        files: ^app/\n        exclude: ^app/generated/'
+edit_in 2 "top-level exclude below an added hook" "$PC" "$PCBASE" '        args: ["-ll"]' \
+  $'        args: ["-ll"]\n      - id: check-json\nexclude: ^generated/'
+PCTEMPLATE=$'repos:\n  - repo: local\n    hooks:\n      - id: template-hooks\n        entry: uv run pre-commit run --config pre-commit.base.yaml --files\n'
+edit_in 2 "template-hooks entry changed" "$PC" "$PCTEMPLATE" 'entry: uv run pre-commit run --config' \
+  'entry: uv run pre-commit run ruff-check --config'
+PB="$REPO/pre-commit.base.yaml"
+edit_in 2 "template hook removed from pre-commit.base.yaml" "$PB" "$PCBASE" $'      - id: bandit\n' ''
+edit_in R "template hook removed, reason added" "$PB" "$PCBASE" $'      - id: bandit\n        args: ["-ll"]\n' \
+  "      # bandit runs in CI only. $TRIED"$'\n'
 MK="$REPO/Makefile"
 MKBASE=$'lint-check:\n\tuv run ruff check app\n\tuv run ruff format --check app\n\ngate: lint-check typecheck security test\n\t@echo ok\n'
 edit_in 0 "lint widened to tests"         "$MK" "$MKBASE" $'\tuv run ruff check app\n' $'\tuv run ruff check app tests\n'

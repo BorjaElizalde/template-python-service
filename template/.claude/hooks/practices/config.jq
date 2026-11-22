@@ -4,10 +4,13 @@
 # comment or on the comment lines above it; a removed line leaves no place, so the edit adds the
 # reason as a comment.
 # Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
-# and a Makefile tool line only if no added line runs the same tool. A select added to a ruff config
-# that extends another counts as switching checks off: ruff takes it as the whole rule list and
-# drops the extended one; so does a removed extend line. Every edit to the shared base files stops,
-# reason or not: each update rewrites them, so a change goes to the template. CI workflows are not
+# a Makefile tool line only if no added line runs the same tool, and a commit hook the edit adds
+# may name its files or exclude. A select added to a ruff config that extends another counts as
+# switching checks off: ruff takes it as the whole rule list and drops the extended one; so does a
+# removed extend line. Every edit to the shared base files stops, reason or not: each update
+# rewrites them, so a change goes to the template. pre-commit.base.yaml is checked like
+# .pre-commit-config.yaml instead, as the place a project switches a template hook off; a changed
+# entry that runs pre-commit, such as template-hooks, can switch them off too. CI workflows are not
 # checked here: the owner reviews CI changes in the PR, which only the owner merges.
 include "lib";
 include "python";
@@ -72,11 +75,18 @@ def toml_findings($ctx):
            + " whole rule list; extend-select adds to it"), at: $at}
      else empty end);
 
+# Whether new line $at narrows checks that were there before the edit: it is top-level, so it
+# narrows every hook, or it sits in a hook whose `- id:` line the edit did not add.
+def narrows_old_checks($ctx; $at):
+  ([range(0; $at) | select($ctx.new[.] | test("^\\s*-\\s*id:"))] | last) as $id
+  | ($ctx.new[$at] | test("^\\S")) or $id == null or all($ctx.added[]; .at != $id);
+
 def precommit_findings($ctx):
   ($ctx.added[]
-   | select(.line | has("^\\s*(exclude|files):|stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]"))
+   | select(((.line | has("^\\s*(exclude|files):")) and narrows_old_checks($ctx; .at))
+       or (.line | has("stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]")))
    | {text: "added `\(.line | short)`", at}),
-  ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):")) | {text: "removed `\(short)`", at: null});
+  ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):|pre-commit\\s+run")) | {text: "removed `\(short)`", at: null});
 
 def makefile_findings($ctx):
   ($ctx.added | map(.line)) as $added
@@ -111,7 +121,7 @@ def check($ctx):
   else
     ([$ctx.added[].line | comment | select(. != null)] | join("\n")) as $added_comments
     | [if ($ctx.rel | test("(^|/)(pyproject\\.toml|\\.?ruff\\.toml)$")) then toml_findings($ctx)
-       elif ($ctx.rel | test("(^|/)\\.pre-commit-config\\.yaml$")) then precommit_findings($ctx)
+       elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
        elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
        else empty end
        | select(reasoned($ctx; $added_comments) | not) | "- \(.text)"]
