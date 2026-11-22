@@ -328,7 +328,15 @@ edit_in 2 "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'inc
 edit_in 2 "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
 edit_in 2 "pytest deselect=, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
   '    "-v",' $'    "-v",\n    "--deselect=tests/test_x.py::test_y",'
-edit_in 2 "typed except check off"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
+edit_in 2 "pytest plugin turned off, glued to its -p" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -pno:warnings"'
+edit_in 2 "pytest plugin turned off, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-p", "no:warnings"]'
+edit_in 2 "pytest plugin turned off, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
+  '    "-v",' $'    "-v",\n    "-p",\n    "no:warnings",'
+edit_in 2 "tests selected by name, as list items" "$PY" "$BASE" 'addopts = "-v"' "addopts = ['-v', '-k', 'smoke']"
+edit_in 2 "tests selected by name, at the start of a multi-line string's line" "$PY" "$BASE" 'addopts = "-v"' \
+  $'addopts = """\n-k smoke\n"""'
+edit_in 0 "pytest option that tightens" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "--strict-markers"]'
+edit_in 2 "typed except check off"       "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
 edit_in 2 "per-file-ignores reason with no Tried sentence" "$PY" "$BASE" $'[tool.basedpyright]' \
   $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
 edit_in 2 "rule removed, its reason only in an old comment" "$PY" \
@@ -353,7 +361,6 @@ EXT=$'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nextend-select 
 edit_in 2 "select in a config that extends a base" "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = ["F"]'
 edit_in 2 "multi-line select there"       "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = [\n    "F",\n]'
 edit_in 2 "select under [tool.ruff] there" "$PY" "$EXT" 'extend = "ruff.base.toml"' $'extend = "ruff.base.toml"\nselect = ["F"]'
-edit_in 2 "select in a ruff.toml that extends a base" "$REPO/ruff.toml" $'extend = "ruff.base.toml"\n\n[lint]\n' '[lint]' $'[lint]\nselect = ["F"]'
 edit_in R "select there with a reason"    "$PY" "$EXT" 'extend-select = ["B"]' \
   $'extend-select = ["B"]\n'"select = [\"F\"]  # F: this tool keeps only Pyflakes. $TRIED"
 edit_in 0 "extend-select there"           "$PY" "$EXT" 'extend-select = ["B"]' 'extend-select = ["B", "ANN"]'
@@ -390,7 +397,6 @@ says yes "goes between \`# jscpd:ignore-start\` and \`# jscpd:ignore-end\`" "the
   "$JS" $'{\n  "minLines": 9\n}\n' $'{\n  "minLines": 99\n}\n'
 says no "jscpd:ignore-start" "the ruff.base.toml stop names no jscpd marker" "$RB" \
   $'[lint]\nselect = ["F"]\n' $'[lint]\nselect = []\n'
-edit_in 2 "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
 edit_in 2 "pre-commit exclude added"      "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n        exclude: ^tests/'
@@ -424,6 +430,30 @@ edit_in R "errors ignored, reason above"  "$MK" "$MKBASE" $'\tuv run ruff check 
 MKDUP=$'duplication:\n\tuv run jscpd .\n'
 edit_in 2 "jscpd line removed"            "$MK" "$MKDUP" $'\tuv run jscpd .\n' ''
 edit_in 0 "jscpd line kept, scan widened" "$MK" "$MKDUP" $'\tuv run jscpd .\n' $'\tuv run jscpd . scripts\n'
+
+echo "-- config: every edit to bandit's, pytest's or ruff's own files stops until it adds a reason on lines of its own"
+BANDIT="$REPO/.bandit"; PINI="$REPO/pytest.ini"; RT="$REPO/ruff.toml"
+edit_in 2 ".bandit skips a test"          "$BANDIT" $'[bandit]\n' '[bandit]' $'[bandit]\nskips = B101'
+write 2 "pytest.ini created, even empty" "$PINI" '' ''
+edit_in 2 ".pytest.ini edited, even to tighten" "$REPO/.pytest.ini" $'[pytest]\naddopts = -v\n' 'addopts = -v' \
+  'addopts = -v --strict-markers'
+write 2 "pytest.toml created"             "$REPO/pytest.toml" '' $'[pytest]\naddopts = ["-v"]\n'
+write 2 ".pytest.toml created"            "$REPO/.pytest.toml" '' $'[pytest]\naddopts = ["-v"]\n'
+edit_in 2 "ruff.toml ignore"              "$RT" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
+edit_in 2 "select in a ruff.toml that extends a base" "$RT" $'extend = "ruff.base.toml"\n\n[lint]\n' '[lint]' $'[lint]\nselect = ["F"]'
+write 2 ".ruff.toml created in a folder"  "$REPO/$PKG/.ruff.toml" '' $'extend = "../pyproject.toml"\n'
+edit_in 2 "reason after the entry"        "$BANDIT" $'[bandit]\n' '[bandit]' \
+  $'[bandit]\n'"skips = B101  # B101: the tests assert. $TRIED"
+edit_in 2 "reason with no Tried sentence" "$PINI" $'[pytest]\naddopts = -v\n' 'addopts = -v' \
+  $'# The suite prints its own warnings.\naddopts = -v -p no:warnings'
+says yes "\`#\` comment lines of their own" "the stop says where the reason goes" "$BANDIT" \
+  $'[bandit]\n' $'[bandit]\nskips = B101'
+edit_in R ".bandit skips, reason above"   "$BANDIT" $'[bandit]\n' '[bandit]' \
+  $'[bandit]\n# B101: the tests assert.\n# '"$TRIED"$'\nskips = B101'
+write R "pytest.ini created with its reason" "$PINI" '' \
+  "# The generated suite needs its own settings. $TRIED"$'\n[pytest]\naddopts = -v\n'
+edit_in R "ruff.toml entry removed, reason where it was" "$RT" $'[lint]\nselect = ["F", "E"]\n' \
+  $'select = ["F", "E"]\n' "# E: ruff format owns layout. $TRIED"$'\nselect = ["F"]\n'
 
 echo "-- config: CI workflows are not checked (the owner reviews them in the PR)"
 edit_in 0 "gate.yaml loosened"            "$REPO/.github/workflows/gate.yaml" $'      - run: uv run pytest tests/ --cov\n' 'uv run pytest tests/ --cov' 'uv run pytest tests/ --cov || true'
