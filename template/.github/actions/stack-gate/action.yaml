@@ -49,9 +49,9 @@ runs:
             "reason (.claude/rules/skipped-checks.md). No jscpd? uv add --dev jscpd"
           exit 1
         }
-    # As in python.mk: no tests/ skips pytest, an empty tests/ fails it. pytest resolves pythonpath
-    # from its settings file's folder, so CI's copy goes to the root. The rm comes first: cp writes
-    # through a symlink, and a committed link to /dev/null would leave pytest an empty file.
+    # As in python.mk: no tests/ skips pytest, an empty tests/ fails it. With -c, pytest would take
+    # this action's folder as its root: --rootdir keeps the repository's, and python -m puts the
+    # repository on the import path, which pyproject.toml's pythonpath does for make gate.
     - name: Run tests with pytest
       shell: bash
       run: |
@@ -59,6 +59,4 @@ runs:
           echo "::notice::pytest skipped: no tests/ folder"
           exit 0
         fi
-        rm -f .pytest-ci.ini
-        cp "$GITHUB_ACTION_PATH/pytest.ini" .pytest-ci.ini
-        uv run pytest -c .pytest-ci.ini tests --cov
+        uv run python -m pytest -c "$GITHUB_ACTION_PATH/pytest.ini" --rootdir . tests --cov

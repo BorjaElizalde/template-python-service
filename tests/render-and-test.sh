@@ -200,16 +200,19 @@ ci_step_of() {  # ci_step_of <target>: the name of CI's step that runs what make
     test) echo 'Run tests with pytest' ;;
   esac
 }
-# ci_fails_at <target> [<file> <content>]: CI fails the project, with the file holding the content
-# if one is given, at the step that runs what make <target> runs.
+# ci_fails_at <target> <command...>: the command, ci or ci_with, fails at the step that runs what
+# make <target> runs.
 ci_fails_at() {
   local failed
-  failed="$(if [ $# -eq 3 ]; then ci_with "$2" "$3"; else ci; fi)" && { echo "FAIL CI passed"; return 1; }
+  if failed="$("${@:2}")"; then
+    echo "FAIL CI passed"
+    return 1
+  fi
   [ "$failed" = "$(ci_step_of "$1")" ] || { echo "FAIL CI failed at $failed"; return 1; }
 }
 expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
 fails_both() {  # fails_both <target> <file> <content>: make <target> fails the file, and so does CI's step for it
-  fails_with "$2" "$3" "$1" && ci_fails_at "$@"
+  fails_with "$2" "$3" "$1" && ci_fails_at "$1" ci_with "$2" "$3"
 }
 passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
   make_with "$1" "$2" gate && ci_with "$1" "$2"
@@ -238,7 +241,7 @@ relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the comman
   return "$status"
 }
 local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's step for it fails it
-  make_with "$2" "$3" "$1" && ci_fails_at "$@"
+  make_with "$2" "$3" "$1" && ci_fails_at "$1" ci_with "$2" "$3"
 }
 ISINSTANCE='def k(x: int) -> bool:\n    return isinstance(x, int)\n'
 expect "a no-op typecheck target in python.mk relaxes make typecheck, not CI" \
@@ -263,26 +266,20 @@ expect "make lint-check and CI check ruff's rules for the template's Python vers
 expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
   relaxed pyproject.toml 'extends = "basedpyright.base.json"' 'extends = "basedpyright.base.json"\nreportUnnecessaryIsInstance = false' \
   local_only typecheck app/isinstance.py "$ISINSTANCE"
-baselined() {  # baselined <file> <content>: runs local_only typecheck while basedpyright's baseline lists the file's errors
+with_baseline() {  # with_baseline <file> <content> <command...>: runs the command while basedpyright's baseline lists the file's errors
   printf '%b' "$2" >"$D/$1"
   (cd "$D" && uv run basedpyright --writebaseline) >/dev/null 2>&1
-  local_only typecheck "$1" "$2"
+  rm "$D/$1"
+  "${@:3}"
   local status=$?
   rm -r "$D/.basedpyright"
   return "$status"
 }
-expect "a basedpyright baseline relaxes typecheck, not CI" baselined app/isinstance.py "$ISINSTANCE"
+expect "a basedpyright baseline relaxes typecheck, not CI" \
+  with_baseline app/isinstance.py "$ISINSTANCE" local_only typecheck app/isinstance.py "$ISINSTANCE"
 WARNS='import warnings\n\n\ndef test_warns():\n    warnings.warn("old", DeprecationWarning, stacklevel=1)\n'
 expect "a filterwarnings in pyproject.toml relaxes test, not CI" \
   relaxed pyproject.toml 'filterwarnings = ["error"]' 'filterwarnings = ["ignore"]' local_only test tests/test_warns.py "$WARNS"
-pytest_settings_linked_to_null() {  # CI's pytest fails a warning while the project commits CI's settings path as a link to /dev/null
-  ln -s /dev/null "$D/.pytest-ci.ini"
-  ci_fails_at test tests/test_warns.py "$WARNS"
-  local status=$?
-  rm -f "$D/.pytest-ci.ini"
-  return "$status"
-}
-expect "a committed .pytest-ci.ini that links to /dev/null leaves CI's pytest settings in place" pytest_settings_linked_to_null
 
 # Both gates check every Python file in the repository, not only the package: in a second
 # top-level folder, each tool fails the file that breaks its rule, and only its rule.
@@ -377,7 +374,7 @@ expect "a project with no tests/ passes make gate, which says it skipped pytest"
 expect "CI's checks pass a project with no tests/" ci
 mkdir "$D/tests"
 expect "make gate fails a project with an empty tests/" bash -c "! make -s -C '$D' gate"
-expect "CI's checks fail a project with an empty tests/, at pytest" ci_fails_at test
+expect "CI's checks fail a project with an empty tests/, at pytest" ci_fails_at test ci
 rm -r "$D/tests"
 mv "$OUT/tests" "$D/tests"
 
