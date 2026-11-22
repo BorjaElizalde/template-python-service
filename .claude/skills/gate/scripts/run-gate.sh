@@ -6,8 +6,8 @@
 #   0  "Gate: PASS", the tree, the duration and the log's last 8 lines; the log is removed
 #   n  "Gate: FAIL (exit <n>)", the tree, the kept log's path and its last 80 lines, where n is
 #      make's exit status, 2 when a recipe fails
-#   2  usage, outside a Git worktree, or the tree can't be read; a failed gate keeps its status
-# So exit 2 alone can't tell a usage error from a failed gate: the first line printed does.
+#   2  outside a Git worktree, or the tree can't be read
+# So exit 2 alone can't tell these from a failed gate: the first line printed does.
 set -u -o pipefail
 
 gate_repo=$(git rev-parse --show-toplevel 2>/dev/null) || {
@@ -33,17 +33,8 @@ tree_fingerprint() {
 }
 
 if [[ "${1:-}" == "--fingerprint" ]]; then
-  if [[ $# -ne 1 ]]; then
-    printf 'Usage: %s [--fingerprint]\n' "$0" >&2
-    exit 2
-  fi
   tree_fingerprint
   exit
-fi
-
-if [[ $# -ne 0 ]]; then
-  printf 'Usage: %s [--fingerprint]\n' "$0" >&2
-  exit 2
 fi
 
 gate_tmp_root=${TMPDIR:-/tmp}
@@ -52,12 +43,7 @@ gate_started=$(date +%s)
 make gate >"$gate_log" 2>&1
 gate_status=$?
 gate_finished=$(date +%s)
-if ! gate_tree=$(tree_fingerprint); then
-  printf 'Gate: FAIL (fingerprint unavailable)\nLog: %s\n' "$gate_log" >&2
-  tail -n 80 "$gate_log"
-  [[ $gate_status -ne 0 ]] && exit "$gate_status"
-  exit 2
-fi
+gate_tree=$(tree_fingerprint) || exit 2
 
 if [[ $gate_status -eq 0 ]]; then
   printf 'Gate: PASS\nTree: %s\nDuration: %ss\n' \

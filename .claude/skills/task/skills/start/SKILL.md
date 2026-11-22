@@ -1,12 +1,11 @@
 ---
 name: start
 description: Use to start, open or resume the session of any task or subagent — a new task, or an existing issue with or without a worktree or a session. Finds or creates the issue, creates or reuses its worktree, and opens, resumes or brings forward its session. Also use to park, release or link an issue, and to plan a backlog.
-allowed-tools: Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh issue create:*), Bash(gh issue edit:*), Bash(bash:*)
+allowed-tools: Bash(bash:*)
 ---
 
 Every subagent session belongs to one issue in BorjaElizalde/template-python-service and works in its own worktree,
-research tasks included: the worktree is the agent's workspace for notes, test runs and drafts.
-The same steps start a new task and pick up an existing one.
+research tasks included. The same steps start a new task and pick up an existing one.
 
 1. Find the issue. Given a number, use it. Otherwise search the open issues with
    `gh issue list -R BorjaElizalde/template-python-service --state open --search "<keywords>"` and reuse one that
@@ -27,9 +26,7 @@ The same steps start a new task and pick up an existing one.
 3. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" start <n> <type>`. Before anything else, it
    refuses a type it does not know, and an issue that must wait (see below), naming its open
    blocker or the reason it is parked: tell the owner, and start nothing in its place. Otherwise
-   it first runs `task.sh cleanup`, which finishes every task whose issue is closed, as a bare
-   `/task:finish` does, then prints the status line of every other task, with no backlog. Then it
-   picks up what the issue already has:
+   it picks up what the issue already has:
    - its worktree, else its branch (left without a worktree, or pushed from another clone), else
      a new branch from `origin/develop`;
    - its running session, never opened twice, else its last session, resumed, else a new one, in
@@ -86,7 +83,7 @@ scratchpad, `/tmp` or `/private/tmp` path: a restart wipes them, and a consumer 
 task's input files that way. What a task needs goes in the issue, or the task rebuilds it.
 
 Before you write an issue, or a comment written the same way, read
-`.claude/published-text-clarity.md`, and write the text as it says.
+`.claude/rules/writing.md`, and write the text as it says.
 
 ## Issues that must wait
 

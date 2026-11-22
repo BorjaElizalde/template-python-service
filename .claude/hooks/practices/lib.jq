@@ -9,8 +9,6 @@ def lines: split("\n");
 def new_file($old_file):
   .tool_input as $t
   | if ($t.content | type) == "string" then $t.content
-    elif ($t.edits | type) == "array" then
-      reduce $t.edits[] as $e ($old_file; split($e.old_string) | join($e.new_string))
     elif ($t.old_string // "") == "" then $t.new_string // ""
     else $old_file | split($t.old_string) | join($t.new_string // "")
     end;

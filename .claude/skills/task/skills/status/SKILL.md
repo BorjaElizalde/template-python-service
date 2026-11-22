@@ -1,23 +1,20 @@
 ---
 name: status
 description: Use when the owner asks for the status of the tasks, in words or with /task:status, and in the first reply after a session start in the main checkout. Runs the cleanup and the status, acts on each task that needs it, and answers with one card per task, then the backlog's ready, blocked and parked issues.
-allowed-tools: Bash(bash:*), Bash(gh issue view:*)
+allowed-tools: Bash(bash:*)
 ---
 
 1. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" cleanup`, then
-   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" status`. The status lists every open issue once.
-   Under In progress, it prints one line per task: `design mode` for a design task, its session,
-   its newest PR with that PR's checks, and when the session last wrote. Then come Ready, Blocked,
-   with the open issues each waits on, and Parked, with each reason; a parked line also names an
-   open blocker.
+   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" status`. The status lists every open issue once:
+   one line per task under In progress, then the rest under Ready, Blocked and Parked.
 2. Read each task's issue with `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`,
    for its goal and any `Owner steps` comment, and the last message of each session that is idle or
    waiting.
 3. A line that ends in `needs attention` asks for a move. Make it by the first case that fits, and
    give the task's card its mark:
-   - a design task, waiting, or idle with a question in its last message: the question is the
-     owner's, who answers it in its tmux window, `#<n>`.
-     Never answer it for the owner, and never send the session back to work past it. ✋
+   - a design task idle with a question in its last message: the question is the owner's, who
+     answers it in its tmux window, `#<n>`. Never answer it for the owner, and never send the
+     session back to work past it. ✋
    - idle, PR open and checks passed: review the PR; the owner merges it. 👀
    - checks failed: send the session back to work with SendMessage, saying what failed. ⏳
    - idle, PR draft: its review steps have not ended, and it marks the PR ready when they do.

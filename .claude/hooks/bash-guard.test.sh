@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
     -R|--repo) repo="$2"; shift ;;
     --json|--jq) shift ;;
     -*) ;;
-    *) [ -n "$pr" ] || pr="$1" ;;
+    *) [ -n "$pr" ] || pr="${1##*/}" ;;
   esac
   shift
 done
@@ -128,54 +128,56 @@ echo "-- other reliable blocks"
 t 2 "rm -rf root"                      'rm -rf /'
 t 2 "rm -rf home"                      'rm -rf ~'
 t 2 "rm -rf \$HOME"                    "rm -rf \$HOME"
+t 2 "rm -rf quoted \$HOME"             "rm -rf \"\$HOME\""
+t 2 "rm -rf \${HOME}"                  "rm -rf \${HOME}"
+t 2 "rm -rf everything under root"     'rm -rf /*'
+t 2 "rm -rf everything under home"     'rm -rf ~/*'
 t 0 "rm -rf a folder under \$HOME"     "rm -rf \$HOME/build"
+t 0 "rm -rf a quoted folder under \$HOME" "rm -rf \"\$HOME/build\""
 t 2 "reset hard origin main"           'git reset --hard origin/main'
+t 2 "reset hard after -C"              'git -C x reset --hard origin/main'
 t 2 "switch existing branch"           'git switch develop'
+t 2 "switch after -c"                  'git -c x=y switch main'
 
-echo "-- merges into protected branches (PR 11 feat→develop, 12 develop→staging, 13 staging→main,"
-echo "   14 fix→feat, 15 feat→main, unnamed = the current branch's PR, fix→feat)"
+echo "-- a command that bash -c, sh -c or eval runs is checked as if sent on its own"
+t 2 "bash -c merge"                    'bash -c "gh pr merge 12 --squash"'
+t 2 "sh -c push"                       'sh -c "git push origin main"'
+t 2 "eval push"                        'eval "git push origin main"'
+t 2 "bash -c in bash -c"               "bash -c \"bash -c 'git push origin main'\""
+t 0 "bash -c of an allowed command"    'bash -c "git status"'
+t 0 "bash -c commit whose msg names a push" 'bash -c "git commit -m \"a; git push origin main\""'
+
+echo "-- merges: only 'gh pr merge <pr> --merge' and 'gh pr merge <n> --squash --match-head-commit"
+echo "   <sha>' (PR 11 feat→develop, 12 develop→staging, 13 staging→main, 14 fix→feat, 15 feat→main)"
 t 2 "feature PR into develop"          'gh pr merge 11 --merge'
-t 2 "feature PR into main"             'gh pr merge 15 --squash'
-t 2 "auto-merge into develop"          'gh pr merge --auto --merge 11'
+t 2 "feature PR into main"             "gh pr merge 15 --squash --match-head-commit $H"
 t 2 "after cd"                         'cd /tmp && gh pr merge 11 --merge'
-t 2 "quoted subject is not the PR"     'gh pr merge --subject "Merge 14" 11 --merge'
-t 2 "promotion squashed"               'gh pr merge 12 --squash'
-t 2 "promotion rebased"                'gh pr merge 13 --rebase'
-t 2 "promotion with no strategy"       'gh pr merge 12'
+t 2 "promotion squashed"               "gh pr merge 12 --squash --match-head-commit $H"
 t 2 "PR not found"                     'gh pr merge 99 --merge'
+t 2 "another form, into a feature branch" 'gh pr merge 14 --squash -d'
+t 2 "another form, no strategy"        'gh pr merge 12'
+t 2 "another form, a flag before pr"   'gh -R o/r pr merge 12 --merge'
 t 2 "REST merge route"                 'gh api -X PUT repos/o/r/pulls/14/merge'
 t 2 "GraphQL merge mutation"           "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'"
 t 0 "promotion develop→staging"        'gh pr merge 12 --merge'
-t 0 "promotion staging→main, -md"      'gh pr merge 13 -md'
-t 0 "stacked PR into a feature branch" 'gh pr merge 14 --squash -d'
-t 0 "current branch's stacked PR"      'gh pr merge --merge'
+t 0 "promotion staging→main"           'gh pr merge 13 --merge'
+t 0 "promotion named by its URL"       'gh pr merge https://github.com/acme/app/pull/12 --merge'
+t 0 "stacked PR into a feature branch" "gh pr merge 14 --squash --match-head-commit $H"
 t 0 "PR lookup only"                   'gh pr view 11'
 t 0 "REST read of merge state"         'gh api repos/o/r/pulls/11/merge'
 t 0 "msg mentions a merge"             'git commit -m "gh pr merge 11"'
 t 0 "local merge into a feature branch" 'git merge origin/develop'
 t 2 "without agent_merges, a green pinned squash is still the owner's" "gh pr merge 21 --squash --match-head-commit $H"
-# A short-flag cluster is read as gh reads it: a letter that takes a value takes the rest.
-t 2 "promotion squashed, an m in an attached subject"   'gh pr merge 12 --squash -tmessage'
-t 2 "promotion given two strategies"                    'gh pr merge 12 --merge --squash'
-t 0 "promotion with -m and an attached subject"         'gh pr merge 12 -m -tsubject'
-t 0 "promotion with --merge=true"                       'gh pr merge 12 --merge=true'
-t 2 "promotion with --merge=false"                      'gh pr merge 12 --merge=false'
 
 echo "-- agent_merges: the agent's own PR into develop, squashed, pinned to a head whose every check"
 echo "   passed with gate among them (PR 21 green; 22 gate running; 23 no gate; 24 a check failed;"
 echo "   25 a status pending; 26 no checks; 27 a check completed with no conclusion;"
 echo "   28 develop moved on after its checks passed; 16 bugfix→staging)"
 t_on 0 "own green PR, squash, pinned head"   "gh pr merge 21 --squash --match-head-commit $H"
-t_on 0 "pin given with ="                    "gh pr merge 21 --squash --match-head-commit=$H"
-t_on 0 "short -s in a cluster with -d"       "gh pr merge 21 -sd --match-head-commit $H"
-t_on 0 "own repo named with -R, any case"    "gh pr merge 21 -R Acme/App --squash --match-head-commit $H"
 t_on 0 "promotion still passes"              'gh pr merge 12 --merge'
-t_on 2 "no pin"                              'gh pr merge 21 --squash'
 t_on 2 "pin to another commit"               'gh pr merge 21 --squash --match-head-commit 2222222222222222222222222222222222222222'
-t_on 2 "a merge commit into develop"         "gh pr merge 21 --merge --match-head-commit $H"
-t_on 2 "a rebase into develop"               "gh pr merge 21 --rebase --match-head-commit $H"
+t_on 2 "a merge commit into develop"         'gh pr merge 21 --merge'
 t_on 2 "--auto"                              "gh pr merge 21 --squash --auto --match-head-commit $H"
-t_on 2 "--admin"                             "gh pr merge 21 --squash --admin --match-head-commit $H"
 t_on 2 "gate still running"                  "gh pr merge 22 --squash --match-head-commit $H"
 t_on 2 "no gate among the checks"            "gh pr merge 23 --squash --match-head-commit $H"
 t_on 2 "a check failed"                      "gh pr merge 24 --squash --match-head-commit $H"
@@ -184,7 +186,6 @@ t_on 2 "no checks at all"                    "gh pr merge 26 --squash --match-he
 # An empty conclusion is not a pass, even on a check that says it completed.
 t_on 2 "a check completed with no conclusion" "gh pr merge 27 --squash --match-head-commit $H"
 t_on 2 "a failed up-to-date status, though the checks passed" "gh pr merge 28 --squash --match-head-commit $H"
-t_on 2 "another repository named with -R"    "gh pr merge 21 -R other/app --squash --match-head-commit $H"
 t_on 2 "another repository after cd"         "cd $STUB/other && gh pr merge 21 --squash --match-head-commit $H"
 t_on 2 "bugfix into staging stays the owner's" "gh pr merge 16 --squash --match-head-commit $H"
 t_on 2 "feature into main stays the owner's" "gh pr merge 15 --squash --match-head-commit $H"
@@ -192,26 +193,16 @@ t_on 2 "a squashed promotion still blocks"   "gh pr merge 12 --squash --match-he
 t_on 2 "REST merge route still blocks"       'gh api -X PUT repos/acme/app/pulls/21/merge'
 guard_case "$STUB/on-ssh/.claude/hooks/bash-guard.sh" 0 "own repo from an ssh origin" "gh pr merge 21 --squash --match-head-commit $H"
 guard_case "$STUB/on-no-origin/.claude/hooks/bash-guard.sh" 2 "no origin, so no own repository" "gh pr merge 21 --squash --match-head-commit $H"
-says "--match-head-commit $H" "a missing pin names the head to pin" 'gh pr merge 21 --squash'
+says "--match-head-commit <sha>', word for word" "a merge in another form names the two forms" 'gh pr merge 21 --squash'
 says "a-check-not-passed" "a failed check is named in the verdict" "gh pr merge 24 --squash --match-head-commit $H"
 says "a-check-not-passed" "a check with no conclusion is named in the verdict" "gh pr merge 27 --squash --match-head-commit $H"
-says "only its own repository" "another repository is named as not this project's" "gh pr merge 21 -R other/app --squash --match-head-commit $H"
-t_on 2 "a rebase whose attached subject holds an s"     "gh pr merge 21 -r -tsubject --match-head-commit $H"
-t_on 2 "a squash and a rebase both"                     "gh pr merge 21 --squash --rebase --match-head-commit $H"
-t_on 2 "--squash=false"                                 "gh pr merge 21 --squash=false --rebase --match-head-commit $H"
-t_on 0 "-s, then an attached subject"                   "gh pr merge 21 -s -tmessage --match-head-commit $H"
-t_on 0 "-st, the subject the next word"                 "gh pr merge 21 -st subject --match-head-commit $H"
-t_on 0 "--squash=true"                                  "gh pr merge 21 --squash=true --match-head-commit $H"
-t_on 2 "another repository attached to -R"              "gh pr merge 21 -Rother/app --squash --match-head-commit $H"
-t_on 2 "another repository in an -sR cluster"           "gh pr merge 21 -sR other/app --match-head-commit $H"
-t_on 2 "--auto=true"                                    "gh pr merge 21 --squash --auto=true --match-head-commit $H"
-t_on 0 "--auto=false"                                   "gh pr merge 21 --squash --auto=false --match-head-commit $H"
-t_on 2 "--admin=1"                                      "gh pr merge 21 --squash --admin=1 --match-head-commit $H"
+says "only its own repository" "another repository is named as not this project's" "cd $STUB/other && gh pr merge 21 --squash --match-head-commit $H"
 
 echo "-- skipping the commit hooks (must block)"
 t 2 "commit --no-verify"               'git commit --no-verify -m "x"'
 t 2 "commit -n"                        'git commit -n -m "x"'
 t 2 "commit -nm cluster"               'git commit -nm "x"'
+t 2 "-c before commit --no-verify"     'git -c user.name=z commit --no-verify -m x'
 t 2 "SKIP env on commit"               'SKIP=lint git commit -m "x"'
 t 2 "quoted SKIP env on commit"        'SKIP="lint" git commit -m "x"'
 t 2 "HUSKY=0 on commit"                'HUSKY=0 git commit -m "x"'

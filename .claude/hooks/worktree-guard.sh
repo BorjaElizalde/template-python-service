@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# PreToolUse(Edit|Write|MultiEdit) worktree guard — language-agnostic:
+# PreToolUse(Edit|Write) worktree guard — language-agnostic:
 #   refuse to edit tracked source in the PRIMARY working tree (the main checkout),
 #   on ANY branch. All feature work belongs in a linked worktree under
 #   WORKTREE_ROOT (../agentic.conf) — branching off in the main checkout and editing
