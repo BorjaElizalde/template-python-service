@@ -1,0 +1,10 @@
+# From the python-service template: change the template, not this copy.
+# CI's secret scan, which gate.sh runs: the commit hook's gitleaks, at the same commit, with an
+# entry that scans every commit HEAD holds instead of what a commit stages. gitleaks's default
+# --all would also scan every other branch the unshallow fetch brings.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      - id: gitleaks
+        entry: gitleaks git --redact --verbose --log-opts=HEAD

@@ -17,6 +17,12 @@ grep -Eq "^[[:space:]]*extend[[:space:]]*=[[:space:]]*[\"']ruff\\.base\\.toml[\"
   fail pyproject.toml "[tool.ruff] no longer extends ruff.base.toml, the rules CI checks."
 
 uv sync --all-groups
+# The secret scan reads every commit, so a secret a later commit deletes still fails it. CI's
+# checkout holds one commit, so the rest of the history comes first.
+if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+  git fetch --quiet --unshallow
+fi
+uv run pre-commit run --config "$HERE/gitleaks-history.pre-commit.yaml" --all-files
 uv run ruff check .
 uv run ruff format --check .
 # basedpyright resolves a config's paths from that file's folder, so CI's config sits at the root
