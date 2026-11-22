@@ -179,7 +179,6 @@ expect "make typecheck and CI check types in basedpyright's recommended mode" \
   fails_both typecheck app/explicit_any.py "$EXPLICIT_ANY"
 expect "a call made only for its effect passes make gate and CI" \
   passes_both app/effect.py 'def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n'
-CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 # The secrets are made at run time, so this file holds none for a scanner to find.
 TOKEN="ghp_$(od -An -tx1 -N18 /dev/urandom | tr -d ' \n')"
 PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n$(head -c 900 /dev/urandom | base64)\n-----END RSA PRIVATE KEY-----\n"
@@ -207,6 +206,7 @@ relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the comman
 local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's checks fail it
   make_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
 }
+CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 expect "a no-op typecheck target in python.mk relaxes make gate, not CI" \
   relaxed python.mk 'uv run basedpyright' 'true' local_only gate app/cast.py "$CAST"
 expect "a rule dropped from the project's ruff.base.toml relaxes lint-check, not CI" \
@@ -238,11 +238,28 @@ expect "basedpyright.base.json's exclude is what keeps the notebook out of typec
 cp "$D/pyproject.toml" "$D/uv.lock" "$OUT/"
 (cd "$D" && uv add --quiet sqlalchemy alembic)
 mkdir -p "$D/database/versions"
-REVISION='"""add a price\n\nRevision ID: b2c3\nRevises:\n"""\n\nfrom collections.abc import Sequence\n
-import sqlalchemy as sa\nfrom alembic import op\n\nrevision: str = "b2c3"
-down_revision: str | Sequence[str] | None = None\n\n\ndef upgrade() -> None:
-    op.create_table("price", sa.Column("amount", sa.Double(), nullable=False))\n\n
-def downgrade() -> None:\n    op.drop_table("price")\n'
+REVISION='"""add a price
+
+Revision ID: b2c3
+Revises:
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "b2c3"
+down_revision: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table("price", sa.Column("amount", sa.Double(), nullable=False))
+
+
+def downgrade() -> None:
+    op.drop_table("price")
+'
 expect "an Alembic revision passes make gate and CI" passes_both database/versions/b2c3_add_a_price.py "$REVISION"
 expect "basedpyright checks an Alembic revision, locally and in CI" \
   fails_both typecheck database/versions/b2c3_add_a_price.py "${REVISION/drop_table/drop_tabel}"
