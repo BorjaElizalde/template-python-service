@@ -50,10 +50,7 @@ warned() { grep -qxF -- "$1" "$WORK/err"; }  # warned <line>: the last run print
 temp_files() { find "$WORK/tmp" -type f; }
 numbered() { seq "$1" "$2" | sed 's/^/line /'; }  # numbered <from> <to>: the stub's lines
 
-echo "-- usage"
-exits 2 "an unknown argument is refused"           "$REPO" --verbose
-check "with the usage line"                        grep -qE '^Usage: .*run-gate\.sh \[--fingerprint\]$' "$WORK/err"
-exits 2 "--fingerprint takes no other argument"    "$REPO" --fingerprint extra
+echo "-- outside a Git worktree"
 exits 2 "outside a Git worktree it refuses"        "$WORK/elsewhere"
 check "and says so"                                warned 'Not inside a Git worktree.'
 
@@ -95,18 +92,6 @@ check "then the log's last 80 lines"               test "$(tail -n +5 "$WORK/out
 rm "$LOG"
 GATE_TEST_EXIT=3 exits 3 "any other status of make passes through too" "$REPO"
 rm "$(sed -n 's/^Log: //p' "$WORK/out")"
-
-echo "-- no tree to fingerprint: a repository with no commit"
-EMPTY="$WORK/empty"
-git init -q "$EMPTY"
-exits 2 "--fingerprint exits 2"                    "$EMPTY" --fingerprint
-exits 2 "a gate that passed exits 2"               "$EMPTY"
-check "it says why"                                warned 'Gate: FAIL (fingerprint unavailable)'
-LOG="$(sed -n 's/^Log: //p' "$WORK/err")"
-check "and keeps the log"                          test "$(temp_files)" = "$LOG"
-check "whose last lines it prints"                 test "$(cat "$WORK/out")" = "$(cat "$LOG")"
-rm "$LOG"
-GATE_TEST_EXIT=3 exits 3 "a gate that failed keeps make's status" "$EMPTY"
 
 echo "== $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

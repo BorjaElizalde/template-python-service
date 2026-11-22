@@ -1,7 +1,7 @@
 ---
 name: finish
 description: Use when a task is done — closes its issue once the result is delivered, closes its session, and removes its worktree and branches. With no task named, finishes every task whose issue is closed.
-allowed-tools: Bash(gh issue view:*), Bash(gh issue close:*), Bash(gh pr list:*), Bash(bash:*)
+allowed-tools: Bash(gh issue close:*), Bash(bash:*)
 ---
 
 Run this from the main checkout's session, never from the task's own session: it closes that

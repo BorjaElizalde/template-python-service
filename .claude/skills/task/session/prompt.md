@@ -17,6 +17,5 @@ that opened or resumed this session names. Never escalate to the owner: the orch
 each escalation or brings it to the owner. When no orchestrator is named or the send fails, the
 task waits on the escalation: say it in your last message, and stop.
 
-Your worktree is your workspace: keep notes, test runs and drafts there. A result counts only once
-it is in the PR or posted on the issue, because `/task:finish` deletes the worktree, gitignored
-files included.
+A result counts only once it is in the PR or posted on the issue: `/task:finish` removes your
+worktree, and refuses while it holds an untracked file. So leave none there when you stop.
