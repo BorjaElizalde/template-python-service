@@ -104,7 +104,7 @@ def makefile_findings($ctx):
 # The line indexes of each statement that sets collect_ignore or collect_ignore_glob, which list
 # the paths pytest leaves out of collection: from the line that names one to the line that closes
 # its brackets. Each form that adds a path starts its statement with the name.
-def ignore_statements($lines):
+def collect_ignore_statements($lines):
   def open_brackets: (gsub("[^\\[({]"; "") | length) - (gsub("[^\\])}]"; "") | length);
   reduce range(0; $lines | length) as $at ({depth: 0, out: []};
     ($lines[$at] | unquoted_code) as $code
@@ -114,15 +114,20 @@ def ignore_statements($lines):
       else . end)
   | .out;
 
+def sets_empty_list: unquoted_code | test("=\\s*\\[\\s*\\]\\s*$");
+
+# A statement's line that holds a path or a name, not only a comment or a closing bracket.
+def holds_entry: unquoted_code | test("[\\w\"']");
+
 # A statement whose first line the edit adds gives one reason, on that line or above it; an entry
-# added to an older statement gives its own. An empty list, a comment or a closing bracket needs
-# none: basedpyright wants `collect_ignore: list[str] = []` before a path is appended.
+# added to an older statement gives its own. An empty list needs none: basedpyright wants
+# `collect_ignore: list[str] = []` before a path is appended.
 def conftest_findings($ctx):
   [$ctx.added[].at] as $added
-  | ignore_statements($ctx.new)[]
-  | select($ctx.new[.[0]] | unquoted_code | test("=\\s*\\[\\s*\\]\\s*$") | not)
+  | collect_ignore_statements($ctx.new)[]
+  | select($ctx.new[.[0]] | sets_empty_list | not)
   | if .[0] | IN($added[]) then .[0] else .[1:][] | select(IN($added[])) end
-  | select($ctx.new[.] | unquoted_code | test("[\\w\"']"))
+  | select($ctx.new[.] | holds_entry)
   | {text: "added `\($ctx.new[.] | short)`", at: .};
 
 def reason_on_own_lines($ctx): [$ctx.added[].line | select(test("^\\s*#"))] | join("\n") | reason_form;
