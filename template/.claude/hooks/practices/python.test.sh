@@ -338,6 +338,9 @@ edit_in 2 "tests selected by name, at the start of a multi-line string's line" "
 edit_in 2 "tests selected by mark"        "$PY" "$BASE" 'addopts = "-v"' "addopts = \"-v -m 'not slow'\""
 edit_in 2 "tests selected by mark, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-m", "not slow"]'
 edit_in 2 "tests selected by mark, glued to its -m" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -mslow"'
+edit_in 2 "tests selected by mark, -m after a flag" "$PY" "$BASE" 'addopts = "-v"' "addopts = \"-vm 'not slow'\""
+edit_in 2 "tests selected by name, -k after a flag" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-xk", "smoke"]'
+edit_in 0 "report chars that hold m" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -rm"'
 edit_in 2 "tests only collected, --co"    "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "--co"]'
 edit_in 2 "tests only collected, --collect-only" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --collect-only"'
 edit_in 2 "tests only collected, --collectonly" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --collectonly"'
@@ -392,6 +395,9 @@ edit_in R "entry added to an older list, reason above the entry" "$CONF" "$LIST"
   $'    "legacy",\n    # slow needs a GPU. '"$TRIED"$'\n    "slow",'
 edit_in 0 "fixture edited beside an older collect_ignore" "$CONF" \
   $'collect_ignore = ["legacy"]\n\n\ndef client():\n    return 1\n' '    return 1' '    return 2'
+write 0 "collect_ignore set to an empty list" "$CONF" '' $'collect_ignore: list[str] = []\n'
+write R "empty list, then a path appended with its reason" "$CONF" '' \
+  $'import sys\n\ncollect_ignore: list[str] = []\nif sys.platform == "win32":\n    # posix needs fork.\n    # '"$TRIED"$'\n    collect_ignore.append("posix")\n'
 edit 0 "collect_ignore only read" "$CONF" '    return 1' '    return ", ".join(collect_ignore)'
 write 0 "collect_ignore outside a conftest.py" "$APP" '' $'collect_ignore = ["legacy"]\n'
 

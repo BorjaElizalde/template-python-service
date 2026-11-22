@@ -39,7 +39,8 @@ def opens_select:
 # An addopts line that turns a pytest plugin off: a list item can hold `no:x` apart from its `-p`.
 def plugin_off: has("-p\\s*no:|(^|[\\s\"'])no:");
 
-def drops_tests: has("(^|[\\s\"'])-[km]|--deselect|--ignore");
+# pytest reads `-vm slow` as `-v -m slow`: a flag that takes no value can come before `-k` or `-m`.
+def drops_tests: has("(^|[\\s\"'])-[vqslx]*[km]|--deselect|--ignore");
 
 # An addopts line under which pytest only collects the tests, or sets up or plans their fixtures.
 def runs_no_test: has("--(co|collect-?only|setup-?(only|plan))\\b");
@@ -114,10 +115,12 @@ def ignore_statements($lines):
   | .out;
 
 # A statement whose first line the edit adds gives one reason, on that line or above it; an entry
-# added to an older statement gives its own. A comment or a closing bracket needs none.
+# added to an older statement gives its own. An empty list, a comment or a closing bracket needs
+# none: basedpyright wants `collect_ignore: list[str] = []` before a path is appended.
 def conftest_findings($ctx):
   [$ctx.added[].at] as $added
   | ignore_statements($ctx.new)[]
+  | select($ctx.new[.[0]] | unquoted_code | test("=\\s*\\[\\s*\\]\\s*$") | not)
   | if .[0] | IN($added[]) then .[0] else .[1:][] | select(IN($added[])) end
   | select($ctx.new[.] | unquoted_code | test("[\\w\"']"))
   | {text: "added `\($ctx.new[.] | short)`", at: .};
