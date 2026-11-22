@@ -23,6 +23,11 @@ stack's part to the skipped-check rules in `conventions.md`.
   # Tried logging.exception, which BLE001 accepts, but async code logs with await log.aerror.
   except Exception as e:  # noqa: BLE001
   ```
+- CI's ruff, basedpyright, bandit, jscpd and pytest read only CI's own settings. A setting of
+  theirs in `pyproject.toml` or in another settings file of the project's applies to `make gate`
+  only. So an exception set there, such as a ruff `ignore` or `per-file-ignores` entry, passes
+  `make gate` and fails CI. An exception goes in the code: a skipped check on its line, or
+  `# ruff: noqa: <code>` at the top of a file for the whole file
 - The secret scan, gitleaks, skips a finding whose line holds `gitleaks:allow`, in a file of any
   type, and one whose fingerprint `.gitleaksignore` lists. In `.gitleaks.toml`, an entry under
   `commits`, `paths`, `regexes` or `stopwords` skips the findings it matches, one under

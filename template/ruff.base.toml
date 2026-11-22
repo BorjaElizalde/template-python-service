@@ -1,8 +1,10 @@
 # From the python-service template: change the template, not this copy.
-# The ruff settings every service shares. The project's pyproject.toml extends this file and adds
-# its own through extend-select, extend-banned-api, ignore and extend-per-file-ignores; a select
-# or a banned-api there would replace the whole list below.
+# The ruff settings every service shares. CI reads its copy of this file alone. make gate reads it
+# through the project's pyproject.toml, which extends it: a setting added there applies to make
+# gate only, and a select or a banned-api there would replace the whole list below.
 line-length = 100
+# ruff infers no version for a settings file passed with --config, as CI passes its copy.
+target-version = "py314"
 extend-exclude = ["*.ipynb"]
 
 [lint]

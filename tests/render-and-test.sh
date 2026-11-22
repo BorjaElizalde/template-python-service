@@ -153,26 +153,73 @@ expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED
 CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 expect "lint-check applies the base's ban on typing.cast" fails_with app/cast.py "$CAST" lint-check
 
-# CI's checks call each tool directly with CI's own copy of the shared settings, so a change that
-# relaxes the local gate, or the project's copies of the settings, can't relax them.
+# CI's checks call each tool directly with CI's own settings, so no edit outside .github can relax
+# them: not one to the local gate, to the project's copies of the shared settings, or to a tool's
+# own settings file.
 CI="$D/.github/actions/stack-gate"
 expect "the CI action is a valid action" uvx --quiet check-jsonschema --builtin-schema vendor.github-actions "$CI/action.yaml"
 expect "CI's copies of the shared settings match the project's" bash -c "
   cmp -s '$D/ruff.base.toml' '$CI/ruff.base.toml' && cmp -s '$D/basedpyright.base.json' '$CI/basedpyright.base.json' &&
   cmp -s '$D/.jscpd.json' '$CI/.jscpd.json'"
-ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds the content
+# The action's run steps, as {name, run}, in the order CI runs them.
+STEPS="$(uvx --quiet yq -c '[.runs.steps[] | select(.run) | {name, run}]' "$CI/action.yaml")"
+step_scripts_pass_shellcheck() {
+  local i
+  for ((i = 0; i < $(jq length <<<"$STEPS"); i++)); do
+    jq -r ".[$i].run" <<<"$STEPS" | uvx --quiet --from shellcheck-py shellcheck -s bash -f gcc - || return 1
+  done
+}
+expect "shellcheck passes the script of each CI step" step_scripts_pass_shellcheck
+# ci: runs CI's steps on what a commit would hold, each in its own bash as GitHub runs it, and stops
+# at the first that fails, whose name it prints. It stages the project for the steps that read git's
+# files, and removes the files the steps write.
+ci() {
+  local i status=0
+  git -C "$D" add -A
+  for ((i = 0; i < $(jq length <<<"$STEPS"); i++)); do
+    (cd "$D" && GITHUB_ACTION_PATH="$CI" RUNNER_TEMP="$OUT" bash --noprofile --norc -eo pipefail \
+      -c "$(jq -r ".[$i].run" <<<"$STEPS")") >/dev/null 2>&1 || { jq -r ".[$i].name" <<<"$STEPS"; status=1; break; }
+  done
+  git -C "$D" clean -fq
+  return "$status"
+}
+ci_with() {  # ci_with <file> <content>: runs CI while the file holds the content, committed even if ignored
   printf '%b' "$2" >"$D/$1"
-  (cd "$D" && bash .github/actions/stack-gate/gate.sh) >/dev/null 2>&1
+  git -C "$D" add -f "$1"
+  ci
   local status=$?
   rm "$D/$1"
   return "$status"
 }
+ci_step_of() {  # ci_step_of <target>: the name of CI's step that runs what make <target> runs
+  case $1 in
+    lint-check) echo 'Lint with ruff' ;;
+    typecheck) echo 'Check types with basedpyright' ;;
+    security) echo 'Scan for security issues with bandit' ;;
+    duplication) echo 'Find duplicated code with jscpd' ;;
+    test) echo 'Run tests with pytest' ;;
+  esac
+}
+# ci_fails_at <target> [<file> <content>]: CI fails the project, with the file holding the content
+# if one is given, at the step that runs what make <target> runs.
+ci_fails_at() {
+  local failed
+  failed="$(if [ $# -eq 3 ]; then ci_with "$2" "$3"; else ci; fi)" && { echo "FAIL CI passed"; return 1; }
+  [ "$failed" = "$(ci_step_of "$1")" ] || { echo "FAIL CI failed at $failed"; return 1; }
+}
 expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
-fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
-  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
+fails_both() {  # fails_both <target> <file> <content>: make <target> fails the file, and so does CI's step for it
+  fails_with "$2" "$3" "$1" && ci_fails_at "$@"
 }
 passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
   make_with "$1" "$2" gate && ci_with "$1" "$2"
+}
+with_file() {  # with_file <file> <content> <command...>: runs the command while the file holds the content
+  printf '%b' "$2" >"$D/$1"
+  "${@:3}"
+  local status=$?
+  rm "$D/$1"
+  return "$status"
 }
 # Strict mode passes an explicit Any; recommended warns, and a warning fails the check.
 EXPLICIT_ANY='from typing import Any\n\n\ndef echo(x: Any) -> Any:\n    return x\n'
@@ -190,27 +237,54 @@ relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the comman
   cp "$OUT/relaxed.bak" "$f"
   return "$status"
 }
-local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's checks fail it
-  make_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
+local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's step for it fails it
+  make_with "$2" "$3" "$1" && ci_fails_at "$@"
 }
 ISINSTANCE='def k(x: int) -> bool:\n    return isinstance(x, int)\n'
-expect "a no-op typecheck target in python.mk relaxes make gate, not CI" \
-  relaxed python.mk 'uv run basedpyright' 'true' local_only gate app/isinstance.py "$ISINSTANCE"
+expect "a no-op typecheck target in python.mk relaxes make typecheck, not CI" \
+  relaxed python.mk 'uv run basedpyright' 'true' local_only typecheck app/isinstance.py "$ISINSTANCE"
 expect "a rule dropped from the project's ruff.base.toml relaxes lint-check, not CI" \
   relaxed ruff.base.toml '"ANN",' '' local_only lint-check app/untyped.py "$UNTYPED"
 expect "pyproject.toml that stops extending ruff's base relaxes lint-check, not CI" \
   relaxed pyproject.toml 'extend = "ruff.base.toml"' '' local_only lint-check app/untyped.py "$UNTYPED"
+expect "an ignore in pyproject.toml's ruff settings relaxes lint-check, not CI" \
+  relaxed pyproject.toml 'extend = "ruff.base.toml"' 'extend = "ruff.base.toml"\nlint.ignore = ["ANN"]' \
+  local_only lint-check app/untyped.py "$UNTYPED"
+expect "a ruff.toml relaxes lint-check, not CI" with_file ruff.toml 'extend = "ruff.base.toml"\n\n[lint]\nignore = ["ANN"]\n' \
+  local_only lint-check app/untyped.py "$UNTYPED"
+expect "a committed file that .gitignore lists relaxes lint-check, not CI" \
+  relaxed .gitignore 'build/' 'build/\napp/untyped.py' local_only lint-check app/untyped.py "$UNTYPED"
+expect "a committed file that .ignore lists relaxes lint-check, not CI" \
+  with_file .ignore 'app/untyped.py\n' local_only lint-check app/untyped.py "$UNTYPED"
+# ruff infers no Python version for a settings file passed with --config, and UP040 applies from 3.12.
+TYPE_ALIAS='from typing import TypeAlias\n\nNumber: TypeAlias = int\n'
+expect "make lint-check and CI check ruff's rules for the template's Python version" \
+  fails_both lint-check app/alias.py "$TYPE_ALIAS"
 expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
   relaxed pyproject.toml 'extends = "basedpyright.base.json"' 'extends = "basedpyright.base.json"\nreportUnnecessaryIsInstance = false' \
   local_only typecheck app/isinstance.py "$ISINSTANCE"
+baselined() {  # baselined <file> <content>: runs local_only typecheck while basedpyright's baseline lists the file's errors
+  printf '%b' "$2" >"$D/$1"
+  (cd "$D" && uv run basedpyright --writebaseline) >/dev/null 2>&1
+  local_only typecheck "$1" "$2"
+  local status=$?
+  rm -r "$D/.basedpyright"
+  return "$status"
+}
+expect "a basedpyright baseline relaxes typecheck, not CI" baselined app/isinstance.py "$ISINSTANCE"
+WARNS='import warnings\n\n\ndef test_warns():\n    warnings.warn("old", DeprecationWarning, stacklevel=1)\n'
+expect "a filterwarnings in pyproject.toml relaxes test, not CI" \
+  relaxed pyproject.toml 'filterwarnings = ["error"]' 'filterwarnings = ["ignore"]' local_only test tests/test_warns.py "$WARNS"
 
 # Both gates check every Python file in the repository, not only the package: in a second
 # top-level folder, each tool fails the file that breaks its rule, and only its rule.
 mkdir -p "$D/commons"
-INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
+INSECURE='import hashlib\n\n\ndef digest(data: bytes) -> str:\n    return hashlib.md5(data).hexdigest()\n'
 expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
 expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/isinstance.py "$ISINSTANCE"
 expect "bandit checks a second top-level folder, locally and in CI" fails_both security commons/insecure.py "$INSECURE"
+expect "a .bandit that skips a test relaxes security, not CI" \
+  with_file .bandit '[bandit]\nskips = B324\n' local_only security commons/insecure.py "$INSECURE"
 # The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
 NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
   "source": ["import os\\n", "x: int = None\\n"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
@@ -280,6 +354,10 @@ expect "a block written twice in database/ passes make gate and CI" passes_both 
 rmdir "$D/database"
 expect "a minLines raised in the project's .jscpd.json relaxes duplication, not CI" \
   relaxed .jscpd.json '"minLines": 9' '"minLines": 99' local_only duplication app/copies.py "$COPIES"
+expect "a committed file that .gitignore lists relaxes duplication, not CI" \
+  relaxed .gitignore 'build/' 'build/\napp/copies.py' local_only duplication app/copies.py "$COPIES"
+expect "a committed file that .ignore lists relaxes duplication, not CI" \
+  with_file .ignore 'app/copies.py\n' local_only duplication app/copies.py "$COPIES"
 expect "ruff.base.toml's jscpd task tag is what keeps the markers out of ERA001" \
   relaxed ruff.base.toml ', "jscpd"]' ']' fails_with app/copies.py "$MARKED" lint-check
 
@@ -288,10 +366,10 @@ expect "ruff.base.toml's jscpd task tag is what keeps the markers out of ERA001"
 mv "$D/tests" "$OUT/tests"
 expect "a project with no tests/ passes make gate, which says it skipped pytest" \
   bash -o pipefail -c "make -s -C '$D' gate | grep 'pytest skipped'"
-expect "CI's checks pass a project with no tests/" bash -c "cd '$D' && bash .github/actions/stack-gate/gate.sh"
+expect "CI's checks pass a project with no tests/" ci
 mkdir "$D/tests"
 expect "make gate fails a project with an empty tests/" bash -c "! make -s -C '$D' gate"
-expect "CI's checks fail a project with an empty tests/" bash -c "cd '$D' && ! bash .github/actions/stack-gate/gate.sh"
+expect "CI's checks fail a project with an empty tests/, at pytest" ci_fails_at test
 rm -r "$D/tests"
 mv "$OUT/tests" "$D/tests"
 

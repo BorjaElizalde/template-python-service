@@ -102,7 +102,7 @@ def check($ctx):
       + (if $ctx.rel | endswith(".jscpd.json") then
            ". A copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,"
            + " with its reason (.claude/rules/skipped-checks.md)."
-         else ", or add this project's own settings in pyproject.toml, which extends this file." end))}
+         else ". Where this project's own settings go: .claude/rules/skipped-checks.md." end))}
   else
     [if ($ctx.rel | test("(^|/)(pyproject\\.toml|\\.?ruff\\.toml)$")) then toml_findings($ctx)
      elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
