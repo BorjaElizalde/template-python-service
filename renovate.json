@@ -1,11 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "The Gate workflow comes from template-agentic and takes its action pins from that template's update PR, so Renovate's github-actions manager leaves it alone. The stack-gate action is this repository's own. The pre-commit manager is off by default; it bumps the gitleaks pin in the template's commit hooks.",
+  "description": "The Gate workflow comes from template-agentic and takes its action pins from that template's update PR, so Renovate's github-actions manager leaves it alone. The stack-gate action is this repository's own. The pre-commit manager is off by default; it bumps the gitleaks pin in the template's commit hooks, in pre-commit.base.yaml, which its default file pattern does not match.",
   "extends": ["github>BorjaElizalde/template-agentic//renovate/base"],
   "github-actions": {
     "ignorePaths": [".github/workflows/gate.yaml"]
   },
   "pre-commit": {
-    "enabled": true
+    "enabled": true,
+    "managerFilePatterns": ["/(^|/)pre-commit\\.base\\.yaml$/"]
   }
 }

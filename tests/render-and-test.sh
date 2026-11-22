@@ -262,26 +262,73 @@ mv "$OUT/tests" "$D/tests"
 # The shared pre-commit hooks run the project's own tools, so they read the same base settings.
 git -C "$D" add -A
 expect "pre-commit passes on a new project" bash -c "cd '$D' && uv run pre-commit run --all-files"
-hook_with() {  # hook_with <file> <content> <hook>: runs one hook on the file while it holds the content
+hook_with() {  # hook_with <file> <content> [<pre-commit run argument>...]: runs pre-commit on the file while it holds the content
   printf '%b' "$2" >"$D/$1"
   git -C "$D" add "$1"  # as a commit would: gitleaks reads only what is staged
-  (cd "$D" && uv run pre-commit run "$3" --files "$1") >/dev/null 2>&1
+  (cd "$D" && uv run pre-commit run "${@:3}" --files "$1") >/dev/null 2>&1
   local status=$?
   git -C "$D" rm -qf "$1"
   return "$status"
 }
 fails_hook() { ! hook_with "$@"; }
-# Each hook passes a clean file first: a hook id that names no hook fails too.
-expect "pre-commit's ruff passes a typed file" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' ruff-check
-expect "pre-commit's ruff applies the base's rules" fails_hook app/untyped.py "$UNTYPED" ruff-check
-expect "pre-commit passes a trimmed file" hook_with app/trimmed.py 'x = 1\n' trailing-whitespace
-expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   \n' trailing-whitespace
+# Each template hook passes a clean file first: a hook id that names no hook fails too.
+BASE=(--config pre-commit.base.yaml)
+expect "pre-commit's ruff passes a typed file" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' "${BASE[@]}" ruff-check
+expect "pre-commit's ruff applies the base's rules" fails_hook app/untyped.py "$UNTYPED" "${BASE[@]}" ruff-check
+expect "pre-commit passes a trimmed file" hook_with app/trimmed.py 'x = 1\n' "${BASE[@]}" trailing-whitespace
+expect "pre-commit trims trailing whitespace" fails_hook app/spaced.py 'x = 1   \n' "${BASE[@]}" trailing-whitespace
 # The secrets are made at run time, so this file holds none for a scanner to find.
 TOKEN="ghp_$(od -An -tx1 -N18 /dev/urandom | tr -d ' \n')"
 PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n$(head -c 900 /dev/urandom | base64)\n-----END RSA PRIVATE KEY-----\n"
-expect "pre-commit's gitleaks passes a file with no secret" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' gitleaks
-expect "pre-commit's gitleaks stops a token in a Python file" fails_hook app/settings.py "TOKEN = \"$TOKEN\"\n" gitleaks
-expect "pre-commit's gitleaks stops a private key in a file of another type" fails_hook deploy.pem "$PRIVATE_KEY" gitleaks
+expect "pre-commit's gitleaks passes a file with no secret" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' "${BASE[@]}" gitleaks
+expect "pre-commit's gitleaks stops a token in a Python file" fails_hook app/settings.py "TOKEN = \"$TOKEN\"\n" "${BASE[@]}" gitleaks
+expect "pre-commit's gitleaks stops a private key in a file of another type" fails_hook deploy.pem "$PRIVATE_KEY" "${BASE[@]}" gitleaks
+
+# A commit runs every hook in .pre-commit-config.yaml: the template's, through template-hooks, then
+# the project's own, which go after it.
+OWN_HOOK=('      - id: no-forbidden' '        name: no forbidden word' '        entry: forbidden'
+  '        language: pygrep' '        types: [python]')
+printf '%s\n' "${OWN_HOOK[@]}" >>"$D/.pre-commit-config.yaml"
+expect "a commit's hooks pass a file that none of them rejects" hook_with app/allowed.py 'x = "allowed"\n'
+expect "a commit runs the template's hooks" fails_hook app/untyped.py "$UNTYPED"
+expect "a commit runs the project's own hook" fails_hook app/word.py 'x = "forbidden"\n'
+
+# Copier updates .pre-commit-config.yaml, so a service made while every template hook sat there
+# moves them to pre-commit.base.yaml on its next update. RELEASES holds three releases of the
+# Python layer: v1 with that layout, v2 the current tree, v3 a change to a template hook.
+RELEASES="$OUT/releases"
+mkdir "$RELEASES"
+git -C "$V" archive v0 | tar -xf - -C "$RELEASES"
+git -C "$RELEASES" init -q -b main
+mv "$RELEASES/template/pre-commit.base.yaml" "$RELEASES/template/.pre-commit-config.yaml"
+commit "$RELEASES" v1 && git -C "$RELEASES" tag v1
+git -C "$V" archive v0 template/.pre-commit-config.yaml template/pre-commit.base.yaml | tar -xf - -C "$RELEASES"
+commit "$RELEASES" v2 && git -C "$RELEASES" tag v2
+SERVICE="$OUT/service"
+uvx --quiet copier copy --quiet --defaults --vcs-ref v1 "${PYTHON_ANSWERS[@]}" "$RELEASES" "$SERVICE"
+git -C "$SERVICE" init -q
+# update_with_no_conflict <release>: commits the service as it is, since Copier updates only a clean
+# tree, updates it to the release, and fails if a file holds a conflict marker.
+update_with_no_conflict() {
+  commit "$SERVICE" "before $1" &&
+    (cd "$SERVICE" && uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml --vcs-ref "$1") &&
+    ! grep -rIl --exclude-dir=.git '^<<<<<<< ' "$SERVICE"
+}
+moves_template_hooks() {
+  update_with_no_conflict v2 && cmp -s "$RELEASES/template/.pre-commit-config.yaml" "$SERVICE/.pre-commit-config.yaml" &&
+    cmp -s "$RELEASES/template/pre-commit.base.yaml" "$SERVICE/pre-commit.base.yaml"
+}
+expect "an update moves an older service's template hooks to pre-commit.base.yaml" moves_template_hooks
+BASE_HOOKS="$RELEASES/template/pre-commit.base.yaml"
+sed 's/trailing-whitespace-fixer$/& --markdown-linebreak-ext=md/' "$BASE_HOOKS" >"$OUT/base.yaml"
+mv "$OUT/base.yaml" "$BASE_HOOKS"
+commit "$RELEASES" v3 && git -C "$RELEASES" tag v3
+keeps_own_hook() {
+  printf '%s\n' "${OWN_HOOK[@]}" >>"$SERVICE/.pre-commit-config.yaml" &&
+    update_with_no_conflict v3 && git -C "$SERVICE" diff --quiet HEAD -- .pre-commit-config.yaml &&
+    grep -q 'trailing-whitespace-fixer --markdown-linebreak-ext=md$' "$SERVICE/pre-commit.base.yaml"
+}
+expect "an update that changes a template hook keeps the project's own hook, with no conflict" keeps_own_hook
 
 # The seeded .gitignore keeps secrets and the gate's output out of git; the gate above left both.
 expect "git ignores .env files and what the gate leaves" bash -c "cd '$D' &&
