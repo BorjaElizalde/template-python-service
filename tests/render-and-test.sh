@@ -224,23 +224,30 @@ INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
 expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
 expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/cast.py "$CAST"
 expect "bandit checks a second top-level folder, locally and in CI" fails_both security commons/insecure.py "$INSECURE"
-# The exclusions: a notebook that breaks ruff's and basedpyright's rules passes both gates.
+# The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
 NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
   "source": ["import os\\n", "x: int = None\\n"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
 expect "a bad notebook leaves make gate and CI green" passes_both explore.ipynb "$NOTEBOOK"
 expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
   relaxed ruff.base.toml 'extend-exclude = ["*.ipynb"]' '' fails_with explore.ipynb "$NOTEBOOK" lint-check
 expect "basedpyright.base.json's exclude is what keeps the notebook out of typecheck" \
-  relaxed basedpyright.base.json '"**/*.ipynb", ' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
-# basedpyright also leaves out an Alembic revision, as Alembic writes it once ruff has fixed it.
+  relaxed basedpyright.base.json '"exclude": ["**/*.ipynb"],' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
+
+# Both gates check an Alembic revision against the SQLAlchemy and Alembic the project installs. The
+# revision is as Alembic writes it once ruff has fixed it, and its sa.Double() is Double[Unknown].
+cp "$D/pyproject.toml" "$D/uv.lock" "$OUT/"
+(cd "$D" && uv add --quiet sqlalchemy alembic)
+mkdir -p "$D/database/versions"
 REVISION='"""add a price\n\nRevision ID: b2c3\nRevises:\n"""\n\nfrom collections.abc import Sequence\n
 import sqlalchemy as sa\nfrom alembic import op\n\nrevision: str = "b2c3"
 down_revision: str | Sequence[str] | None = None\n\n\ndef upgrade() -> None:
     op.create_table("price", sa.Column("amount", sa.Double(), nullable=False))\n\n
 def downgrade() -> None:\n    op.drop_table("price")\n'
-mkdir -p "$D/database/versions"
 expect "an Alembic revision passes make gate and CI" passes_both database/versions/b2c3_add_a_price.py "$REVISION"
+expect "basedpyright checks an Alembic revision, locally and in CI" \
+  fails_both typecheck database/versions/b2c3_add_a_price.py "${REVISION/drop_table/drop_tabel}"
 rm -r "$D/database"
+cp "$OUT/pyproject.toml" "$OUT/uv.lock" "$D/"
 
 # Both gates fail a block of 10 lines or more written twice, and only that: every other check
 # passes the same file once its copy sits between the ignore markers. The two returns differ, so
@@ -249,7 +256,7 @@ copy() {  # copy <name> <lines> <returned>: a block of <lines> lines, from the d
   local adds=(amount tax fee tip)
   printf 'def %s(orders: list[dict[str, int]]) -> dict[int, int]:\n' "$1"
   printf '    totals: dict[int, int] = {}\n    for order in orders:\n'
-  printf '        key = order["customer"]\n        totals[key] = totals.get(key, 0)\n'
+  printf '        key = order["customer"]\n        totals.setdefault(key, 0)\n'
   printf '        totals[key] += order["%s"]\n' "${adds[@]:0:$(($2 - 6))}"
   printf '    return %s\n' "$3"
 }
