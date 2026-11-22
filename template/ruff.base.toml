@@ -1,7 +1,7 @@
 # From the python-service template: change the template, not this copy.
 # The ruff settings every service shares. The project's pyproject.toml extends this file and adds
-# its own through extend-select, ignore and extend-per-file-ignores; a select there would replace
-# the whole rule list below.
+# its own through extend-select, extend-banned-api, ignore and extend-per-file-ignores; a select
+# or a banned-api there would replace the whole list below.
 line-length = 100
 extend-exclude = ["*.ipynb"]
 
@@ -20,7 +20,6 @@ select = [
     "BLE001",  # blind except
     "S110",  # try-except-pass
     "S112",  # try-except-continue
-    "RUF100",  # unused noqa
     "G004",  # f-string in a log call
     "PLC2701",  # private name imported from another module
     "B",  # flake8-bugbear
@@ -30,20 +29,30 @@ select = [
     "DTZ",  # flake8-datetimez
     "PGH003",  # blanket type: ignore
     "PGH004",  # blanket noqa
-    "RUF006",  # dangling asyncio task
     "ANN",  # flake8-annotations
     "ARG",  # flake8-unused-arguments
     "SIM",  # flake8-simplify
+    "RUF",  # Ruff-specific rules
+    "TRY",  # tryceratops
+    "RET",  # flake8-return
+    "PIE",  # flake8-pie
+    "C4",  # flake8-comprehensions
+    "FBT",  # flake8-boolean-trap
+    "TID",  # flake8-tidy-imports
 ]
 # ANN401: Any is the honest type where a signature takes or returns whatever a file, a request or
 # a library hands over: JSON and YAML loaders, pydantic before-validators, framework internals that
 # publish no type, and **kwargs forwarded to APIs that take Any themselves.
-# Tried a narrower type, the rule's documented fix, but `object` from a loader needs a cast at
+# Tried a narrower type, the rule's documented fix, but `object` from a loader needs narrowing at
 # every caller, and a framework internal with no published type has nothing narrower to name.
 # Tried allow-star-arg-any, but it clears only the **kwargs hits.
 # Tried per-file-ignores for the files that hold an honest Any, but every new loader or validator
 # would need its own entry.
-ignore = ["ANN401"]
+# TRY003: most raises have a message of their own, written where the error happens, which is
+# where a reader looks for it.
+# Tried an exception class that builds its message, the rule's documented fix, but each raise
+# would then need a class that only it raises.
+ignore = ["ANN401", "TRY003"]
 # ERA001: jscpd's markers, `# jscpd:ignore-start` and `# jscpd:ignore-end`, parse as Python, so
 # eradicate reads them as commented-out code; it never reads a comment that starts with a task tag
 # as code. The other task tags are ruff's defaults.
@@ -62,6 +71,9 @@ task-tags = ["TODO", "FIXME", "XXX", "jscpd"]
 # Tried ignore-fully-untyped, but it leaves most test hits and exempts untyped package code.
 # Tried mypy-init-return, suppress-dummy-args and allow-star-arg-any, but they clear no test hit.
 "tests/**" = ["ANN"]
+
+[lint.flake8-tidy-imports.banned-api."typing.cast"]
+msg = "cast hides a type error from basedpyright: narrow the type, or validate the data"
 
 [lint.flake8-bandit]
 check-typed-exception = true

@@ -16,8 +16,8 @@ dev = [
     "ruff",
 ]
 
-# The shared settings come from the template's base files. Add rules with extend-select, not
-# select, which would replace the shared rule list.
+# The shared settings come from the template's base files. Add rules with extend-select and banned
+# APIs with extend-banned-api, not select or banned-api, which would replace the shared list.
 [tool.ruff]
 extend = "ruff.base.toml"
 
