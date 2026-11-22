@@ -299,6 +299,15 @@ expect "a first copy keeps the project's Makefile, pyproject.toml and .gitignore
   [ \"\$(cat '$E/.gitignore')\" = .idea/ ] &&
   [ -f '$E/python.mk' ] && [ -f '$E/ruff.base.toml' ] && [ -f '$E/basedpyright.base.json' ]"
 
+ignores_environment_version() {
+  local got
+  got="$(AGENTIC_SRC=stale AGENTIC_REF=stale make -s -C "$ROOT" -f Makefile -f - agentic-version \
+    <<<"agentic-version: ; @echo \$(AGENTIC_SRC) \$(AGENTIC_REF)")"
+  [ "$got" = "$AGENTIC_SRC $AGENTIC_REF" ] || { echo "FAIL make resolved $got"; return 1; }
+}
+expect "make takes the agentic version from the answers or its command line, never from a session's environment" \
+  ignores_environment_version
+
 # A fresh render of this repository's own answers must reproduce every file template-agentic owns
 # here; the files it seeds once (_skip_if_exists) and the answers file are the project's. Every
 # answer the file records goes in, so a question a release adds renders as answered, not default.
