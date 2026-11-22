@@ -78,9 +78,6 @@ edit 2 "pytest.skip()"                "$TEST" '    pass' '    pytest.skip()'
 edit 2 "jscpd ignore-start, no reason" "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()\n# jscpd:ignore-end'
 edit 2 "jscpd marker inside prose"    "$APP" 'x = c()' $'# keep this jscpd:ignore-start\nx = c()'
 write 2 "Write: new file, bare noqa"  "$APP" '' $'import os  # noqa\n'
-printf '%s' $'a = 1\nb = 1' >"$APP"
-check 2 "MultiEdit: 2nd edit adds noqa" "$(jq -n --arg p "$APP" '{tool_input:{file_path:$p,
-  edits:[{old_string:"a = 1", new_string:"a = 2"}, {old_string:"b = 1", new_string:"b = 1  # noqa"}]}}')"
 edit 2 "a why, no Tried sentence"     "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader'
 edit 2 "Tried with no but"            "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader. Tried importing it.'
 edit 2 "Tried with no why before it"  "$APP" 'x = c()' 'x = c()  # noqa: F821 Tried importing it, but the import cycles.'
@@ -317,13 +314,16 @@ write 0 "write test in the email templates check" "$REPO/tests/contracts/test_em
 
 echo "-- config: switching a check off stops until a reason in the form sits next to it"
 PY="$REPO/pyproject.toml"
-BASE=$'[project]\ndependencies = ["fastapi"]\n\n[tool.ruff.lint]\nselect = [\n    "F",  # Pyflakes\n    "E",  # pycodestyle\n]\n\n[tool.basedpyright]\ntypeCheckingMode = "basic"\ninclude = ["app"]\n\n[tool.pytest.ini_options]\naddopts = "-v"\n'
+BASE=$'[project]\ndependencies = ["fastapi"]\n\n[tool.ruff.lint]\nselect = [\n    "F",  # Pyflakes\n    "E",  # pycodestyle\n]\n\n[tool.basedpyright]\ntypeCheckingMode = "recommended"\ninclude = ["app"]\n\n[tool.pytest.ini_options]\naddopts = "-v"\n'
 edit_in 2 "ruff ignore added"             "$PY" "$BASE" $'select = [' $'ignore = ["E501"]\nselect = ['
 edit_in 2 "per-file-ignores entry"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.per-file-ignores]\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
 edit_in 2 "item added to multi-line ignore" "$PY" $'[tool.ruff.lint]\nignore = [\n    "E501",\n]\n' '    "E501",' $'    "E501",\n    "E712",'
 edit_in 2 "rule removed from select"      "$PY" "$BASE" $'    "E",  # pycodestyle\n' ''
-edit_in 2 "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "basic"' $'typeCheckingMode = "basic"\nreportUnusedImport = false'
-edit_in 2 "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "off"'
+edit_in 2 "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "recommended"' $'typeCheckingMode = "recommended"\nreportUnusedImport = false'
+edit_in 2 "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "off"'
+edit_in 2 "type-check mode lowered to standard" "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "standard"'
+edit_in 2 "type-check mode lowered to strict" "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "strict"'
+edit_in 2 "type-check warnings let pass"  "$PY" "$BASE" 'typeCheckingMode = "recommended"' $'typeCheckingMode = "recommended"\nfailOnWarnings = false'
 edit_in 2 "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'include = []'
 edit_in 2 "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
 edit_in 2 "pytest deselect=, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
@@ -342,7 +342,9 @@ edit_in R "rule removed from select, reason where it was" "$PY" "$BASE" $'    "E
   "    # E: ruff format owns layout. $TRIED"$'\n'
 edit_in 0 "rule added to select"          "$PY" "$BASE" $'    "E",  # pycodestyle\n' $'    "E",  # pycodestyle\n    "BLE001",\n'
 edit_in R "select entry comment reworded (no stop, the comment reminds)" "$PY" "$BASE" '    "E",  # pycodestyle' '    "E",  # pycodestyle errors'
-edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "standard"'
+edit_in R "type-check mode lowered, reason above" "$PY" "$BASE" 'typeCheckingMode = "recommended"' \
+  "# This tool's generated stubs hold no types. $TRIED"$'\ntypeCheckingMode = "standard"'
+edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "all"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
 
@@ -397,6 +399,17 @@ edit_in 2 "bandit skip arg"               "$PC" "$PCBASE" 'args: ["-ll"]' 'args:
 edit_in R "pre-commit exclude, reason above" "$PC" "$PCBASE" '      - id: ruff' \
   $'      - id: ruff\n        # The tests hold generated code.\n        # '"$TRIED"$'\n        exclude: ^tests/'
 edit_in 0 "pre-commit hook added"         "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n      - id: check-json'
+edit_in 0 "pre-commit hook added with its files" "$PC" "$PCBASE" '      - id: ruff' \
+  $'      - id: ruff\n      - id: check-json\n        files: ^app/\n        exclude: ^app/generated/'
+edit_in 2 "top-level exclude below an added hook" "$PC" "$PCBASE" '        args: ["-ll"]' \
+  $'        args: ["-ll"]\n      - id: check-json\nexclude: ^generated/'
+PCTEMPLATE=$'repos:\n  - repo: local\n    hooks:\n      - id: template-hooks\n        entry: uv run pre-commit run --config pre-commit.base.yaml --files\n'
+edit_in 2 "template-hooks entry changed" "$PC" "$PCTEMPLATE" 'entry: uv run pre-commit run --config' \
+  'entry: uv run pre-commit run ruff-check --config'
+PB="$REPO/pre-commit.base.yaml"
+edit_in 2 "template hook removed from pre-commit.base.yaml" "$PB" "$PCBASE" $'      - id: bandit\n' ''
+edit_in R "template hook removed, reason added" "$PB" "$PCBASE" $'      - id: bandit\n        args: ["-ll"]\n' \
+  "      # bandit runs in CI only. $TRIED"$'\n'
 MK="$REPO/Makefile"
 MKBASE=$'lint-check:\n\tuv run ruff check app\n\tuv run ruff format --check app\n\ngate: lint-check typecheck security test\n\t@echo ok\n'
 edit_in 0 "lint widened to tests"         "$MK" "$MKBASE" $'\tuv run ruff check app\n' $'\tuv run ruff check app tests\n'

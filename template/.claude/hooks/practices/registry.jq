@@ -11,7 +11,7 @@ import "config" as config;
 
 def kind($path):
   if $path | endswith(".py") then "python"
-  elif $path | test("/(pyproject\\.toml|\\.?ruff(\\.base)?\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json|\\.pre-commit-config\\.yaml|Makefile|[^/]+\\.mk)$") then "config"
+  elif $path | test("/(pyproject\\.toml|\\.?ruff(\\.base)?\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json|\\.pre-commit-config\\.yaml|pre-commit\\.base\\.yaml|Makefile|[^/]+\\.mk)$") then "config"
   elif $path | test("\\.(toml|ya?ml)$") then "data"
   else "other" end;
 
