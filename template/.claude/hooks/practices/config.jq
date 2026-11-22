@@ -11,7 +11,8 @@
 # rewrites them, so a change goes to the template. Every edit to .bandit, [.]pytest.ini,
 # [.]pytest.toml or [.]ruff.toml stops until it adds a reason on comment lines of their own: the
 # gate's tools can read their settings there, and the hook does not read these files' entries.
-# pre-commit.base.yaml is checked like
+# In a conftest.py, the statements that set collect_ignore or collect_ignore_glob are checked:
+# pytest does not collect the paths they list. pre-commit.base.yaml is checked like
 # .pre-commit-config.yaml instead, as the place a project switches a template hook off; a changed
 # entry that runs pre-commit, such as template-hooks, can switch them off too. CI workflows are not
 # checked here: the owner reviews CI changes in the PR, which only the owner merges.
@@ -38,7 +39,10 @@ def opens_select:
 # An addopts line that turns a pytest plugin off: a list item can hold `no:x` apart from its `-p`.
 def plugin_off: has("-p\\s*no:|(^|[\\s\"'])no:");
 
-def drops_tests: has("(^|[\\s\"'])-k|--deselect|--ignore");
+def drops_tests: has("(^|[\\s\"'])-[km]|--deselect|--ignore");
+
+# An addopts line under which pytest only collects the tests, or sets up or plans their fixtures.
+def runs_no_test: has("--(co|collect-?only|setup-?(only|plan))\\b");
 
 # Each finding is {text, at}: `at` is an added line's index in the new file, null for a removed line.
 def pyproject_findings($ctx):
@@ -54,7 +58,7 @@ def pyproject_findings($ctx):
          or (.line | has("^\\s*report\\w+\\s*=\\s*(false|\"(none|warning|information|hint)\")"))
          or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic|standard|strict)\""))
          or (.line | has("failOnWarnings\\s*=\\s*false|check-typed-exception\\s*=\\s*false|--exit-zero"))
-         or ((.key == "addopts") and (.line | plugin_off or drops_tests)))
+         or ((.key == "addopts") and (.line | plugin_off or drops_tests or runs_no_test)))
      | {text: "added `\(.line | short)`", at: $at}),
     ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section)
      | select(((.key | test("^(extend-)?select$")) and (.line | dropped($kept_rules)))
@@ -96,6 +100,28 @@ def makefile_findings($ctx):
            | length > 0)))
      | {text: "removed `\(short)`", at: null});
 
+# The line indexes of each statement that sets collect_ignore or collect_ignore_glob, which list
+# the paths pytest leaves out of collection: from the line that names one to the line that closes
+# its brackets. Each form that adds a path starts its statement with the name.
+def ignore_statements($lines):
+  def open_brackets: (gsub("[^\\[({]"; "") | length) - (gsub("[^\\])}]"; "") | length);
+  reduce range(0; $lines | length) as $at ({depth: 0, out: []};
+    ($lines[$at] | unquoted_code) as $code
+    | if .depth > 0 then .out[-1] += [$at] | .depth += ($code | open_brackets)
+      elif $code | test("^\\s*collect_ignore(_glob)?\\b") then
+        .out += [[$at]] | .depth = ($code | open_brackets)
+      else . end)
+  | .out;
+
+# A statement whose first line the edit adds gives one reason, on that line or above it; an entry
+# added to an older statement gives its own. A comment or a closing bracket needs none.
+def conftest_findings($ctx):
+  [$ctx.added[].at] as $added
+  | ignore_statements($ctx.new)[]
+  | if .[0] | IN($added[]) then .[0] else .[1:][] | select(IN($added[])) end
+  | select($ctx.new[.] | unquoted_code | test("[\\w\"']"))
+  | {text: "added `\($ctx.new[.] | short)`", at: .};
+
 def reason_on_own_lines($ctx): [$ctx.added[].line | select(test("^\\s*#"))] | join("\n") | reason_form;
 
 def check($ctx):
@@ -122,6 +148,7 @@ def check($ctx):
     [if ($ctx.rel | test("(^|/)pyproject\\.toml$")) then pyproject_findings($ctx)
      elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
      elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
+     elif ($ctx.rel | test("(^|/)conftest\\.py$")) then conftest_findings($ctx)
      else empty end
      | select(entry_reasoned($ctx) | not) | "- \(.text)"]
     | select(length > 0)

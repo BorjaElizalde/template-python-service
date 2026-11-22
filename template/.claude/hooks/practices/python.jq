@@ -1,7 +1,8 @@
 # From the python-service template: change the template, not this copy.
 # Python helpers for the practice modules, which include it after lib.jq (jq includes do not pass
 # on the definitions they bring in). stack.json, rendered from the template answers, names
-# the application package.
+# the application package. jq 1.7 resolves a name to the included definition over the module's
+# own, so each name here must be one that no including module defines.
 include "lib";
 import "stack" as $stack;
 
@@ -15,6 +16,8 @@ def checkers: "ruff, basedpyright, bandit, pytest, jscpd";
 
 # The line with its quoted text blanked, so a `#` or a bracket inside a string is not read as code.
 def unquoted: gsub("\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'"; "\"\"");
+
+def unquoted_code: unquoted | sub("#.*$"; "");
 
 # The line's comment, from its `#` to the end, or null. Quoted text is blanked first so a `#`
 # inside a string is not read as one; a line holding a triple quote has no trailing comment read.

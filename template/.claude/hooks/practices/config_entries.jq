@@ -8,7 +8,7 @@ include "python";
 # key that opened it, so an item that holds `=` is not read as a new key.
 def annotate:
   reduce .[] as $l ({section: "", key: "", open: false, out: []};
-    ($l | unquoted | sub("#.*$"; "")) as $code
+    ($l | unquoted_code) as $code
     | if .open then .open = ($code | test("\\]") | not)
       elif ($l | test("^\\s*\\[")) then .section = $l | .key = ""
       elif ($l | test("^\\s*[\"']?[A-Za-z0-9_.*/-]+[\"']?\\s*=")) then

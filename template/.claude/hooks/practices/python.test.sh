@@ -335,7 +335,21 @@ edit_in 2 "pytest plugin turned off, in a multi-line addopts" "$PY" $'[tool.pyte
 edit_in 2 "tests selected by name, as list items" "$PY" "$BASE" 'addopts = "-v"' "addopts = ['-v', '-k', 'smoke']"
 edit_in 2 "tests selected by name, at the start of a multi-line string's line" "$PY" "$BASE" 'addopts = "-v"' \
   $'addopts = """\n-k smoke\n"""'
+edit_in 2 "tests selected by mark"        "$PY" "$BASE" 'addopts = "-v"' "addopts = \"-v -m 'not slow'\""
+edit_in 2 "tests selected by mark, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-m", "not slow"]'
+edit_in 2 "tests selected by mark, glued to its -m" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -mslow"'
+edit_in 2 "tests only collected, --co"    "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "--co"]'
+edit_in 2 "tests only collected, --collect-only" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --collect-only"'
+edit_in 2 "tests only collected, --collectonly" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --collectonly"'
+edit_in 2 "fixtures only set up, --setup-only" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --setup-only"'
+edit_in 2 "fixtures only set up, --setuponly" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --setuponly"'
+edit_in 2 "fixtures only planned, --setup-plan" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --setup-plan"'
+edit_in 2 "fixtures only planned, --setupplan" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --setupplan"'
+edit_in R "tests selected by mark, reason above" "$PY" "$BASE" 'addopts = "-v"' \
+  "# The nightly job runs the slow tests. $TRIED"$'\naddopts = "-v -m \'not slow\'"'
 edit_in 0 "pytest option that tightens" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "--strict-markers"]'
+edit_in 0 "options that only start like --co or -m" "$PY" "$BASE" 'addopts = "-v"' \
+  'addopts = ["-v", "--cov", "--color=yes", "--setup-show", "--maxfail=1", "--cov-report=term-missing"]'
 edit_in 2 "typed except check off"       "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
 edit_in 2 "per-file-ignores reason with no Tried sentence" "$PY" "$BASE" $'[tool.basedpyright]' \
   $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
@@ -355,6 +369,31 @@ edit_in R "type-check mode lowered, reason above" "$PY" "$BASE" 'typeCheckingMod
 edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "all"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
+
+echo "-- config: a conftest.py's collect_ignore stops until a reason in the form sits next to it"
+CONF="$REPO/tests/conftest.py"
+LIST=$'collect_ignore = [\n    "legacy",\n]\n'
+write 2 "collect_ignore set on one line" "$CONF" '' $'collect_ignore = ["legacy"]\n'
+write 2 "collect_ignore_glob set on one line" "$CONF" '' $'collect_ignore_glob = ["*_slow.py"]\n'
+write 2 "collect_ignore with a type annotation" "$CONF" '' $'collect_ignore: list[str] = ["legacy"]\n'
+edit 2 "collect_ignore appended to in an if" "$CONF" 'import sys' \
+  $'import sys\n\nif sys.platform == "win32":\n    collect_ignore.append("posix")'
+write 2 "collect_ignore set over several lines" "$CONF" '' $'collect_ignore = [\n    "legacy",\n    "slow",\n]\n'
+edit_in 2 "entry added to an older multi-line list" "$CONF" "$LIST" '    "legacy",' $'    "legacy",\n    "slow",'
+edit_in 2 "entry added to an older list, reason only above the list" "$CONF" \
+  "# legacy holds Python 2 code. $TRIED"$'\n'"$LIST" '    "legacy",' $'    "legacy",\n    "slow",'
+write 2 "collect_ignore reason with no Tried sentence" "$CONF" '' \
+  $'collect_ignore = ["legacy"]  # legacy holds Python 2 code\n'
+write R "collect_ignore with its reason on its line" "$CONF" '' \
+  "collect_ignore = [\"legacy\"]  # legacy holds Python 2 code. $TRIED"$'\n'
+write R "collect_ignore over several lines, reason above it" "$CONF" '' \
+  "# Both hold Python 2 code. $TRIED"$'\ncollect_ignore = [\n    "legacy",\n    "slow",\n]\n'
+edit_in R "entry added to an older list, reason above the entry" "$CONF" "$LIST" '    "legacy",' \
+  $'    "legacy",\n    # slow needs a GPU. '"$TRIED"$'\n    "slow",'
+edit_in 0 "fixture edited beside an older collect_ignore" "$CONF" \
+  $'collect_ignore = ["legacy"]\n\n\ndef client():\n    return 1\n' '    return 1' '    return 2'
+edit 0 "collect_ignore only read" "$CONF" '    return 1' '    return ", ".join(collect_ignore)'
+write 0 "collect_ignore outside a conftest.py" "$APP" '' $'collect_ignore = ["legacy"]\n'
 
 echo "-- config: a select in a ruff config that extends another replaces that config's rule list"
 EXT=$'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nextend-select = ["B"]\n'

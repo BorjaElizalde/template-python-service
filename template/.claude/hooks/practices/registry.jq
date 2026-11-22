@@ -15,12 +15,13 @@ def kind($path):
   elif $path | test("\\.(toml|ya?ml)$") then "data"
   else "other" end;
 
-# gitleaks scans a file of any type, so every edit is checked for its skips.
+# gitleaks scans a file of any type, so every edit is checked for its skips. A conftest.py can
+# leave tests out of pytest's collection, so a Python file gets the config check too.
 def practices($ctx; $kind):
   secret_scan_skips::check($ctx),
   if $kind == "python" then
     skipped_checks::check($ctx), excepts::check($ctx), docstrings::check($ctx),
-    comments::check($ctx), logs::check($ctx), tests::check($ctx)
+    comments::check($ctx), logs::check($ctx), tests::check($ctx), config::check($ctx)
   elif $kind == "config" then config::check($ctx), comments::check($ctx)
   elif $kind == "data" then comments::check($ctx)
   else empty end;
