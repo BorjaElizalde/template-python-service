@@ -64,7 +64,9 @@ the ones the repository already has. Merge the template's copy into each, from `
 release's tag; for `pyproject.toml`, that is its `[tool.ruff]` and `[tool.basedpyright]` tables and
 its `dev` dependency group. Then delete the targets and settings that `python.mk`,
 `.claude/agentic.mk`, `ruff.base.toml` and `basedpyright.base.json` hold. Do the same when an
-update brings a target the `Makefile` already has, such as `claude` or `help`.
+update brings a target the `Makefile` already has, such as `claude` or `help`. A first copy writes
+the template's `.pre-commit-config.yaml`: put the repository's own hooks back after
+`template-hooks`, and leave out those that `pre-commit.base.yaml` already runs.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
 default branch:
@@ -115,12 +117,13 @@ run `make claude` in the repository.
 
 ## Extend
 
-Apart from the project's five files, every file the template writes is the template's: change it
-there, not in the project.
+Apart from the project's five files and its own hooks in `.pre-commit-config.yaml`, every file the
+template writes is the template's: change it there, not in the project.
 
-- **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select`, and the
-  project's exceptions with `ignore` and `extend-per-file-ignores`, each with the reason
-  `.claude/rules/skipped-checks.md` asks for. Never use `select`: it replaces the shared rule list.
+- **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select` and
+  banned APIs with `extend-banned-api`, and the project's exceptions with `ignore` and
+  `extend-per-file-ignores`, each with the reason `.claude/rules/skipped-checks.md` asks for. Never
+  use `select` or `banned-api`: each replaces the shared list.
 - **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only, not to CI.
 - **jscpd**: a copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,
   with the reason `.claude/rules/skipped-checks.md` asks for.
@@ -128,4 +131,6 @@ there, not in the project.
   prints, with the reason `.claude/rules/skipped-checks.md` asks for on the comment lines above it.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
   redefining `gate`. It runs in `make gate` only, not in CI.
+- **Commit hooks**, in `.pre-commit-config.yaml`: add the project's own hooks after
+  `template-hooks`, which runs the template's hooks from `pre-commit.base.yaml`.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
