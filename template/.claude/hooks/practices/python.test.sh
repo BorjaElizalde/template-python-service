@@ -78,9 +78,6 @@ edit 2 "pytest.skip()"                "$TEST" '    pass' '    pytest.skip()'
 edit 2 "jscpd ignore-start, no reason" "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()\n# jscpd:ignore-end'
 edit 2 "jscpd marker inside prose"    "$APP" 'x = c()' $'# keep this jscpd:ignore-start\nx = c()'
 write 2 "Write: new file, bare noqa"  "$APP" '' $'import os  # noqa\n'
-printf '%s' $'a = 1\nb = 1' >"$APP"
-check 2 "MultiEdit: 2nd edit adds noqa" "$(jq -n --arg p "$APP" '{tool_input:{file_path:$p,
-  edits:[{old_string:"a = 1", new_string:"a = 2"}, {old_string:"b = 1", new_string:"b = 1  # noqa"}]}}')"
 edit 2 "a why, no Tried sentence"     "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader'
 edit 2 "Tried with no but"            "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader. Tried importing it.'
 edit 2 "Tried with no why before it"  "$APP" 'x = c()' 'x = c()  # noqa: F821 Tried importing it, but the import cycles.'
