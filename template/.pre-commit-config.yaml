@@ -1,8 +1,7 @@
 # From the python-service template: change the template, not this copy.
 # Every local hook runs the project's own pinned tool through uv, so a commit and make gate never
 # run two versions of one tool. gitleaks has no Python package: pre-commit builds it from the
-# commit its rev pins. CI's secret scan pins the same commit, in
-# .github/actions/stack-gate/gitleaks-history.pre-commit.yaml.
+# commit its rev pins.
 repos:
   - repo: local
     hooks:

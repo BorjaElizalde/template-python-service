@@ -127,8 +127,6 @@ there, not in the project.
   with the reason `.claude/rules/skipped-checks.md` asks for.
 - **gitleaks**: a finding that holds no secret goes in `.gitleaksignore` as the fingerprint gitleaks
   prints, with the reason `.claude/rules/skipped-checks.md` asks for on the comment lines above it.
-  Revoke a real secret first: once committed, it stays in the history, which CI scans, even after
-  the code no longer holds it.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
   redefining `gate`. It runs in `make gate` only, not in CI.
 - **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
