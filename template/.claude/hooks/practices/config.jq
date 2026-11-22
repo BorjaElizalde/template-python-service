@@ -11,6 +11,7 @@
 # checked here: the owner reviews CI changes in the PR, which only the owner merges.
 include "lib";
 include "python";
+include "config_entries";
 
 def checked_section($rel):
   ($rel | test("(^|/)\\.?ruff\\.toml$"))

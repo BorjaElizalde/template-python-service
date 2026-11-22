@@ -6,12 +6,15 @@
 # form; review judges whether the reason holds.
 include "lib";
 include "python";
+include "config_entries";
 
 # gitleaks reads `gitleaks:allow` only on the finding's own line, and the text after it there.
+def allow_reasoned($ctx):
+  (.line | capture("gitleaks:allow(?<after>.*)$").after | reason_form)
+  or (comment_above($ctx.new; .at) | reason_form);
+
 def allow_findings($ctx):
-  $ctx.added[] | select(.line | test("gitleaks:allow"))
-  | select((.line | capture("gitleaks:allow(?<after>.*)$").after | reason_form)
-      or (comment_above($ctx.new; .at) | reason_form) | not)
+  $ctx.added[] | select(.line | test("gitleaks:allow")) | select(allow_reasoned($ctx) | not)
   | "- `\(.line | short)`\n  Write it in this form: gitleaks:allow <reason>";
 
 # gitleaks reads the whole line as the fingerprint, so a reason after it breaks the entry.
