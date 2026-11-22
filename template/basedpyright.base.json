@@ -3,7 +3,20 @@
 // pyproject.toml extends this file. basedpyright matches the exclude from this file's folder, so a
 // config that extends a copy in another folder excludes nothing.
 {
-  "exclude": ["**/*.ipynb"],
+  // database/versions: Alembic writes the revisions there, and recommended mode reports what it
+  // writes: a column type with no type argument, such as sa.Double(), is Double[Unknown]
+  // (reportUnknownArgumentType), and the header's Union and typing.Sequence are deprecated.
+  // Tried editing the project's script.py.mako, but it writes only the header, not the column types
+  // that autogenerate writes.
+  // Tried an executionEnvironments entry that turns those rules off in database/versions alone, but
+  // its root stops a revision's imports of the project's own modules from resolving.
+  "exclude": ["**/*.ipynb", "database/versions"],
   "typeCheckingMode": "recommended",
-  "pythonPlatform": "Linux"
+  "pythonPlatform": "Linux",
+  // reportUnusedCallResult: a call made only for its effect, such as session.execute(...) or
+  // op.create_table(...), returns a value nobody needs. reportUnusedCoroutine still reports an
+  // async call left without await.
+  // Tried `_ = ` before each such call, the rule's documented fix, but on every call made for its
+  // effect it adds an assignment that says nothing.
+  "reportUnusedCallResult": false
 }

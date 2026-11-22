@@ -168,10 +168,15 @@ expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> i
 fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
   fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
 }
-# Strict mode passes a call result left unused; recommended warns, and a warning fails the check.
-UNUSED='def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n'
+passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
+  make_with "$1" "$2" gate && ci_with "$1" "$2"
+}
+# Strict mode passes an explicit Any; recommended warns, and a warning fails the check.
+EXPLICIT_ANY='from typing import Any\n\n\ndef echo(x: Any) -> Any:\n    return x\n'
 expect "make typecheck and CI check types in basedpyright's recommended mode" \
-  fails_both typecheck app/unused.py "$UNUSED"
+  fails_both typecheck app/explicit_any.py "$EXPLICIT_ANY"
+expect "a call made only for its effect passes make gate and CI" \
+  passes_both app/effect.py 'def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n'
 CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
@@ -203,17 +208,23 @@ INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
 expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
 expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/cast.py "$CAST"
 expect "bandit checks a second top-level folder, locally and in CI" fails_both security commons/insecure.py "$INSECURE"
-# The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
+# The exclusions: a notebook that breaks ruff's and basedpyright's rules passes both gates.
 NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
   "source": ["import os\\n", "x: int = None\\n"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
-passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
-  make_with "$1" "$2" gate && ci_with "$1" "$2"
-}
 expect "a bad notebook leaves make gate and CI green" passes_both explore.ipynb "$NOTEBOOK"
 expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
   relaxed ruff.base.toml 'extend-exclude = ["*.ipynb"]' '' fails_with explore.ipynb "$NOTEBOOK" lint-check
 expect "basedpyright.base.json's exclude is what keeps the notebook out of typecheck" \
-  relaxed basedpyright.base.json '"exclude": ["**/*.ipynb"],' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
+  relaxed basedpyright.base.json '"**/*.ipynb", ' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
+# basedpyright also leaves out an Alembic revision, as Alembic writes it once ruff has fixed it.
+REVISION='"""add a price\n\nRevision ID: b2c3\nRevises:\n"""\n\nfrom collections.abc import Sequence\n
+import sqlalchemy as sa\nfrom alembic import op\n\nrevision: str = "b2c3"
+down_revision: str | Sequence[str] | None = None\n\n\ndef upgrade() -> None:
+    op.create_table("price", sa.Column("amount", sa.Double(), nullable=False))\n\n
+def downgrade() -> None:\n    op.drop_table("price")\n'
+mkdir -p "$D/database/versions"
+expect "an Alembic revision passes make gate and CI" passes_both database/versions/b2c3_add_a_price.py "$REVISION"
+rm -r "$D/database"
 
 # Both gates fail a block of 10 lines or more written twice, and only that: every other check
 # passes the same file once its copy sits between the ignore markers. The two returns differ, so
