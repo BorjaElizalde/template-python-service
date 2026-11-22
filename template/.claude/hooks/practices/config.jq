@@ -14,16 +14,7 @@
 # checked here: the owner reviews CI changes in the PR, which only the owner merges.
 include "lib";
 include "python";
-
-# Each line with the TOML section and key it sits under (array items inherit the opening key).
-def annotate:
-  reduce .[] as $l ({section: "", key: "", out: []};
-    if ($l | test("^\\s*\\[")) then .section = $l | .key = ""
-    elif ($l | test("^\\s*[\"']?[A-Za-z0-9_.*/-]+[\"']?\\s*=")) then
-      .key = ($l | capture("^\\s*[\"']?(?<k>[A-Za-z0-9_.*/-]+)").k)
-    else . end
-    | .out += [{line: $l, section, key}])
-  | .out;
+include "config_entries";
 
 def checked_section($rel):
   ($rel | test("(^|/)\\.?ruff\\.toml$"))
@@ -103,12 +94,6 @@ def makefile_findings($ctx):
            | length > 0)))
      | {text: "removed `\(short)`", at: null});
 
-# Whether a finding's reason is in the form: an added line's, in its comment or on the comment
-# lines above it; a removed line's, in the comments the edit adds.
-def reasoned($ctx; $added_comments):
-  if .at == null then $added_comments | reason_form
-  else [($ctx.new[.at] | comment // ""), comment_above($ctx.new; .at)] | any(reason_form) end;
-
 def check($ctx):
   if $ctx.rel | test("(^|/)(ruff\\.base\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json)$") then
     {level: "stop", text: ("Stopped by the practices hook: \($ctx.rel) holds the settings every"
@@ -119,12 +104,11 @@ def check($ctx):
            + " with its reason (.claude/rules/skipped-checks.md)."
          else ", or add this project's own settings in pyproject.toml, which extends this file." end))}
   else
-    ([$ctx.added[].line | comment | select(. != null)] | join("\n")) as $added_comments
-    | [if ($ctx.rel | test("(^|/)(pyproject\\.toml|\\.?ruff\\.toml)$")) then toml_findings($ctx)
-       elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
-       elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
-       else empty end
-       | select(reasoned($ctx; $added_comments) | not) | "- \(.text)"]
+    [if ($ctx.rel | test("(^|/)(pyproject\\.toml|\\.?ruff\\.toml)$")) then toml_findings($ctx)
+     elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
+     elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
+     else empty end
+     | select(entry_reasoned($ctx) | not) | "- \(.text)"]
     | select(length > 0)
     | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
         + " (.claude/rules/skipped-checks.md). This edit may switch off a check in \($ctx.rel)"

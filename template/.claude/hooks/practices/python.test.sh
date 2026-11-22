@@ -326,6 +326,8 @@ edit_in 2 "type-check mode lowered to strict" "$PY" "$BASE" 'typeCheckingMode = 
 edit_in 2 "type-check warnings let pass"  "$PY" "$BASE" 'typeCheckingMode = "recommended"' $'typeCheckingMode = "recommended"\nfailOnWarnings = false'
 edit_in 2 "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'include = []'
 edit_in 2 "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
+edit_in 2 "pytest deselect=, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
+  '    "-v",' $'    "-v",\n    "--deselect=tests/test_x.py::test_y",'
 edit_in 2 "typed except check off"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
 edit_in 2 "per-file-ignores reason with no Tried sentence" "$PY" "$BASE" $'[tool.basedpyright]' \
   $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
@@ -426,6 +428,75 @@ edit_in 0 "jscpd line kept, scan widened" "$MK" "$MKDUP" $'\tuv run jscpd .\n' $
 echo "-- config: CI workflows are not checked (the owner reviews them in the PR)"
 edit_in 0 "gate.yaml loosened"            "$REPO/.github/workflows/gate.yaml" $'      - run: uv run pytest tests/ --cov\n' 'uv run pytest tests/ --cov' 'uv run pytest tests/ --cov || true'
 edit_in 0 "other workflow loosened"       "$REPO/.github/workflows/build.yaml" $'      - run: uv run pytest\n' 'uv run pytest' 'uv run pytest || true'
+
+echo "-- secret scan skips: gitleaks:allow, .gitleaksignore and .gitleaks.toml (must stop)"
+YAML="$REPO/compose.yaml"
+DOC="$REPO/notes.md"
+IGNORE="$REPO/.gitleaksignore"
+GL="$REPO/.gitleaks.toml"
+Q="'''"
+OWN=$'[extend]\nuseDefault = true\n'
+edit 2 "gitleaks:allow, no reason"        "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+edit 2 "gitleaks:allow, a why, no Tried"  "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow a fixture key'
+edit 2 "gitleaks:allow, reason above with code between" "$APP" 'KEY = "k"' \
+  "# A fixture key. $TRIED"$'\nx = 1\nKEY = "k"  # gitleaks:allow'
+edit 2 "gitleaks:allow in YAML, no reason" "$YAML" 'key: k' 'key: k  # gitleaks:allow'
+edit 2 "gitleaks:allow in Markdown, no reason" "$DOC" 'key k' 'key k <!-- gitleaks:allow -->'
+write 2 "fingerprint, no reason"          "$IGNORE" '' $'tests/a.py:github-pat:3\n'
+write 2 "fingerprint, reason after it"    "$IGNORE" '' "tests/a.py:github-pat:3  # A fixture key. $TRIED"$'\n'
+write 2 "fingerprint under another one's reason" "$IGNORE" '' \
+  "# A fixture key. $TRIED"$'\ntests/a.py:github-pat:3\ntests/a.py:github-pat:4\n'
+edit_in 2 "allowlist path, no reason"     "$GL" "$OWN" "$OWN" "$OWN"$'\n[[allowlists]]\n'"paths = [${Q}^tests/${Q}]"
+edit_in 2 "multi-line regexes, reason above the key only" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[allowlists]]\n'"# Fixture keys. $TRIED"$'\nregexes = [\n'"  ${Q}^acme_${Q},"$'\n]'
+edit_in 2 "allowlist item after one that holds =" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[allowlists]]\nregexes = [\n'"  'x=y',"$'\n'"  ${Q}^acme_${Q},"$'\n]'
+edit_in 2 "a rule's allowlist stopword, no reason" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[rules]]\nid = "generic-api-key"\n[[rules.allowlists]]\nstopwords = ["fixture"]'
+edit_in 2 "STOPWORDS in capitals, no reason" "$GL" "$OWN" "$OWN" "$OWN"$'\n[[allowlists]]\nSTOPWORDS = ["fixture"]'
+edit_in 2 "disabledRules entry, no reason" "$GL" "$OWN" "$OWN" "$OWN"'disabledRules = ["generic-api-key"]'
+edit_in 2 "disabledrules in lower case, no reason" "$GL" "$OWN" "$OWN" "$OWN"'disabledrules = ["generic-api-key"]'
+write 2 "new file with a rule, no useDefault" "$GL" '' $'[[rules]]\nid = "acme-key"\n'"regex = ${Q}acme_[a-z0-9]{32}${Q}"$'\n'
+write 2 "new file with only a comment"    "$GL" '' $'# The scan settings.\n'
+edit_in 2 "useDefault removed"            "$GL" "$OWN" $'useDefault = true\n' ''
+edit_in 2 "useDefault turned off"         "$GL" "$OWN" 'useDefault = true' 'useDefault = false'
+edit_in 2 "the [extend] header removed"   "$GL" "$OWN" $'[extend]\n' ''
+write 2 "new file with useDefault outside [extend]" "$GL" '' $'useDefault = true\n'
+write 2 "new file with useDefault under a rule" "$GL" '' $'[[rules]]\nid = "acme-key"\nuseDefault = true\n'
+says yes "tool's docs (gitleaks)" "the stop sends the agent to gitleaks's docs first" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+says yes "revoke a real secret" "the stop says a real secret is revoked, not skipped" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+says yes "Write it in this form: gitleaks:allow <reason>" "the stop shows the inline form" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+says yes "Add it, or add the reason as a comment" "the stop says how to keep gitleaks's own rules" "$GL" "$OWN" ''
+
+echo "-- secret scan skips: a reason in the form where gitleaks keeps it (goes on)"
+edit 0 "gitleaks:allow + reason after it" "$APP" 'KEY = "k"' "KEY = \"k\"  # gitleaks:allow a fixture key. $TRIED"
+edit R "gitleaks:allow + reason above"    "$APP" 'KEY = "k"' $'# A fixture key.\n# '"$TRIED"$'\nKEY = "k"  # gitleaks:allow'
+edit 0 "gitleaks:allow in YAML + reason after it" "$YAML" 'key: k' "key: k  # gitleaks:allow a fixture key. $TRIED"
+edit 0 "gitleaks:allow in Markdown + reason in its comment" "$DOC" 'key k' "key k <!-- gitleaks:allow an example key. $TRIED -->"
+edit 0 "edit next to an old bare gitleaks:allow" "$APP" $'KEY = "k"  # gitleaks:allow\nx = 1' $'KEY = "k"  # gitleaks:allow\nx = 2'
+write 0 "fingerprint + reason above"      "$IGNORE" '' "# A fixture key. $TRIED"$'\ntests/a.py:github-pat:3\n'
+write 0 "a comment in .gitleaksignore"    "$IGNORE" '' $'# Fingerprints of fixture keys.\n'
+edit_in R "allowlist path + reason above" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[allowlists]]\n'"# Fixture keys. $TRIED"$'\n'"paths = [${Q}^tests/${Q}]"
+edit_in R "disabledRules entry + reason on its line" "$GL" "$OWN" "$OWN" \
+  "$OWN""disabledRules = [\"generic-api-key\"]  # generic-api-key: fixture keys. $TRIED"
+edit_in R "new file without useDefault + reason" "$GL" '' '' \
+  "# This project scans only for its own key. $TRIED"$'\n[[rules]]\nid = "acme-key"\n'
+edit_in 0 "a rule added to a file that keeps useDefault" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[rules]]\nid = "acme-key"\n'"regex = ${Q}acme_[a-z0-9]{32}${Q}"
+edit_in 0 "an allowlist description added" "$GL" "$OWN"$'\n[[allowlists]]\npaths = ["x"]\n' '[[allowlists]]' \
+  $'[[allowlists]]\ndescription = "Fixtures"'
+edit_in 0 "an allowlist path removed"     "$GL" "$OWN"$'\n[[allowlists]]\npaths = ["x"]\n' $'paths = ["x"]\n' ''
+write 0 "new file that keeps useDefault"  "$GL" '' "$OWN"
+write 0 "new file with extend.useDefault outside any table" "$GL" '' $'extend.useDefault = true\n'
+edit R "gitleaks:allow + reason above that names gitleaks" "$APP" 'KEY = "k"' \
+  "# gitleaks flags a fixture key. $TRIED"$'\nKEY = "k"  # gitleaks:allow'
+write 0 "fingerprint + reason above that names gitleaks" "$IGNORE" '' \
+  "# gitleaks flags a fixture key. $TRIED"$'\ntests/a.py:github-pat:3\n'
+edit R "noqa + reason above that names gitleaks" "$APP" 'x = 1' "# gitleaks flags the URL. $TRIED"$'\nx = 1  # noqa: E501'
+mkdir -p "$REPO/docs"
+write 0 "a .gitleaks.toml below the root" "$REPO/docs/.gitleaks.toml" '' $'[[allowlists]]\npaths = ["x"]\n'
+write 0 "a .gitleaksignore below the root" "$REPO/docs/.gitleaksignore" '' $'tests/a.py:github-pat:3\n'
 
 echo "== $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

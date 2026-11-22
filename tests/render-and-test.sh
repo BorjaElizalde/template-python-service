@@ -319,6 +319,14 @@ PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n$(head -c 900 /dev/urandom | base6
 expect "pre-commit's gitleaks passes a file with no secret" hook_with app/typed.py 'def g(x: int) -> int:\n    return x\n' "${BASE[@]}" gitleaks
 expect "pre-commit's gitleaks stops a token in a Python file" fails_hook app/settings.py "TOKEN = \"$TOKEN\"\n" "${BASE[@]}" gitleaks
 expect "pre-commit's gitleaks stops a private key in a file of another type" fails_hook deploy.pem "$PRIVATE_KEY" "${BASE[@]}" gitleaks
+# The practices hook asks for a skip's reason in these places, so gitleaks must still skip there.
+REASON='A fixture GitHub never issued. Tried a stub, but it hides the token format.'
+expect "pre-commit's gitleaks skips a line that holds gitleaks:allow and its reason" hook_with app/fixture.py \
+  "TOKEN = \"$TOKEN\"  # gitleaks:allow $REASON\n" "${BASE[@]}" gitleaks
+printf '# %s\napp/fixture.py:github-pat:1\n' "$REASON" >"$D/.gitleaksignore"
+expect "pre-commit's gitleaks skips a fingerprint listed under its reason" hook_with app/fixture.py "TOKEN = \"$TOKEN\"\n" \
+  "${BASE[@]}" gitleaks
+rm "$D/.gitleaksignore"
 
 # A commit runs every hook in .pre-commit-config.yaml: the template's, through template-hooks, then
 # the project's own, which go after it.
