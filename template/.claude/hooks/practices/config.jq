@@ -59,7 +59,8 @@ def toml_findings($ctx):
      | select((.section | test("per-file-ignores"))
          or (.key | test("^(extend-)?(ignore|exclude|force-exclude|omit|exclude_lines|exclude_also|norecursedirs|skips)$"))
          or (.line | has("^\\s*report\\w+\\s*=\\s*(false|\"(none|warning|information|hint)\")"))
-         or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic)\"|check-typed-exception\\s*=\\s*false|--exit-zero"))
+         or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic|standard|strict)\""))
+         or (.line | has("failOnWarnings\\s*=\\s*false|check-typed-exception\\s*=\\s*false|--exit-zero"))
          or ((.key == "addopts") and (.line | has("-p\\s*no:|--deselect|\\s-k\\s|--ignore"))))
      | {text: "added `\(.line | short)`", at: $at}),
     ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section($ctx.rel))

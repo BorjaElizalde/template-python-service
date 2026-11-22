@@ -149,13 +149,9 @@ make_with() {  # make_with <file> <content> <target>: runs the target while the 
 fails_with() { ! make_with "$@"; }
 UNTYPED='def f(x):\n    return x\n'
 expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED" lint-check
-# basedpyright's own default mode is stricter than the base's and rejects an unannotated parameter.
-expect "typecheck applies the base's checking mode" make_with app/untyped.py "$UNTYPED" typecheck
 # Ruff takes any module path as a banned-api key, so only a banned call shows that the key is right.
 CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 expect "lint-check applies the base's ban on typing.cast" fails_with app/cast.py "$CAST" lint-check
-ISINSTANCE='def k(x: int) -> bool:\n    return isinstance(x, int)\n'
-expect "typecheck applies the base's added errors" fails_with app/isinstance.py "$ISINSTANCE" typecheck
 
 # CI's checks call each tool directly with CI's own copy of the shared settings, so a change that
 # relaxes the local gate, or the project's copies of the settings, can't relax them.
@@ -172,6 +168,18 @@ ci_with() {  # ci_with <file> <content>: runs CI's checks while the file holds t
   return "$status"
 }
 expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
+fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
+  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
+}
+passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
+  make_with "$1" "$2" gate && ci_with "$1" "$2"
+}
+# Strict mode passes an explicit Any; recommended warns, and a warning fails the check.
+EXPLICIT_ANY='from typing import Any\n\n\ndef echo(x: Any) -> Any:\n    return x\n'
+expect "make typecheck and CI check types in basedpyright's recommended mode" \
+  fails_both typecheck app/explicit_any.py "$EXPLICIT_ANY"
+expect "a call made only for its effect passes make gate and CI" \
+  passes_both app/effect.py 'def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n'
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
   cp "$f" "$OUT/relaxed.bak"
@@ -185,6 +193,7 @@ relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the comman
 local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's checks fail it
   make_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
 }
+ISINSTANCE='def k(x: int) -> bool:\n    return isinstance(x, int)\n'
 expect "a no-op typecheck target in python.mk relaxes make gate, not CI" \
   relaxed python.mk 'uv run basedpyright' 'true' local_only gate app/isinstance.py "$ISINSTANCE"
 expect "a rule dropped from the project's ruff.base.toml relaxes lint-check, not CI" \
@@ -198,9 +207,6 @@ expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
 # Both gates check every Python file in the repository, not only the package: in a second
 # top-level folder, each tool fails the file that breaks its rule, and only its rule.
 mkdir -p "$D/commons"
-fails_both() {  # fails_both <target> <file> <content>: make <target> and CI's checks each fail the file
-  fails_with "$2" "$3" "$1" && ! ci_with "$2" "$3"
-}
 INSECURE='def run(code: str) -> object:\n    return eval(code)\n'
 expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
 expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/isinstance.py "$ISINSTANCE"
@@ -208,14 +214,44 @@ expect "bandit checks a second top-level folder, locally and in CI" fails_both s
 # The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
 NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
   "source": ["import os\\n", "x: int = None\\n"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
-passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
-  make_with "$1" "$2" gate && ci_with "$1" "$2"
-}
 expect "a bad notebook leaves make gate and CI green" passes_both explore.ipynb "$NOTEBOOK"
 expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
   relaxed ruff.base.toml 'extend-exclude = ["*.ipynb"]' '' fails_with explore.ipynb "$NOTEBOOK" lint-check
 expect "basedpyright.base.json's exclude is what keeps the notebook out of typecheck" \
   relaxed basedpyright.base.json '"exclude": ["**/*.ipynb"],' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
+
+# Both gates check an Alembic revision against the SQLAlchemy and Alembic the project installs. The
+# revision is as Alembic writes it once ruff has fixed it, and its sa.Double() is Double[Unknown].
+cp "$D/pyproject.toml" "$D/uv.lock" "$OUT/"
+(cd "$D" && uv add --quiet sqlalchemy alembic)
+mkdir -p "$D/database/versions"
+REVISION='"""add a price
+
+Revision ID: b2c3
+Revises:
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "b2c3"
+down_revision: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table("price", sa.Column("amount", sa.Double(), nullable=False))
+
+
+def downgrade() -> None:
+    op.drop_table("price")
+'
+expect "an Alembic revision passes make gate and CI" passes_both database/versions/b2c3_add_a_price.py "$REVISION"
+expect "basedpyright checks an Alembic revision, locally and in CI" \
+  fails_both typecheck database/versions/b2c3_add_a_price.py "${REVISION/drop_table/drop_tabel}"
+rm -r "$D/database"
+cp "$OUT/pyproject.toml" "$OUT/uv.lock" "$D/"
 
 # Both gates fail a block of 10 lines or more written twice, and only that: every other check
 # passes the same file once its copy sits between the ignore markers. The two returns differ, so
