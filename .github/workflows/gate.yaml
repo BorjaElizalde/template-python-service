@@ -1,5 +1,5 @@
 # From the agentic template: change the template, not this copy.
-# The develop and staging rulesets require this check.
+# The develop and staging rulesets require its checks, `gate / <job>`.
 name: Gate
 
 on:
@@ -16,20 +16,18 @@ concurrency:
 
 jobs:
   gate:
-    # Skipped on a draft, which can't merge and is gated when it is marked ready, and on the
-    # promotion of develop, whose code passed this check on its way in, so a second run only costs
-    # minutes. Tried the head's name alone, but a fork's develop would skip too, and so would a
-    # branch Develop into develop, since == ignores case. Tried a trigger filter in place of the if,
-    # but it can't read a PR's head or its draft state, and a required check that never reports
-    # blocks the merge, where a skipped job passes.
-    if: >-
-      ${{ !github.event.pull_request.draft
-      && !(github.base_ref == 'staging' && github.head_ref == 'develop'
-      && github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      # The stack layer's checks, each tool called directly. A project's CI never runs make gate,
-      # so a change that relaxes the local gate can't relax CI.
-      - uses: ./.github/actions/stack-gate
+    # The stack's checks, each tool called directly, and each job of them skips when skip is true.
+    # A project's CI never runs make gate, so a change that relaxes the local gate can't relax CI.
+    uses: ./.github/workflows/gate-checks.yaml
+    with:
+      # Skipped on a draft, which can't merge and is gated when it is marked ready, and on the
+      # promotion of develop, whose code passed this check on its way in, so a second run only
+      # costs minutes. Tried an if on this job, but a skipped job that calls a workflow reports
+      # only as gate, so a required gate / <job> never reports and blocks the merge, where a
+      # skipped check passes. Tried the head's name alone, but a fork's develop would skip too,
+      # and so would a branch Develop into develop, since == ignores case. Tried a trigger filter,
+      # but it can't read a PR's head or its draft state.
+      skip: >-
+        ${{ github.event.pull_request.draft
+        || (github.base_ref == 'staging' && github.head_ref == 'develop'
+        && github.event.pull_request.head.repo.full_name == github.repository) }}
