@@ -38,7 +38,7 @@ def opens_select:
 # An addopts line that turns a pytest plugin off: a list item can hold `no:x` apart from its `-p`.
 def plugin_off: has("-p\\s*no:|(^|[\\s\"'])no:");
 
-def drops_tests: has("(^|[\\s\"'])-k|--deselect|--ignore");
+def drops_tests: has("(^|[\\s\"'])-[km]|--deselect|--ignore");
 
 # Each finding is {text, at}: `at` is an added line's index in the new file, null for a removed line.
 def pyproject_findings($ctx):
