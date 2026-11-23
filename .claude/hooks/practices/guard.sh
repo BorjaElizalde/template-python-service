@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# PreToolUse(Edit|Write|MultiEdit) coding-practice guard: one hook, one verdict per edit.
+# PreToolUse(Edit|Write) coding-practice guard: one hook, one verdict per edit.
 # The stack layer supplies registry.jq beside this script, the one plug-in point:
 #   kind($path)              -> the file's kind, or null when no practice applies
 #   practices($ctx; $kind)   -> a stream of {level, text} from its practice modules

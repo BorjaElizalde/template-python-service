@@ -4,27 +4,22 @@
 # comment or on the comment lines above it; a removed line leaves no place, so the edit adds the
 # reason as a comment.
 # Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
-# and a Makefile tool line only if no added line runs the same tool. A select added to a ruff config
-# that extends another counts as switching checks off: ruff takes it as the whole rule list and
-# drops the extended one; so does a removed extend line. Every edit to the shared base files stops,
-# reason or not: each update rewrites them, so a change goes to the template. CI workflows are not
+# a Makefile tool line only if no added line runs the same tool, and a commit hook the edit adds
+# may name its files or exclude. A select added to a ruff config that extends another counts as
+# switching checks off: ruff takes it as the whole rule list and drops the extended one; so does a
+# removed extend line. Every edit to the shared base files stops, reason or not: each update
+# rewrites them, so a change goes to the template. Every edit to .bandit, [.]pytest.ini,
+# [.]pytest.toml or [.]ruff.toml stops until it adds a reason on comment lines of their own: the
+# gate's tools can read their settings there, and the hook does not read these files' entries.
+# pre-commit.base.yaml is checked like
+# .pre-commit-config.yaml instead, as the place a project switches a template hook off; a changed
+# entry that runs pre-commit, such as template-hooks, can switch them off too. CI workflows are not
 # checked here: the owner reviews CI changes in the PR, which only the owner merges.
 include "lib";
 include "python";
+include "config_entries";
 
-# Each line with the TOML section and key it sits under (array items inherit the opening key).
-def annotate:
-  reduce .[] as $l ({section: "", key: "", out: []};
-    if ($l | test("^\\s*\\[")) then .section = $l | .key = ""
-    elif ($l | test("^\\s*[\"']?[A-Za-z0-9_.*/-]+[\"']?\\s*=")) then
-      .key = ($l | capture("^\\s*[\"']?(?<k>[A-Za-z0-9_.*/-]+)").k)
-    else . end
-    | .out += [{line: $l, section, key}])
-  | .out;
-
-def checked_section($rel):
-  ($rel | test("(^|/)\\.?ruff\\.toml$"))
-  or test("^\\s*\\[tool\\.(ruff|basedpyright|pyright|coverage|pytest|bandit|mypy)");
+def checked_section: test("^\\s*\\[tool\\.(ruff|basedpyright|pyright|coverage|pytest|bandit|mypy)");
 
 def quoted: [scan("\"([^\"]+)\"") | .[0]];
 
@@ -33,49 +28,58 @@ def kept($ctx; $re): [$ctx.new | annotate[] | select(.key | test($re)) | .line |
 
 def dropped($kept): [quoted[] | select($kept[.] | not)] | length > 0;
 
-def ruff_file: test("(^|/)\\.?ruff\\.toml$");
-
 def extends_ruff($ctx):
-  any($ctx.new | annotate[]; .key == "extend"
-    and ((.section | test("^\\s*\\[tool\\.ruff\\]")) or ($ctx.rel | ruff_file)));
+  any($ctx.new | annotate[]; .key == "extend" and (.section | test("^\\s*\\[tool\\.ruff\\]")));
 
 # The opening line of a select, the one place a ruff rule list starts.
-def opens_select($rel):
-  (.line | test("^\\s*select\\s*="))
-  and ((.section | test("^\\s*\\[(tool\\.ruff(\\.lint)?|lint)\\]\\s*$")) or (.section == "" and ($rel | ruff_file)));
+def opens_select:
+  (.line | test("^\\s*select\\s*=")) and (.section | test("^\\s*\\[tool\\.ruff(\\.lint)?\\]\\s*$"));
+
+# An addopts line that turns a pytest plugin off: a list item can hold `no:x` apart from its `-p`.
+def plugin_off: has("-p\\s*no:|(^|[\\s\"'])no:");
+
+def drops_tests: has("(^|[\\s\"'])-[km]|--deselect|--ignore");
 
 # Each finding is {text, at}: `at` is an added line's index in the new file, null for a removed line.
-def toml_findings($ctx):
+def pyproject_findings($ctx):
   ($ctx.removed | line_set) as $removed
   | kept($ctx; "^(extend-)?select$") as $kept_rules
   | kept($ctx; "^(include|testpaths)$") as $kept_paths
   | kept($ctx; "^extends?$") as $kept_bases
   | ($ctx.new | annotate) as $notes
-  | ($ctx.added[] | .at as $at | $notes[$at] | select(.section | checked_section($ctx.rel))
+  | ($ctx.added[] | .at as $at | $notes[$at] | select(.section | checked_section)
      | select(.line | test("^\\s*(#|\\[|$)") | not)
      | select((.section | test("per-file-ignores"))
          or (.key | test("^(extend-)?(ignore|exclude|force-exclude|omit|exclude_lines|exclude_also|norecursedirs|skips)$"))
          or (.line | has("^\\s*report\\w+\\s*=\\s*(false|\"(none|warning|information|hint)\")"))
-         or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic)\"|check-typed-exception\\s*=\\s*false|--exit-zero"))
-         or ((.key == "addopts") and (.line | has("-p\\s*no:|--deselect|\\s-k\\s|--ignore"))))
+         or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic|standard|strict)\""))
+         or (.line | has("failOnWarnings\\s*=\\s*false|check-typed-exception\\s*=\\s*false|--exit-zero"))
+         or ((.key == "addopts") and (.line | plugin_off or drops_tests)))
      | {text: "added `\(.line | short)`", at: $at}),
-    ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section($ctx.rel))
+    ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section)
      | select(((.key | test("^(extend-)?select$")) and (.line | dropped($kept_rules)))
          or ((.key | test("^(include|testpaths)$")) and (.line | dropped($kept_paths)))
          or ((.key | test("^extends?$")) and (.line | dropped($kept_bases)))
          or (.line | has("^\\s*report\\w+\\s*=\\s*(true|\"error\")|check-typed-exception\\s*=\\s*true")))
      | {text: "removed `\(.line | short)`", at: null}),
     (if extends_ruff($ctx) then
-       $ctx.added[] | .at as $at | $notes[$at] | select(opens_select($ctx.rel))
+       $ctx.added[] | .at as $at | $notes[$at] | select(opens_select)
        | {text: ("added `\(.line | short)`: in a config that extends another, select replaces its"
            + " whole rule list; extend-select adds to it"), at: $at}
      else empty end);
 
+# Whether new line $at narrows checks that were there before the edit: it is top-level, so it
+# narrows every hook, or it sits in a hook whose `- id:` line the edit did not add.
+def narrows_old_checks($ctx; $at):
+  ([range(0; $at) | select($ctx.new[.] | test("^\\s*-\\s*id:"))] | last) as $id
+  | ($ctx.new[$at] | test("^\\S")) or $id == null or all($ctx.added[]; .at != $id);
+
 def precommit_findings($ctx):
   ($ctx.added[]
-   | select(.line | has("^\\s*(exclude|files):|stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]"))
+   | select(((.line | has("^\\s*(exclude|files):")) and narrows_old_checks($ctx; .at))
+       or (.line | has("stages:.*manual|--exit-zero|--skip|--ignore|[\\s\\[\"]-s[\\s\",\\]]")))
    | {text: "added `\(.line | short)`", at}),
-  ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):")) | {text: "removed `\(short)`", at: null});
+  ($ctx.removed[] | select(has("^\\s*-\\s*(id|repo):|pre-commit\\s+run")) | {text: "removed `\(short)`", at: null});
 
 def makefile_findings($ctx):
   ($ctx.added | map(.line)) as $added
@@ -92,11 +96,7 @@ def makefile_findings($ctx):
            | length > 0)))
      | {text: "removed `\(short)`", at: null});
 
-# Whether a finding's reason is in the form: an added line's, in its comment or on the comment
-# lines above it; a removed line's, in the comments the edit adds.
-def reasoned($ctx; $added_comments):
-  if .at == null then $added_comments | reason_form
-  else [($ctx.new[.at] | comment // ""), comment_above($ctx.new; .at)] | any(reason_form) end;
+def reason_on_own_lines($ctx): [$ctx.added[].line | select(test("^\\s*#"))] | join("\n") | reason_form;
 
 def check($ctx):
   if $ctx.rel | test("(^|/)(ruff\\.base\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json)$") then
@@ -106,14 +106,24 @@ def check($ctx):
       + (if $ctx.rel | endswith(".jscpd.json") then
            ". A copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,"
            + " with its reason (.claude/rules/skipped-checks.md)."
-         else ", or add this project's own settings in pyproject.toml, which extends this file." end))}
+         else ". Where this project's own settings go: .claude/rules/skipped-checks.md." end))}
+  elif $ctx.rel | test("(^|/)(\\.bandit|\\.?pytest\\.(ini|toml)|\\.?ruff\\.toml)$") then
+    select(reason_on_own_lines($ctx) | not)
+    | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
+        + " (.claude/rules/skipped-checks.md). The gate's bandit, pytest or ruff can read its"
+        + " settings from \($ctx.rel), and pytest and ruff then ignore those in pyproject.toml. The"
+        + " hook does not check this file's entries, so every edit here stops until it adds a"
+        + " reason in the required form.\n"
+        + reason_steps("changing \($ctx.rel)"; "the change"; checkers)
+        + "The reason goes on `#` comment lines of their own that the edit adds, and starts with"
+        + " the rule code where there is one (`# B101: ...`): bandit and pytest read a `#` after"
+        + " an INI entry as part of its value.")}
   else
-    ([$ctx.added[].line | comment | select(. != null)] | join("\n")) as $added_comments
-    | [if ($ctx.rel | test("(^|/)(pyproject\\.toml|\\.?ruff\\.toml)$")) then toml_findings($ctx)
-       elif ($ctx.rel | test("(^|/)\\.pre-commit-config\\.yaml$")) then precommit_findings($ctx)
-       elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
-       else empty end
-       | select(reasoned($ctx; $added_comments) | not) | "- \(.text)"]
+    [if ($ctx.rel | test("(^|/)pyproject\\.toml$")) then pyproject_findings($ctx)
+     elif ($ctx.rel | test("(^|/)(\\.pre-commit-config|pre-commit\\.base)\\.yaml$")) then precommit_findings($ctx)
+     elif ($ctx.rel | test("(^|/)Makefile$")) then makefile_findings($ctx)
+     else empty end
+     | select(entry_reasoned($ctx) | not) | "- \(.text)"]
     | select(length > 0)
     | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
         + " (.claude/rules/skipped-checks.md). This edit may switch off a check in \($ctx.rel)"

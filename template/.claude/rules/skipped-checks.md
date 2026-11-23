@@ -2,11 +2,19 @@
 paths:
   - "**/*.py"
   - "pyproject.toml"
+  - ".gitleaksignore"
+  - ".gitleaks.toml"
+  - "**/.bandit"
+  - "**/pytest.ini"
+  - "**/.pytest.ini"
+  - "**/pytest.toml"
+  - "**/.pytest.toml"
+  - "**/ruff.toml"
+  - "**/.ruff.toml"
 ---
 
 # Skipped checks
-These load when you read or edit Python or `pyproject.toml`, and add Python's part to the
-skipped-check rules in `conventions.md`.
+These add this stack's part to the skipped-check rules in `conventions.md`.
 
 - Python's skipped checks are `# noqa`, `# type: ignore`, `# pyright: ignore`, `# nosec`,
   `# pragma: no cover`, `# fmt: skip/off`, a pytest skip, and `# jscpd:ignore-start` through
@@ -21,6 +29,26 @@ skipped-check rules in `conventions.md`.
   # Tried logging.exception, which BLE001 accepts, but async code logs with await log.aerror.
   except Exception as e:  # noqa: BLE001
   ```
+- CI's ruff, basedpyright, bandit, jscpd and pytest read only CI's own settings. A setting of
+  theirs in `pyproject.toml` or in another settings file of the project's applies to `make gate`
+  only. So an exception set there, such as a ruff `ignore` or `per-file-ignores` entry, passes
+  `make gate` and fails CI. An exception goes in the code: a skipped check on its line, or
+  `# ruff: noqa: <code>` at the top of a file for the whole file
+- The secret scan, gitleaks, skips a finding whose line holds `gitleaks:allow`, in a file of any
+  type, and one whose fingerprint `.gitleaksignore` lists. In `.gitleaks.toml`, an entry under
+  `commits`, `paths`, `regexes` or `stopwords` skips the findings it matches, one under
+  `disabledRules` skips a rule, and a file without `useDefault = true` under `[extend]` drops
+  gitleaks's own rules. The docs to read first are gitleaks's. Skip only a value that is not a
+  secret: revoke a real secret and take it out of the code
+- gitleaks reads `gitleaks:allow` only on the finding's own line, so its reason goes after it
+  there, or on the comment lines above when that line would pass 100 columns. gitleaks reads a
+  whole `.gitleaksignore` line as the fingerprint, so a fingerprint's reason goes on the comment
+  lines above it
+- bandit can read its settings from `.bandit`, pytest from `pytest.ini`, `.pytest.ini`,
+  `pytest.toml` and `.pytest.toml`, and ruff from `ruff.toml` and `.ruff.toml`. pytest and ruff
+  then ignore their settings in `pyproject.toml`. So any edit to one of these files can switch a
+  check off, and it gives a reason, whatever it changes. The reason goes on `#` comment lines of
+  their own: bandit and pytest read a `#` after an INI entry as part of its value
 - The practices hook (`.claude/hooks/practices/`) stops an edit that adds a skipped check or
   loosens a config without the rule code or without a reason in the form `conventions.md` gives,
   and its message repeats that rule's steps. The hook checks only the form; review judges whether

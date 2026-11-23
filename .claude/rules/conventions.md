@@ -27,10 +27,10 @@ change the code.
 - Before you write a comment or a docstring, ask whether a clearer name, a smaller function or a
   simpler structure would make it unnecessary, without hurting performance or the design; if so,
   change the code instead.
-- Write a comment only to say why the obvious approach is wrong here, an outside constraint (how a
-  provider, library or platform behaves), a safety, security or data-integrity rule or a contract
-  callers must respect that the code does not show, or the reason for a skipped check. Inside the
-  code, a comment is one line, except that reason, and it never restates the code.
+- Write a comment only for what the code cannot show: why the obvious approach is wrong here, how
+  a provider, library or platform behaves, a safety, security or data-integrity rule, a contract
+  callers must respect, or the reason for a skipped check. Inside the code, a comment is one line,
+  except that reason, and it never restates the code.
 - A file whose language has no docstring (shell, jq, YAML, a Makefile) may open with a comment
   that says what the file is for, the contract it keeps and how to run it, in as few lines as that
   takes, held to the same bar as any comment.

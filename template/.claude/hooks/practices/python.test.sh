@@ -78,9 +78,6 @@ edit 2 "pytest.skip()"                "$TEST" '    pass' '    pytest.skip()'
 edit 2 "jscpd ignore-start, no reason" "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()\n# jscpd:ignore-end'
 edit 2 "jscpd marker inside prose"    "$APP" 'x = c()' $'# keep this jscpd:ignore-start\nx = c()'
 write 2 "Write: new file, bare noqa"  "$APP" '' $'import os  # noqa\n'
-printf '%s' $'a = 1\nb = 1' >"$APP"
-check 2 "MultiEdit: 2nd edit adds noqa" "$(jq -n --arg p "$APP" '{tool_input:{file_path:$p,
-  edits:[{old_string:"a = 1", new_string:"a = 2"}, {old_string:"b = 1", new_string:"b = 1  # noqa"}]}}')"
 edit 2 "a why, no Tried sentence"     "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader'
 edit 2 "Tried with no but"            "$APP" 'x = c()' 'x = c()  # noqa: F821 defined by the plugin loader. Tried importing it.'
 edit 2 "Tried with no why before it"  "$APP" 'x = c()' 'x = c()  # noqa: F821 Tried importing it, but the import cycles.'
@@ -317,16 +314,33 @@ write 0 "write test in the email templates check" "$REPO/tests/contracts/test_em
 
 echo "-- config: switching a check off stops until a reason in the form sits next to it"
 PY="$REPO/pyproject.toml"
-BASE=$'[project]\ndependencies = ["fastapi"]\n\n[tool.ruff.lint]\nselect = [\n    "F",  # Pyflakes\n    "E",  # pycodestyle\n]\n\n[tool.basedpyright]\ntypeCheckingMode = "basic"\ninclude = ["app"]\n\n[tool.pytest.ini_options]\naddopts = "-v"\n'
+BASE=$'[project]\ndependencies = ["fastapi"]\n\n[tool.ruff.lint]\nselect = [\n    "F",  # Pyflakes\n    "E",  # pycodestyle\n]\n\n[tool.basedpyright]\ntypeCheckingMode = "recommended"\ninclude = ["app"]\n\n[tool.pytest.ini_options]\naddopts = "-v"\n'
 edit_in 2 "ruff ignore added"             "$PY" "$BASE" $'select = [' $'ignore = ["E501"]\nselect = ['
 edit_in 2 "per-file-ignores entry"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.per-file-ignores]\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
 edit_in 2 "item added to multi-line ignore" "$PY" $'[tool.ruff.lint]\nignore = [\n    "E501",\n]\n' '    "E501",' $'    "E501",\n    "E712",'
 edit_in 2 "rule removed from select"      "$PY" "$BASE" $'    "E",  # pycodestyle\n' ''
-edit_in 2 "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "basic"' $'typeCheckingMode = "basic"\nreportUnusedImport = false'
-edit_in 2 "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "off"'
+edit_in 2 "type-check report turned off"  "$PY" "$BASE" 'typeCheckingMode = "recommended"' $'typeCheckingMode = "recommended"\nreportUnusedImport = false'
+edit_in 2 "type-check mode lowered"       "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "off"'
+edit_in 2 "type-check mode lowered to standard" "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "standard"'
+edit_in 2 "type-check mode lowered to strict" "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "strict"'
+edit_in 2 "type-check warnings let pass"  "$PY" "$BASE" 'typeCheckingMode = "recommended"' $'typeCheckingMode = "recommended"\nfailOnWarnings = false'
 edit_in 2 "type-check scope narrowed"     "$PY" "$BASE" 'include = ["app"]' 'include = []'
 edit_in 2 "pytest deselect"               "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v --deselect tests/test_x.py::test_y"'
-edit_in 2 "typed except check off"        "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
+edit_in 2 "pytest deselect=, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
+  '    "-v",' $'    "-v",\n    "--deselect=tests/test_x.py::test_y",'
+edit_in 2 "pytest plugin turned off, glued to its -p" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -pno:warnings"'
+edit_in 2 "pytest plugin turned off, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-p", "no:warnings"]'
+edit_in 2 "pytest plugin turned off, in a multi-line addopts" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
+  '    "-v",' $'    "-v",\n    "-p",\n    "no:warnings",'
+edit_in 2 "tests selected by name, as list items" "$PY" "$BASE" 'addopts = "-v"' "addopts = ['-v', '-k', 'smoke']"
+edit_in 2 "tests selected by name, at the start of a multi-line string's line" "$PY" "$BASE" 'addopts = "-v"' \
+  $'addopts = """\n-k smoke\n"""'
+edit_in 2 "tests selected by mark"        "$PY" "$BASE" 'addopts = "-v"' "addopts = \"-v -m 'not slow'\""
+edit_in 2 "tests selected by mark, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-m", "not slow"]'
+edit_in 2 "tests selected by mark, glued to its -m" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -mslow"'
+edit_in 0 "report chars that hold m"      "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -rm"'
+edit_in 0 "pytest option that tightens" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "--strict-markers"]'
+edit_in 2 "typed except check off"       "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
 edit_in 2 "per-file-ignores reason with no Tried sentence" "$PY" "$BASE" $'[tool.basedpyright]' \
   $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
 edit_in 2 "rule removed, its reason only in an old comment" "$PY" \
@@ -336,11 +350,15 @@ says yes "Read the current documentation" "a config stop sends the agent to the 
 edit_in R "per-file-ignores reason above the entry" "$PY" "$BASE" $'[tool.basedpyright]' \
   $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n# '"$TRIED"$'\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
 edit_in R "ignore with the reason on its line" "$PY" "$BASE" $'select = [' "ignore = [\"E501\"]  # E501: long URLs. $TRIED"$'\nselect = ['
+edit_in R "tests selected by mark, reason above" "$PY" "$BASE" 'addopts = "-v"' \
+  "# The nightly job runs the slow tests. $TRIED"$'\naddopts = "-v -m \'not slow\'"'
 edit_in R "rule removed from select, reason where it was" "$PY" "$BASE" $'    "E",  # pycodestyle\n' \
   "    # E: ruff format owns layout. $TRIED"$'\n'
 edit_in 0 "rule added to select"          "$PY" "$BASE" $'    "E",  # pycodestyle\n' $'    "E",  # pycodestyle\n    "BLE001",\n'
 edit_in R "select entry comment reworded (no stop, the comment reminds)" "$PY" "$BASE" '    "E",  # pycodestyle' '    "E",  # pycodestyle errors'
-edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "basic"' 'typeCheckingMode = "standard"'
+edit_in R "type-check mode lowered, reason above" "$PY" "$BASE" 'typeCheckingMode = "recommended"' \
+  "# This tool's generated stubs hold no types. $TRIED"$'\ntypeCheckingMode = "standard"'
+edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "all"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
 
@@ -349,7 +367,6 @@ EXT=$'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nextend-select 
 edit_in 2 "select in a config that extends a base" "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = ["F"]'
 edit_in 2 "multi-line select there"       "$PY" "$EXT" 'extend-select = ["B"]' $'extend-select = ["B"]\nselect = [\n    "F",\n]'
 edit_in 2 "select under [tool.ruff] there" "$PY" "$EXT" 'extend = "ruff.base.toml"' $'extend = "ruff.base.toml"\nselect = ["F"]'
-edit_in 2 "select in a ruff.toml that extends a base" "$REPO/ruff.toml" $'extend = "ruff.base.toml"\n\n[lint]\n' '[lint]' $'[lint]\nselect = ["F"]'
 edit_in R "select there with a reason"    "$PY" "$EXT" 'extend-select = ["B"]' \
   $'extend-select = ["B"]\n'"select = [\"F\"]  # F: this tool keeps only Pyflakes. $TRIED"
 edit_in 0 "extend-select there"           "$PY" "$EXT" 'extend-select = ["B"]' 'extend-select = ["B", "ANN"]'
@@ -386,7 +403,6 @@ says yes "goes between \`# jscpd:ignore-start\` and \`# jscpd:ignore-end\`" "the
   "$JS" $'{\n  "minLines": 9\n}\n' $'{\n  "minLines": 99\n}\n'
 says no "jscpd:ignore-start" "the ruff.base.toml stop names no jscpd marker" "$RB" \
   $'[lint]\nselect = ["F"]\n' $'[lint]\nselect = []\n'
-edit_in 2 "ruff.toml ignore"              "$REPO/ruff.toml" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
 edit_in 2 "pre-commit exclude added"      "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n        exclude: ^tests/'
@@ -395,6 +411,17 @@ edit_in 2 "bandit skip arg"               "$PC" "$PCBASE" 'args: ["-ll"]' 'args:
 edit_in R "pre-commit exclude, reason above" "$PC" "$PCBASE" '      - id: ruff' \
   $'      - id: ruff\n        # The tests hold generated code.\n        # '"$TRIED"$'\n        exclude: ^tests/'
 edit_in 0 "pre-commit hook added"         "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n      - id: check-json'
+edit_in 0 "pre-commit hook added with its files" "$PC" "$PCBASE" '      - id: ruff' \
+  $'      - id: ruff\n      - id: check-json\n        files: ^app/\n        exclude: ^app/generated/'
+edit_in 2 "top-level exclude below an added hook" "$PC" "$PCBASE" '        args: ["-ll"]' \
+  $'        args: ["-ll"]\n      - id: check-json\nexclude: ^generated/'
+PCTEMPLATE=$'repos:\n  - repo: local\n    hooks:\n      - id: template-hooks\n        entry: uv run pre-commit run --config pre-commit.base.yaml --files\n'
+edit_in 2 "template-hooks entry changed" "$PC" "$PCTEMPLATE" 'entry: uv run pre-commit run --config' \
+  'entry: uv run pre-commit run ruff-check --config'
+PB="$REPO/pre-commit.base.yaml"
+edit_in 2 "template hook removed from pre-commit.base.yaml" "$PB" "$PCBASE" $'      - id: bandit\n' ''
+edit_in R "template hook removed, reason added" "$PB" "$PCBASE" $'      - id: bandit\n        args: ["-ll"]\n' \
+  "      # bandit runs in CI only. $TRIED"$'\n'
 MK="$REPO/Makefile"
 MKBASE=$'lint-check:\n\tuv run ruff check app\n\tuv run ruff format --check app\n\ngate: lint-check typecheck security test\n\t@echo ok\n'
 edit_in 0 "lint widened to tests"         "$MK" "$MKBASE" $'\tuv run ruff check app\n' $'\tuv run ruff check app tests\n'
@@ -410,9 +437,102 @@ MKDUP=$'duplication:\n\tuv run jscpd .\n'
 edit_in 2 "jscpd line removed"            "$MK" "$MKDUP" $'\tuv run jscpd .\n' ''
 edit_in 0 "jscpd line kept, scan widened" "$MK" "$MKDUP" $'\tuv run jscpd .\n' $'\tuv run jscpd . scripts\n'
 
+echo "-- config: every edit to bandit's, pytest's or ruff's own files stops until it adds a reason on lines of its own"
+BANDIT="$REPO/.bandit"; PINI="$REPO/pytest.ini"; RT="$REPO/ruff.toml"
+edit_in 2 ".bandit skips a test"          "$BANDIT" $'[bandit]\n' '[bandit]' $'[bandit]\nskips = B101'
+write 2 "pytest.ini created, even empty" "$PINI" '' ''
+edit_in 2 ".pytest.ini edited, even to tighten" "$REPO/.pytest.ini" $'[pytest]\naddopts = -v\n' 'addopts = -v' \
+  'addopts = -v --strict-markers'
+write 2 "pytest.toml created"             "$REPO/pytest.toml" '' $'[pytest]\naddopts = ["-v"]\n'
+write 2 ".pytest.toml created"            "$REPO/.pytest.toml" '' $'[pytest]\naddopts = ["-v"]\n'
+edit_in 2 "ruff.toml ignore"              "$RT" $'line-length = 100\n' 'line-length = 100' $'line-length = 100\nignore = ["E501"]'
+edit_in 2 "select in a ruff.toml that extends a base" "$RT" $'extend = "ruff.base.toml"\n\n[lint]\n' '[lint]' $'[lint]\nselect = ["F"]'
+write 2 ".ruff.toml created in a folder"  "$REPO/$PKG/.ruff.toml" '' $'extend = "../pyproject.toml"\n'
+edit_in 2 "reason after the entry"        "$BANDIT" $'[bandit]\n' '[bandit]' \
+  $'[bandit]\n'"skips = B101  # B101: the tests assert. $TRIED"
+edit_in 2 "reason with no Tried sentence" "$PINI" $'[pytest]\naddopts = -v\n' 'addopts = -v' \
+  $'# The suite prints its own warnings.\naddopts = -v -p no:warnings'
+says yes "\`#\` comment lines of their own" "the stop says where the reason goes" "$BANDIT" \
+  $'[bandit]\n' $'[bandit]\nskips = B101'
+edit_in R ".bandit skips, reason above"   "$BANDIT" $'[bandit]\n' '[bandit]' \
+  $'[bandit]\n# B101: the tests assert.\n# '"$TRIED"$'\nskips = B101'
+write R "pytest.ini created with its reason" "$PINI" '' \
+  "# The generated suite needs its own settings. $TRIED"$'\n[pytest]\naddopts = -v\n'
+edit_in R "ruff.toml entry removed, reason where it was" "$RT" $'[lint]\nselect = ["F", "E"]\n' \
+  $'select = ["F", "E"]\n' "# E: ruff format owns layout. $TRIED"$'\nselect = ["F"]\n'
+
 echo "-- config: CI workflows are not checked (the owner reviews them in the PR)"
 edit_in 0 "gate.yaml loosened"            "$REPO/.github/workflows/gate.yaml" $'      - run: uv run pytest tests/ --cov\n' 'uv run pytest tests/ --cov' 'uv run pytest tests/ --cov || true'
 edit_in 0 "other workflow loosened"       "$REPO/.github/workflows/build.yaml" $'      - run: uv run pytest\n' 'uv run pytest' 'uv run pytest || true'
+
+echo "-- secret scan skips: gitleaks:allow, .gitleaksignore and .gitleaks.toml (must stop)"
+YAML="$REPO/compose.yaml"
+DOC="$REPO/notes.md"
+IGNORE="$REPO/.gitleaksignore"
+GL="$REPO/.gitleaks.toml"
+Q="'''"
+OWN=$'[extend]\nuseDefault = true\n'
+edit 2 "gitleaks:allow, no reason"        "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+edit 2 "gitleaks:allow, a why, no Tried"  "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow a fixture key'
+edit 2 "gitleaks:allow, reason above with code between" "$APP" 'KEY = "k"' \
+  "# A fixture key. $TRIED"$'\nx = 1\nKEY = "k"  # gitleaks:allow'
+edit 2 "gitleaks:allow in YAML, no reason" "$YAML" 'key: k' 'key: k  # gitleaks:allow'
+edit 2 "gitleaks:allow in Markdown, no reason" "$DOC" 'key k' 'key k <!-- gitleaks:allow -->'
+write 2 "fingerprint, no reason"          "$IGNORE" '' $'tests/a.py:github-pat:3\n'
+write 2 "fingerprint, reason after it"    "$IGNORE" '' "tests/a.py:github-pat:3  # A fixture key. $TRIED"$'\n'
+write 2 "fingerprint under another one's reason" "$IGNORE" '' \
+  "# A fixture key. $TRIED"$'\ntests/a.py:github-pat:3\ntests/a.py:github-pat:4\n'
+edit_in 2 "allowlist path, no reason"     "$GL" "$OWN" "$OWN" "$OWN"$'\n[[allowlists]]\n'"paths = [${Q}^tests/${Q}]"
+edit_in 2 "multi-line regexes, reason above the key only" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[allowlists]]\n'"# Fixture keys. $TRIED"$'\nregexes = [\n'"  ${Q}^acme_${Q},"$'\n]'
+edit_in 2 "allowlist item after one that holds =" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[allowlists]]\nregexes = [\n'"  'x=y',"$'\n'"  ${Q}^acme_${Q},"$'\n]'
+edit_in 2 "a rule's allowlist stopword, no reason" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[rules]]\nid = "generic-api-key"\n[[rules.allowlists]]\nstopwords = ["fixture"]'
+edit_in 2 "STOPWORDS in capitals, no reason" "$GL" "$OWN" "$OWN" "$OWN"$'\n[[allowlists]]\nSTOPWORDS = ["fixture"]'
+edit_in 2 "disabledRules entry, no reason" "$GL" "$OWN" "$OWN" "$OWN"'disabledRules = ["generic-api-key"]'
+edit_in 2 "disabledrules in lower case, no reason" "$GL" "$OWN" "$OWN" "$OWN"'disabledrules = ["generic-api-key"]'
+write 2 "new file with a rule, no useDefault" "$GL" '' $'[[rules]]\nid = "acme-key"\n'"regex = ${Q}acme_[a-z0-9]{32}${Q}"$'\n'
+write 2 "new file with only a comment"    "$GL" '' $'# The scan settings.\n'
+edit_in 2 "useDefault removed"            "$GL" "$OWN" $'useDefault = true\n' ''
+edit_in 2 "useDefault turned off"         "$GL" "$OWN" 'useDefault = true' 'useDefault = false'
+edit_in 2 "the [extend] header removed"   "$GL" "$OWN" $'[extend]\n' ''
+write 2 "new file with useDefault outside [extend]" "$GL" '' $'useDefault = true\n'
+write 2 "new file with useDefault under a rule" "$GL" '' $'[[rules]]\nid = "acme-key"\nuseDefault = true\n'
+says yes "tool's docs (gitleaks)" "the stop sends the agent to gitleaks's docs first" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+says yes "revoke a real secret" "the stop says a real secret is revoked, not skipped" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+says yes "Write it in this form: gitleaks:allow <reason>" "the stop shows the inline form" "$APP" 'KEY = "k"' 'KEY = "k"  # gitleaks:allow'
+says yes "Add it, or add the reason as a comment" "the stop says how to keep gitleaks's own rules" "$GL" "$OWN" ''
+
+echo "-- secret scan skips: a reason in the form where gitleaks keeps it (goes on)"
+edit 0 "gitleaks:allow + reason after it" "$APP" 'KEY = "k"' "KEY = \"k\"  # gitleaks:allow a fixture key. $TRIED"
+edit R "gitleaks:allow + reason above"    "$APP" 'KEY = "k"' $'# A fixture key.\n# '"$TRIED"$'\nKEY = "k"  # gitleaks:allow'
+edit 0 "gitleaks:allow in YAML + reason after it" "$YAML" 'key: k' "key: k  # gitleaks:allow a fixture key. $TRIED"
+edit 0 "gitleaks:allow in Markdown + reason in its comment" "$DOC" 'key k' "key k <!-- gitleaks:allow an example key. $TRIED -->"
+edit 0 "edit next to an old bare gitleaks:allow" "$APP" $'KEY = "k"  # gitleaks:allow\nx = 1' $'KEY = "k"  # gitleaks:allow\nx = 2'
+write 0 "fingerprint + reason above"      "$IGNORE" '' "# A fixture key. $TRIED"$'\ntests/a.py:github-pat:3\n'
+write 0 "a comment in .gitleaksignore"    "$IGNORE" '' $'# Fingerprints of fixture keys.\n'
+edit_in R "allowlist path + reason above" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[allowlists]]\n'"# Fixture keys. $TRIED"$'\n'"paths = [${Q}^tests/${Q}]"
+edit_in R "disabledRules entry + reason on its line" "$GL" "$OWN" "$OWN" \
+  "$OWN""disabledRules = [\"generic-api-key\"]  # generic-api-key: fixture keys. $TRIED"
+edit_in R "new file without useDefault + reason" "$GL" '' '' \
+  "# This project scans only for its own key. $TRIED"$'\n[[rules]]\nid = "acme-key"\n'
+edit_in 0 "a rule added to a file that keeps useDefault" "$GL" "$OWN" "$OWN" \
+  "$OWN"$'\n[[rules]]\nid = "acme-key"\n'"regex = ${Q}acme_[a-z0-9]{32}${Q}"
+edit_in 0 "an allowlist description added" "$GL" "$OWN"$'\n[[allowlists]]\npaths = ["x"]\n' '[[allowlists]]' \
+  $'[[allowlists]]\ndescription = "Fixtures"'
+edit_in 0 "an allowlist path removed"     "$GL" "$OWN"$'\n[[allowlists]]\npaths = ["x"]\n' $'paths = ["x"]\n' ''
+write 0 "new file that keeps useDefault"  "$GL" '' "$OWN"
+write 0 "new file with extend.useDefault outside any table" "$GL" '' $'extend.useDefault = true\n'
+edit R "gitleaks:allow + reason above that names gitleaks" "$APP" 'KEY = "k"' \
+  "# gitleaks flags a fixture key. $TRIED"$'\nKEY = "k"  # gitleaks:allow'
+write 0 "fingerprint + reason above that names gitleaks" "$IGNORE" '' \
+  "# gitleaks flags a fixture key. $TRIED"$'\ntests/a.py:github-pat:3\n'
+edit R "noqa + reason above that names gitleaks" "$APP" 'x = 1' "# gitleaks flags the URL. $TRIED"$'\nx = 1  # noqa: E501'
+mkdir -p "$REPO/docs"
+write 0 "a .gitleaks.toml below the root" "$REPO/docs/.gitleaks.toml" '' $'[[allowlists]]\npaths = ["x"]\n'
+write 0 "a .gitleaksignore below the root" "$REPO/docs/.gitleaksignore" '' $'tests/a.py:github-pat:3\n'
 
 echo "== $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

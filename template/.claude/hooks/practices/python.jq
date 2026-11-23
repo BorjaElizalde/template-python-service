@@ -7,11 +7,14 @@ import "stack" as $stack;
 
 def package: $stack[0].package;
 def outside_tests: startswith("tests/") | not;
-def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff|jscpd)\\b|^\\s*#!";
+def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff|jscpd|gitleaks:allow)\\b|^\\s*#!";
 def plain_comment: has("^\\s*#\\s*[a-z0-9]") and (has(directive) | not);
 
 # The tools whose docs a stop for a skipped check or a loosened config sends the agent to first.
 def checkers: "ruff, basedpyright, bandit, pytest, jscpd";
+
+# The line with its quoted text blanked, so a `#` or a bracket inside a string is not read as code.
+def unquoted: gsub("\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'"; "\"\"");
 
 # The line's comment, from its `#` to the end, or null. Quoted text is blanked first so a `#`
 # inside a string is not read as one; a line holding a triple quote has no trailing comment read.
@@ -20,7 +23,7 @@ def checkers: "ruff, basedpyright, bandit, pytest, jscpd";
 def comment:
   if test("^\\s*#") then trimmed
   elif test("\"\"\"|'''") then null
-  else gsub("\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'"; "\"\"")
+  else unquoted
     | (capture("\\s(?<c>#.*)$") // {c: null}).c
     | if . == null then null else trimmed end
   end;
