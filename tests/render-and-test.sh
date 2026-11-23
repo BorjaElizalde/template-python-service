@@ -156,13 +156,28 @@ expect "lint-check applies the base's ban on typing.cast" fails_with app/cast.py
 # CI's checks call each tool directly with CI's own settings, so no edit outside .github can relax
 # them: not one to the local gate, to the project's copies of the shared settings, or to a tool's
 # own settings file.
-CI="$D/.github/actions/stack-gate"
-expect "the CI action is a valid action" uvx --quiet check-jsonschema --builtin-schema vendor.github-actions "$CI/action.yaml"
+CI="$D/.github/workflows/gate-checks.yaml"
+CI_SETTINGS="$D/.github/gate-checks"
+expect "the CI workflow is a valid workflow" uvx --quiet check-jsonschema --builtin-schema vendor.github-workflows "$CI"
+# GitHub runs the template's copy only in a project, so a break of its contract with the Gate
+# workflow would first show there, failing every PR.
+keeps_gates_contract() {
+  local triggers declared passed conditions
+  triggers="$(uvx --quiet yq -c '.on | keys' "$CI")"
+  declared="$(uvx --quiet yq -c '[.on.workflow_call.inputs | keys]' "$CI")"
+  passed="$(uvx --quiet yq -c '[.jobs[] | select(.uses == "./.github/workflows/gate-checks.yaml") | .with | keys]' \
+    "$D/.github/workflows/gate.yaml")"
+  conditions="$(uvx --quiet yq -c '[.jobs[].if] | unique' "$CI")"
+  [ "$triggers" = '["workflow_call"]' ] && [ "$passed" = "$declared" ] &&
+    [ "$conditions" = "[\"\${{ !inputs.skip }}\"]" ] ||
+    { echo "FAIL triggers $triggers; inputs declared $declared, passed $passed; jobs run if $conditions"; return 1; }
+}
+expect "the Gate workflow calls the CI workflow with the inputs it declares, and each job skips on skip" keeps_gates_contract
 expect "CI's copies of the shared settings match the project's" bash -c "
-  cmp -s '$D/ruff.base.toml' '$CI/ruff.base.toml' && cmp -s '$D/basedpyright.base.json' '$CI/basedpyright.base.json' &&
-  cmp -s '$D/.jscpd.json' '$CI/.jscpd.json'"
-# The action's run steps, as {name, run}, in the order CI runs them.
-STEPS="$(uvx --quiet yq -c '[.runs.steps[] | select(.run) | {name, run}]' "$CI/action.yaml")"
+  cmp -s '$D/ruff.base.toml' '$CI_SETTINGS/ruff.base.toml' && cmp -s '$D/.jscpd.json' '$CI_SETTINGS/.jscpd.json' &&
+  cmp -s '$D/basedpyright.base.json' '$CI_SETTINGS/basedpyright.base.json'"
+# The CI job's run steps, as {name, run}, in the order CI runs them.
+STEPS="$(uvx --quiet yq -c '[.jobs.checks.steps[] | select(.run) | {name, run}]' "$CI")"
 step_scripts_pass_shellcheck() {
   local i
   for ((i = 0; i < $(jq length <<<"$STEPS"); i++)); do
@@ -177,7 +192,7 @@ ci() {
   local i status=0
   git -C "$D" add -A
   for ((i = 0; i < $(jq length <<<"$STEPS"); i++)); do
-    (cd "$D" && GITHUB_ACTION_PATH="$CI" RUNNER_TEMP="$OUT" bash --noprofile --norc -eo pipefail \
+    (cd "$D" && RUNNER_TEMP="$OUT" bash --noprofile --norc -eo pipefail \
       -c "$(jq -r ".[$i].run" <<<"$STEPS")") >/dev/null 2>&1 || { jq -r ".[$i].name" <<<"$STEPS"; status=1; break; }
   done
   git -C "$D" clean -fq
