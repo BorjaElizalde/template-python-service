@@ -1,11 +1,62 @@
 # From the python-service template: change the template, not this copy.
+# The checks a project's CI runs, one step per tool, never through make gate. Each tool reads only
+# CI's settings, the files beside this action, so no edit outside .github can relax CI. Coverage
+# alone reads the project's settings: CI sets no coverage floor, so they can only add one.
 name: Python checks
-description: The checks a project's CI runs, each tool called directly, never through make
+description: The checks a project's CI runs, each tool called directly with CI's own settings
 runs:
   using: composite
   steps:
     - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       with:
         enable-cache: true
-    - run: bash "$GITHUB_ACTION_PATH/gate.sh"
+    - name: Install dependencies
       shell: bash
+      run: uv sync --all-groups
+    # Else ruff skips a committed file that a .gitignore or .ignore lists.
+    - name: Lint with ruff
+      shell: bash
+      run: uv run ruff check --config "$GITHUB_ACTION_PATH/ruff.base.toml" --no-respect-gitignore .
+    - name: Check the format with ruff
+      shell: bash
+      run: |
+        uv run ruff format --check --config "$GITHUB_ACTION_PATH/ruff.base.toml" \
+          --no-respect-gitignore .
+    # basedpyright resolves the paths in its settings from their file's folder, so CI's copy goes to
+    # the root. No file is at the baseline path: a project's .basedpyright/baseline.json would hide
+    # each error it lists.
+    - name: Check types with basedpyright
+      shell: bash
+      run: |
+        cp "$GITHUB_ACTION_PATH/basedpyright.base.json" .basedpyright-ci.json
+        uv run basedpyright --project .basedpyright-ci.json \
+          --baselinefile "$RUNNER_TEMP/no-baseline.json"
+    # With --ini, bandit never looks for a project's .bandit.
+    - name: Scan for security issues with bandit
+      shell: bash
+      run: uv run bandit -r . -x ./.venv -ll -ii --ini "$GITHUB_ACTION_PATH/bandit.ini"
+    # Each Python file git tracks, named: in a folder it walks, jscpd skips a file that a .gitignore
+    # or .ignore lists. As in python.mk, a failure prints the fix order python-conventions.md gives.
+    - name: Find duplicated code with jscpd
+      shell: bash
+      run: |
+        files=()
+        while IFS= read -r -d '' file; do files+=("$file"); done < <(git ls-files -z -- '*.py')
+        uv run jscpd --config "$GITHUB_ACTION_PATH/.jscpd.json" "${files[@]}" || {
+          echo "::error::For each copy jscpd lists: delete the copy that should not exist first;" \
+            "else call the code's existing owner; extract a shared function only last. A copy" \
+            "that must stay goes between # jscpd:ignore-start and # jscpd:ignore-end, with its" \
+            "reason (.claude/rules/skipped-checks.md). No jscpd? uv add --dev jscpd"
+          exit 1
+        }
+    # As in python.mk: no tests/ skips pytest, an empty tests/ fails it. With -c, pytest would take
+    # this action's folder as its root: --rootdir keeps the repository's, and python -m puts the
+    # repository on the import path, which pyproject.toml's pythonpath does for make gate.
+    - name: Run tests with pytest
+      shell: bash
+      run: |
+        if [ ! -d tests ]; then
+          echo "::notice::pytest skipped: no tests/ folder"
+          exit 0
+        fi
+        uv run python -m pytest -c "$GITHUB_ACTION_PATH/pytest.ini" --rootdir . tests --cov

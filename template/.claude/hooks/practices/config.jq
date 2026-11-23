@@ -106,7 +106,7 @@ def check($ctx):
       + (if $ctx.rel | endswith(".jscpd.json") then
            ". A copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,"
            + " with its reason (.claude/rules/skipped-checks.md)."
-         else ", or add this project's own settings in pyproject.toml, which extends this file." end))}
+         else ". Where this project's own settings go: .claude/rules/skipped-checks.md." end))}
   elif $ctx.rel | test("(^|/)(\\.bandit|\\.?pytest\\.(ini|toml)|\\.?ruff\\.toml)$") then
     select(reason_on_own_lines($ctx) | not)
     | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
