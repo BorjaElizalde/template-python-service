@@ -1,0 +1,33 @@
+# From the agentic template: change the template, not this copy.
+# The develop and staging rulesets require its checks, `gate / <job>`.
+name: Gate
+
+on:
+  pull_request:
+    # No main: it takes staging alone (Branch protection), whose code passed this check on its way
+    # in. Tried main with its job skipped, but nothing requires gate to report there.
+    branches: [develop, staging]
+    # ready_for_review gates a draft once it is marked ready; the default types leave it out.
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: gate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # The stack's checks, each tool called directly, and each job of them skips when skip is true.
+    # A project's CI never runs make gate, so a change that relaxes the local gate can't relax CI.
+    uses: ./.github/workflows/gate-checks.yaml
+    with:
+      # Skipped on a draft, which can't merge and is gated when it is marked ready, and on the
+      # promotion of develop, whose code passed this check on its way in, so a second run only
+      # costs minutes. Tried an if on this job, but a skipped job that calls a workflow reports
+      # only as gate, so a required gate / <job> never reports and blocks the merge, where a
+      # skipped check passes. Tried the head's name alone, but a fork's develop would skip too,
+      # and so would a branch Develop into develop, since == ignores case. Tried a trigger filter,
+      # but it can't read a PR's head or its draft state.
+      skip: >-
+        ${{ github.event.pull_request.draft
+        || (github.base_ref == 'staging' && github.head_ref == 'develop'
+        && github.event.pull_request.head.repo.full_name == github.repository) }}
