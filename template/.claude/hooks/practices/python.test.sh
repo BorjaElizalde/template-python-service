@@ -396,8 +396,8 @@ says yes "Change the template instead" "the base-file stop sends the change to t
 JS="$REPO/.jscpd.json"
 edit_in 2 "minLines raised in .jscpd.json" "$JS" $'{\n  "minLines": 9\n}\n' '"minLines": 9' '"minLines": 99'
 edit_in 2 "a path left out in .jscpd.json" "$JS" $'{\n  "ignore": ["tests/**"]\n}\n' '"tests/**"' '"tests/**", "app/**"'
-mkdir -p "$REPO/.github/actions/stack-gate"
-edit_in 2 "CI's copy of .jscpd.json edited" "$REPO/.github/actions/stack-gate/.jscpd.json" \
+mkdir -p "$REPO/.github/gate-checks"
+edit_in 2 "CI's copy of .jscpd.json edited" "$REPO/.github/gate-checks/.jscpd.json" \
   $'{\n  "minLines": 9\n}\n' '"minLines": 9' '"minLines": 99'
 says yes "goes between \`# jscpd:ignore-start\` and \`# jscpd:ignore-end\`" "the .jscpd.json stop points to the markers" \
   "$JS" $'{\n  "minLines": 9\n}\n' $'{\n  "minLines": 99\n}\n'

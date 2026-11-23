@@ -31,9 +31,11 @@ done
 if [ -z "$repo" ]; then
   url="$(git remote get-url origin 2>/dev/null)" && repo="${url#https://github.com/}" && repo="${repo%.git}"
 fi
-run() { printf '{"__typename":"CheckRun","name":"%s","status":"%s","conclusion":"%s"}' "$1" "$2" "$3"; }
+run() {  # run <name> <workflow> <status> <conclusion>
+  printf '{"__typename":"CheckRun","name":"%s","workflowName":"%s","status":"%s","conclusion":"%s"}' "$1" "$2" "$3" "$4"
+}
 ctx() { printf '{"__typename":"StatusContext","context":"%s","state":"%s"}' "$1" "$2"; }
-GATE="$(run gate COMPLETED SUCCESS)"
+GATE="$(run 'gate / checks' Gate COMPLETED SUCCESS)"
 pr_json() {  # pr_json <base> <head> <checks>
   printf '{"baseRefName":"%s","headRefName":"%s","headRefOid":"%s","url":"https://github.com/%s/pull/%s","statusCheckRollup":[%s]}\n' \
     "$1" "$2" "$H" "${repo:-acme/app}" "${pr:-1}" "$3"
@@ -47,14 +49,16 @@ case "$pr" in
   16) pr_json staging bugfix/x "$GATE" ;;
   "") pr_json feat/x fix/y "$GATE" ;;
   # The opt-in cases' PRs into develop, each with its checks.
-  21) pr_json develop feat/x "$GATE,$(run docs COMPLETED SKIPPED),$(ctx legacy/ci SUCCESS)" ;;
-  22) pr_json develop feat/x "$(run gate IN_PROGRESS '')" ;;
-  23) pr_json develop feat/x "$(run lint COMPLETED SUCCESS)" ;;
-  24) pr_json develop feat/x "$GATE,$(run test COMPLETED FAILURE)" ;;
+  21) pr_json develop feat/x "$GATE,$(run docs Docs COMPLETED SKIPPED),$(ctx legacy/ci SUCCESS)" ;;
+  22) pr_json develop feat/x "$(run 'gate / checks' Gate IN_PROGRESS '')" ;;
+  23) pr_json develop feat/x "$(run lint Lint COMPLETED SUCCESS)" ;;
+  24) pr_json develop feat/x "$GATE,$(run test Test COMPLETED FAILURE)" ;;
   25) pr_json develop feat/x "$GATE,$(ctx legacy/ci PENDING)" ;;
   26) pr_json develop feat/x "" ;;
-  27) pr_json develop feat/x "$GATE,$(run test COMPLETED '')" ;;
-  28) pr_json develop feat/x "$GATE,$(run up-to-date COMPLETED SUCCESS),$(ctx up-to-date FAILURE)" ;;
+  27) pr_json develop feat/x "$GATE,$(run test Test COMPLETED '')" ;;
+  28) pr_json develop feat/x "$GATE,$(run up-to-date 'Branch protection' COMPLETED SUCCESS),$(ctx up-to-date FAILURE)" ;;
+  29) pr_json develop feat/x "$(run gate Lint COMPLETED SUCCESS)" ;;
+  30) pr_json develop feat/x "$(run 'gate / checks' Gate COMPLETED SKIPPED)" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -170,9 +174,10 @@ t 0 "local merge into a feature branch" 'git merge origin/develop'
 t 2 "without agent_merges, a green pinned squash is still the owner's" "gh pr merge 21 --squash --match-head-commit $H"
 
 echo "-- agent_merges: the agent's own PR into develop, squashed, pinned to a head whose every check"
-echo "   passed with gate among them (PR 21 green; 22 gate running; 23 no gate; 24 a check failed;"
-echo "   25 a status pending; 26 no checks; 27 a check completed with no conclusion;"
-echo "   28 develop moved on after its checks passed; 16 bugfix→staging)"
+echo "   passed with a Gate check among them (PR 21 green; 22 gate running; 23 no gate; 24 a check"
+echo "   failed; 25 a status pending; 26 no checks; 27 a check completed with no conclusion;"
+echo "   28 develop moved on after its checks passed; 29 a check named gate from another workflow;"
+echo "   30 gate skipped; 16 bugfix→staging)"
 t_on 0 "own green PR, squash, pinned head"   "gh pr merge 21 --squash --match-head-commit $H"
 t_on 0 "promotion still passes"              'gh pr merge 12 --merge'
 t_on 2 "pin to another commit"               'gh pr merge 21 --squash --match-head-commit 2222222222222222222222222222222222222222'
@@ -186,6 +191,8 @@ t_on 2 "no checks at all"                    "gh pr merge 26 --squash --match-he
 # An empty conclusion is not a pass, even on a check that says it completed.
 t_on 2 "a check completed with no conclusion" "gh pr merge 27 --squash --match-head-commit $H"
 t_on 2 "a failed up-to-date status, though the checks passed" "gh pr merge 28 --squash --match-head-commit $H"
+t_on 2 "a check named gate from another workflow" "gh pr merge 29 --squash --match-head-commit $H"
+t_on 2 "gate skipped"                        "gh pr merge 30 --squash --match-head-commit $H"
 t_on 2 "another repository after cd"         "cd $STUB/other && gh pr merge 21 --squash --match-head-commit $H"
 t_on 2 "bugfix into staging stays the owner's" "gh pr merge 16 --squash --match-head-commit $H"
 t_on 2 "feature into main stays the owner's" "gh pr merge 15 --squash --match-head-commit $H"
