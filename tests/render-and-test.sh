@@ -157,7 +157,7 @@ expect "lint-check applies the base's ban on typing.cast" fails_with app/cast.py
 # them: not one to the local gate, to the project's copies of the shared settings, or to a tool's
 # own settings file.
 CI="$D/.github/workflows/gate-checks.yaml"
-SETTINGS="$D/.github/gate-checks"
+CI_SETTINGS="$D/.github/gate-checks"
 expect "the CI workflow is a valid workflow" uvx --quiet check-jsonschema --builtin-schema vendor.github-workflows "$CI"
 # GitHub runs the template's copy only in a project, so a break of its contract with the Gate
 # workflow would first show there, failing every PR.
@@ -174,8 +174,8 @@ keeps_gates_contract() {
 }
 expect "the Gate workflow calls the CI workflow with the inputs it declares, and each job skips on skip" keeps_gates_contract
 expect "CI's copies of the shared settings match the project's" bash -c "
-  cmp -s '$D/ruff.base.toml' '$SETTINGS/ruff.base.toml' &&
-  cmp -s '$D/basedpyright.base.json' '$SETTINGS/basedpyright.base.json' && cmp -s '$D/.jscpd.json' '$SETTINGS/.jscpd.json'"
+  cmp -s '$D/ruff.base.toml' '$CI_SETTINGS/ruff.base.toml' && cmp -s '$D/.jscpd.json' '$CI_SETTINGS/.jscpd.json' &&
+  cmp -s '$D/basedpyright.base.json' '$CI_SETTINGS/basedpyright.base.json'"
 # The CI job's run steps, as {name, run}, in the order CI runs them.
 STEPS="$(uvx --quiet yq -c '[.jobs.checks.steps[] | select(.run) | {name, run}]' "$CI")"
 step_scripts_pass_shellcheck() {
