@@ -1,20 +1,24 @@
 // From the python-service template: change the template, not this copy.
 // The basedpyright settings every service shares, read as JSON with comments. The project's
-// pyproject.toml extends this file. basedpyright matches the exclude from this file's folder, so a
-// config that extends a copy in another folder excludes nothing.
+// pyproject.toml extends this file. basedpyright resolves the paths here from this file's folder,
+// so a config that extends a copy in another folder matches none of them.
 {
   "exclude": ["**/*.ipynb"],
-  "typeCheckingMode": "standard",
+  "typeCheckingMode": "recommended",
   "pythonPlatform": "Linux",
-  "reportPrivateUsage": "error",
-  "reportMissingTypeStubs": false,
-  "reportUnknownMemberType": false,
-  "reportUnknownVariableType": false,
-  "reportUnknownArgumentType": false,
-  "reportUnreachable": "error",
-  "reportUnnecessaryComparison": "error",
-  "reportUnnecessaryIsInstance": "error",
-  "reportUnnecessaryCast": "error",
-  "reportIgnoreCommentWithoutRule": "error",
-  "reportUnnecessaryTypeIgnoreComment": "error"
+  // reportUnusedCallResult: a call made only for its effect, such as session.execute(...) or
+  // op.create_table(...), returns a value nobody needs. reportUnusedCoroutine still reports an
+  // async call left without await.
+  // Tried `_ = ` before each such call, the rule's documented fix, but on every call made for its
+  // effect it adds an assignment that says nothing.
+  "reportUnusedCallResult": false,
+  // reportUnknownArgumentType: Alembic writes the revisions in database/versions, and it writes the
+  // Double column types, such as sa.Double(), with no type argument, so each is Double[Unknown].
+  // An entry's imports resolve from its root, so extraPaths adds the project's root back for a
+  // revision that imports the project's own modules, such as a helper under database/.
+  // Tried excluding database/versions, but then no check reads the code that changes the data.
+  // Tried editing the project's script.py.mako, but it writes only the header, not the columns.
+  "executionEnvironments": [
+    {"root": "database/versions", "extraPaths": ["."], "reportUnknownArgumentType": false}
+  ]
 }

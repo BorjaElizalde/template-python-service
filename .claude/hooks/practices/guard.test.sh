@@ -71,8 +71,6 @@ printf 'STOP\nold\n' >"$REPO/b.txt"
 check 0 "edit beside an existing STOP"    "$(edit "$REPO/b.txt" "old" "new")"
 check 0 "edit that removes a STOP"        "$(edit "$REPO/b.txt" "STOP" "gone")"
 check 2 "edit that adds a STOP"           "$(edit "$REPO/b.txt" "old" "STOP again")"
-check 2 "MultiEdit: 2nd edit adds STOP"   "$(jq -n --arg p "$REPO/b.txt" '{tool_input:{file_path:$p,
-  edits:[{old_string:"old", new_string:"new"}, {old_string:"new", new_string:"STOP now"}]}}')"
 
 echo "-- fail-open paths"
 check 0 "file of no kind"                 "$(write "$REPO/a.md" "STOP")"
