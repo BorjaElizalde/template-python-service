@@ -1,0 +1,68 @@
+# From the agentic template: change the template, not this copy.
+# Rulesets can't limit a PR's source, so the staging and main rulesets require this check.
+# Nor does every plan have a ruleset to keep a PR's branch up to date, so a PR into develop that
+# lacks develop's newest commits shows a failed up-to-date check: its own run fails, and a push to
+# develop puts a failed status on its head, which a new head leaves behind. That check never
+# reports as branch-protection: a commit's checks show on every PR it is the head of.
+name: Branch protection
+
+on:
+  pull_request:
+    branches: [develop, staging, main]
+    # A changed base arrives as edited; without it the PR keeps the verdict of its first base.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [develop]
+
+jobs:
+  branch-protection:
+    # One job: a second, skipped on a PR into develop, would pass as branch-protection on its head.
+    name: >-
+      ${{ github.event_name == 'pull_request' && github.base_ref != 'develop'
+      && 'branch-protection' || 'up-to-date' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      # A branch name can't hold a colon.
+      - name: Check the PR's source
+        if: github.base_ref == 'staging' || github.base_ref == 'main'
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          case "$BASE:$HEAD" in
+            main:staging | staging:develop) ;;
+            *) echo "::error::No PR from $HEAD into $BASE: main takes staging, and staging takes develop."; exit 1 ;;
+          esac
+          [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ] ||
+            { echo "::error::$BASE takes PRs from this repository's own branches, not from $HEAD_REPO."; exit 1; }
+      - name: Fail a PR into develop that lacks develop's newest commits
+        if: github.base_ref == 'develop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          behind="$(gh api "repos/$GITHUB_REPOSITORY/compare/develop...$HEAD_SHA" --jq .behind_by)"
+          [ "$behind" -eq 0 ] ||
+            { echo "::error::This branch lacks develop's newest commits ($behind), so its checks say nothing about its code with develop as it is: merge develop into it."; exit 1; }
+      # No run of a PR starts when develop moves, so its head takes a failed status instead.
+      - name: Mark each open PR into develop that lacks the pushed commits
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          heads="$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --limit 1000 --json headRefOid --jq '.[].headRefOid')"
+          for head in $heads; do
+            # GitHub takes 1000 statuses for a commit and context, so a head is marked once.
+            marked="$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/status" --jq 'any(.statuses[]; .context == "up-to-date")')"
+            [ "$marked" = false ] || continue
+            behind="$(gh api "repos/$GITHUB_REPOSITORY/compare/develop...$head" --jq .behind_by)"
+            [ "$behind" -eq 0 ] ||
+              gh api "repos/$GITHUB_REPOSITORY/statuses/$head" --silent -f state=failure -f context=up-to-date \
+                -f description="This branch lacks develop's newest commits: merge develop into it."
+          done
