@@ -11,12 +11,9 @@ concurrency:
 
 jobs:
   gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
-      - run: make gate
+    uses: ./.github/workflows/gate-checks.yaml
+    with:
+      skip: false
 
   # YYYYMMDD.N from the commit date: Copier and Renovate order template versions by PEP 440, which
   # the YYYYMMDD-shortsha image tags do not satisfy.
