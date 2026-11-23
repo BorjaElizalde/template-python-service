@@ -335,6 +335,10 @@ edit_in 2 "pytest plugin turned off, in a multi-line addopts" "$PY" $'[tool.pyte
 edit_in 2 "tests selected by name, as list items" "$PY" "$BASE" 'addopts = "-v"' "addopts = ['-v', '-k', 'smoke']"
 edit_in 2 "tests selected by name, at the start of a multi-line string's line" "$PY" "$BASE" 'addopts = "-v"' \
   $'addopts = """\n-k smoke\n"""'
+edit_in 2 "tests selected by mark"        "$PY" "$BASE" 'addopts = "-v"' "addopts = \"-v -m 'not slow'\""
+edit_in 2 "tests selected by mark, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-m", "not slow"]'
+edit_in 2 "tests selected by mark, glued to its -m" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -mslow"'
+edit_in 0 "report chars that hold m"      "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -rm"'
 edit_in 0 "pytest option that tightens" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "--strict-markers"]'
 edit_in 2 "typed except check off"       "$PY" "$BASE" $'[tool.basedpyright]' $'[tool.ruff.lint.flake8-bandit]\ncheck-typed-exception = false\n\n[tool.basedpyright]'
 edit_in 2 "per-file-ignores reason with no Tried sentence" "$PY" "$BASE" $'[tool.basedpyright]' \
@@ -346,6 +350,8 @@ says yes "Read the current documentation" "a config stop sends the agent to the 
 edit_in R "per-file-ignores reason above the entry" "$PY" "$BASE" $'[tool.basedpyright]' \
   $'[tool.ruff.lint.per-file-ignores]\n# E501: the fixtures hold long URLs.\n# '"$TRIED"$'\n"tests/**" = ["E501"]\n\n[tool.basedpyright]'
 edit_in R "ignore with the reason on its line" "$PY" "$BASE" $'select = [' "ignore = [\"E501\"]  # E501: long URLs. $TRIED"$'\nselect = ['
+edit_in R "tests selected by mark, reason above" "$PY" "$BASE" 'addopts = "-v"' \
+  "# The nightly job runs the slow tests. $TRIED"$'\naddopts = "-v -m \'not slow\'"'
 edit_in R "rule removed from select, reason where it was" "$PY" "$BASE" $'    "E",  # pycodestyle\n' \
   "    # E: ruff format owns layout. $TRIED"$'\n'
 edit_in 0 "rule added to select"          "$PY" "$BASE" $'    "E",  # pycodestyle\n' $'    "E",  # pycodestyle\n    "BLE001",\n'
