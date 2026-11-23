@@ -4,7 +4,7 @@
 # develop. Each tool reads only CI's settings, the files in .github/gate-checks/, so no edit
 # outside .github can relax CI. Coverage alone reads the project's settings: CI sets no coverage
 # floor, so they can only add one.
-name: Python checks
+name: Gate
 
 on:
   workflow_call:

@@ -1,6 +1,6 @@
 # This repository's own CI checks, which the Gate workflow from template-agentic calls. A template
 # repository's CI may run make gate: the rule that CI never runs it is for projects' CI.
-name: Template checks
+name: Gate
 
 on:
   workflow_call:
