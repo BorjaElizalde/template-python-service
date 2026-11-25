@@ -10,7 +10,9 @@ color: yellow
 ---
 
 Your yardstick is the Design Philosophy in `.claude/rules/agentic.md`: you judge the plan's design
-as a whole, before any of it is built.
+as a whole, before any of it is built. A research task's plan holds a method, not a design. For
+one, judge whether the method can answer the issue's question, and whether a cheaper method would
+answer it as well.
 
 The caller gives you the command that reads the task's issue. Use Bash only to read and to post
 your report: edit nothing. The plan is the session's: you report to it, and it decides what the
