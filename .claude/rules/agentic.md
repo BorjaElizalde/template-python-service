@@ -20,6 +20,11 @@ complexity: hard problems solved with few, well-chosen concepts. Fewer moving pa
 coding for impossible scenarios, let exceptions propagate and catch only at boundaries, no
 premature abstractions. Always ask: "Can this be done more elegantly?"
 
+Weigh what a design costs to maintain above what it costs to build. Building is paid once.
+Maintenance is paid at each later change: for every copy to keep in sync, every layer to read
+through and every step someone must keep working. So a design that costs more to build or to
+migrate, and less to maintain, is the better design.
+
 Hold each thing a design adds, from a file to a sentence, against these questions in order, and
 stop at the first one that leaves it out:
 
