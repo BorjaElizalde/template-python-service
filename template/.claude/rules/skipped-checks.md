@@ -14,7 +14,6 @@ paths:
 ---
 
 # Skipped checks
-These add this stack's part to the general skipped-check rules.
 
 - Python's skipped checks are `# noqa`, `# type: ignore`, `# pyright: ignore`, `# nosec`,
   `# pragma: no cover`, `# fmt: skip/off`, a pytest skip, a warning filter other than `error`

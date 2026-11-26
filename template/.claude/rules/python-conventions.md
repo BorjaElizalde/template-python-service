@@ -4,7 +4,6 @@ paths:
 ---
 
 # Python conventions
-These expand on the simplicity principle in the Design Philosophy.
 
 ## Error Handling
 - Let exceptions propagate naturally - catch at boundaries only: the entry points where a call
