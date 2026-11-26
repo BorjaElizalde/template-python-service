@@ -17,6 +17,7 @@ _exclude:
   - "{% if 'api' not in parts %}.claude/rules/api{% endif %}"
   - "{% if 'batch' not in parts %}.claude/rules/batch{% endif %}"
   - "{% if 'database' not in parts %}.claude/rules/database{% endif %}"
+  - "{% if 'api' not in parts and 'batch' not in parts %}.claude/rules/services.md{% endif %}"
 
 package_name:
   type: str

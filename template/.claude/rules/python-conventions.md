@@ -4,7 +4,7 @@ paths:
 ---
 
 # Python conventions
-These expand on the simplicity principle in the Design Philosophy (`.claude/rules/agentic.md`).
+These expand on the simplicity principle in the Design Philosophy.
 
 ## Error Handling
 - Let exceptions propagate naturally - catch at boundaries only: the entry points where a call
@@ -46,30 +46,23 @@ These expand on the simplicity principle in the Design Philosophy (`.claude/rule
   where it applies. A body left empty gets `pass`, or `...` in a Protocol or abstract stub
 
 ## Duplicated Code
-- The gate fails on a block of 10 lines or more written twice outside
-  `tests/`{% if 'database' in parts %} and `database/`{% endif %}, imports aside (jscpd, set in
-  `.jscpd.json`). Fix each copy in this order: first delete the copy that should
-  not exist; else call the code's existing owner; extract a shared function only last. Never
-  extract a helper only to pass the check: that is the premature abstraction the Design
-  Philosophy forbids
+- The gate fails on a block of 10 lines or more written twice, imports aside, outside the folders
+  that `.jscpd.json` leaves out, such as `tests/` (jscpd). Fix each copy in this order: first
+  delete the copy that should not exist; else call the code's existing owner; extract a shared
+  function only last. Never extract a helper only to pass the check: that is the premature
+  abstraction the Design Philosophy forbids
 - Keep both copies only when they look alike but change for different reasons. Then the copy goes
-  between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with its reason in the form
-  `.claude/rules/conventions.md` gives
+  between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with its reason in the form a skipped
+  check's reason takes
 
 ## Code Style
 - The same work runs through the same code path from every entry point: no copy of it per entry
   point
-{%- if 'api' in parts or 'batch' in parts %}
-- Before adding a shared symbol, check its established owner: business operations in
-  `{{ package_name }}/services.py`, technical helpers in `{{ package_name }}/utils/`. Extend the
-  owner instead of creating a parallel definition
-{%- endif %}
+- Before adding a shared symbol, check its established owner, and extend the owner instead of
+  creating a parallel definition
 
 ## Module Imports
 - Importing a module must not execute work: modules define and export, nothing runs
 - Runtime assembly (building apps and servers, wiring middleware) goes in `build_*()` factories
   that only the composition roots, the main modules of the entry points, call
 - Declarative registration stays module-level: Pydantic models, decorators, registries
-{%- if 'api' in parts or 'batch' in parts %}
-- The `config` and `services.py` singletons are built at import: the sanctioned exception
-{%- endif %}

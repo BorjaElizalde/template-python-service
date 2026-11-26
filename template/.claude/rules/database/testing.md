@@ -12,10 +12,6 @@ paths:
   Call `db_session.expire_all()` before the read: the session keeps the objects the `mock_*`
   helpers built and hands them back with their old values, so a "nothing changed" check passes
   whatever the call did
-{%- if 'api' in parts %}
-- The practices hook (`.claude/hooks/practices/`) stops a new test that calls a write endpoint
-  (`client.post`, `put`, `patch` or `delete`) and does not use `db_session` after it
-{%- endif %}
 - The migration checks live in `tests/migrations/`: like the contract checks, they need no
   boundary
 

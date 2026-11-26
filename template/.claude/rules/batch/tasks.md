@@ -13,6 +13,4 @@ paths:
 - `batch/main.py` is the batch tasks' composition root
 
 ## Docstrings
-- The `batch/main.py` CLI command has an outside-facing docstring
-  (`.claude/rules/python-conventions.md`, Docstrings): `--help` shows it
-{%- if 'api' in parts %}. It names each error that comes back by its ``ERR_...`` code{% endif %}
+- The `batch/main.py` CLI command has an outside-facing docstring: `--help` shows it

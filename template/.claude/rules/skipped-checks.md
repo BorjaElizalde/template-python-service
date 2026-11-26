@@ -14,7 +14,7 @@ paths:
 ---
 
 # Skipped checks
-These add this stack's part to the skipped-check rules in `.claude/rules/conventions.md`.
+These add this stack's part to the general skipped-check rules.
 
 - Python's skipped checks are `# noqa`, `# type: ignore`, `# pyright: ignore`, `# nosec`,
   `# pragma: no cover`, `# fmt: skip/off`, a pytest skip, a warning filter other than `error`
@@ -52,6 +52,6 @@ These add this stack's part to the skipped-check rules in `.claude/rules/convent
   check off, and it gives a reason, whatever it changes. The reason goes on `#` comment lines of
   their own: bandit and pytest read a `#` after an INI entry as part of its value
 - The practices hook (`.claude/hooks/practices/`) stops an edit that adds a skipped check or
-  loosens a config without the rule code or without a reason in the form
-  `.claude/rules/conventions.md` gives, and its message repeats that rule's steps. The hook checks
+  loosens a config without the rule code or without a reason in the form the general rules give,
+  and its message repeats that rule's steps. The hook checks
   only the form; review judges whether the reason holds

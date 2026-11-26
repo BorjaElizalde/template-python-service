@@ -21,15 +21,13 @@ paths:
   its routes: FastAPI's idiom. As a parameter, it fails ruff's ARG
 - The API's shared symbols have established owners: API responses in
   `{{ package_name }}/api/v1/responses.py`, API-facing types in `{{ package_name }}/api/v1/types.py`
-  and structured errors in `{{ package_name }}/api/errors.py`. Extend the owner instead of creating
-  a parallel definition
+  and structured errors in `{{ package_name }}/api/errors.py`
 
 ## Module Imports
 - `api/main.py` is the API's composition root. `APIRouter()` with its route decorators and the
   MCP tool registry are declarative registration, so they stay module-level
 
 ## Docstrings
-- The FastAPI endpoints and the models in the OpenAPI schema have outside-facing docstrings
-  (`.claude/rules/python-conventions.md`, Docstrings): they become the SDK's hover text. They name
-  each error that comes back by its ``ERR_...`` code. An endpoint with `include_in_schema=False`
-  has no outside reader
+- Every outside-facing docstring names each error that comes back by its ``ERR_...`` code
+- The FastAPI endpoints and the models in the OpenAPI schema have outside-facing docstrings: they
+  become the SDK's hover text. An endpoint with `include_in_schema=False` has no outside reader

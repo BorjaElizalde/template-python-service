@@ -128,10 +128,12 @@ rule_paths() {  # rule_paths <rule> <path...>: the rendered rule loads for exact
   [ "$got" = "$(printf '%s\n' "${@:2}")" ] || { echo "FAIL $1 loads for: ${got//$'\n'/, }"; return 1; }
 }
 expect "the Python rules load for every Python file" rule_paths python-conventions.md '**/*.py'
-# The part's folder, there only when the project picked the part, decides where its rules apply.
-for rule in api/endpoints.md api/mcp.md batch/tasks.md database/orm.md database/migrations.md; do
+# A part's rule file is in a project only when it picked the part: copier.yaml decides that, so its paths need not.
+for rule in services.md api/endpoints.md api/mcp.md batch/tasks.md database/orm.md database/migrations.md; do
   expect "the part rules of $rule load for every Python file" rule_paths "$rule" '**/*.py'
 done
+expect "no rule file holds a Jinja condition: copier.yaml picks the rule files" \
+  bash -c "! grep -rn '{%' '$ROOT/template/.claude/rules'"
 
 # A copy for each answer to the parts question: no part, each part alone, and all three (the project
 # above). Each gets the rules, hook checks and tool settings of its parts alone.
@@ -170,22 +172,26 @@ has_settings_of() {  # has_settings_of <project> [<part>...]: each part's tool s
   jq -e 'any(.ignore[]; . == "database/**")' "$1/.jscpd.json" >/dev/null && got+=" jscpd"
   [ "$got" = "$want" ] || { echo "FAIL settings:$got; want:$want"; return 1; }
 }
-# has_boundary_rule_and_check <project> <boundary|no-boundary>: the guard stops a new direct
-# test, and testing.md holds the boundary rule, exactly when the project has a boundary.
-has_boundary_rule_and_check() {
-  local status=0 stops=no rule=no want=no
+has_services_rule() {  # has_services_rule <project> [<part>...]: services.md is there exactly with api or batch
+  local want=no got=no
+  [[ " ${*:2} " == *" api "* || " ${*:2} " == *" batch "* ]] && want=yes
+  [ -f "$1/.claude/rules/services.md" ] && got=yes
+  [ "$got" = "$want" ] || { echo "FAIL services.md is there: $got; want: $want"; return 1; }
+}
+# has_boundary_check <project> <boundary|no-boundary>: the guard stops a new direct test exactly
+# when the project has a boundary.
+has_boundary_check() {
+  local status=0 stops=no want=no
   [ "$2" = boundary ] && want=yes
   jq -n --arg p "$1/tests/test_new.py" --arg c $'def test_x():\n    assert double(2) == 4\n' \
     '{tool_input: {file_path: $p, content: $c}}' | bash "$1/.claude/hooks/practices/guard.sh" >/dev/null 2>&1 ||
     status=$?
   [ "$status" -eq 2 ] && stops=yes
-  grep -qx '## Boundaries' "$1/.claude/rules/testing.md" && rule=yes
-  [ "$stops $rule" = "$want $want" ] ||
-    { echo "FAIL the guard stops: $stops; testing.md has the boundary rule: $rule"; return 1; }
+  [ "$stops" = "$want" ] || { echo "FAIL the guard stops a new direct test: $stops; want: $want"; return 1; }
 }
 part_copy_holds() {  # part_copy_holds <project> <boundary|no-boundary> [<part>...]
-  has_parts "$1" "${@:3}" && names_only_rules_it_has "$1" && no_jinja_in "$1" && has_settings_of "$1" "${@:3}" &&
-    has_boundary_rule_and_check "$1" "$2"
+  has_parts "$1" "${@:3}" && has_services_rule "$1" "${@:3}" && names_only_rules_it_has "$1" && no_jinja_in "$1" &&
+    has_settings_of "$1" "${@:3}" && has_boundary_check "$1" "$2"
 }
 expect "a copy with no part gets the Python layer alone, and a new direct test goes through" \
   part_copy_holds "$NONE" no-boundary
@@ -199,7 +205,7 @@ changes_parts() {
   commit "$API" copy &&
     (cd "$API" && uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml \
       --data 'parts=[database]') &&
-    has_parts "$API" database && has_settings_of "$API" database
+    has_parts "$API" database && has_services_rule "$API" database && has_settings_of "$API" database
 }
 expect "an update that changes the parts adds the files of the part added and deletes those of the part dropped" \
   changes_parts
