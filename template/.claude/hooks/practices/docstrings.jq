@@ -112,7 +112,8 @@ def check($ctx):
         + " (.claude/rules/python-conventions.md, Docstrings). This docstring is read outside the"
         + " code (\($reader)): `\($added[0] | short)`\($added | count_more). Write for"
         + " that reader in one to three sentences: what it does for them, what to send, what comes"
-        + " back, and which errors come back by their ``ERR_...`` code. No internals (tables,"
+        + " back, and which errors come back" + when_picked("api"; " by their ``ERR_...`` code")
+        + ". No internals (tables,"
         + " sessions, transactions, internal steps, other modules, history). A helper in this file"
         + " has no outside reader, so the bar for internal code applies to it instead: one or two"
         + " sentences on why it exists or how a caller must use it, and only if a clearer name or"

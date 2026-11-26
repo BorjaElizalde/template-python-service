@@ -23,3 +23,4 @@ operations and the database access. `.claude/rules/python-conventions.md` applie
 ## Docstrings
 - The `batch/main.py` CLI command has an outside-facing docstring
   (`.claude/rules/python-conventions.md`, Docstrings): `--help` shows it
+{%- if 'api' in parts %}. It names each error that comes back by its ``ERR_...`` code{% endif %}

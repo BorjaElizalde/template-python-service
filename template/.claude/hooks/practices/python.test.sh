@@ -11,7 +11,7 @@ WORK="$(mktemp -d)"
 # this project was rendered with.
 cp "$HERE"/*.jq "$HERE/guard.sh" "$WORK/"
 PKG=app
-stack() {  # stack <parts> <boundaries>: the answers the cases after it run with, as JSON lists
+stack() {  # stack <parts> <boundaries>: the answers the cases after it run with, as JSON
   printf '{"package": "%s", "parts": %s, "boundaries": %s}\n' "$PKG" "$1" "$2" >"$WORK/stack.json"
 }
 EVERY_PART='["api", "batch", "database"]'
@@ -339,6 +339,8 @@ write 2 "batch: an endpoint is no boundary"    "$UNIT" '' $'def test_x(client):\
 write 2 "batch: a migration test is no contract check" "$REPO/tests/migrations/test_case.py" '' "$DIRECT"
 says yes "(--help)" "batch: the CLI docstring's reader is --help" \
   "$REPO/$PKG/batch/main.py" 'def run(task_name: str | None = None):' $'def run(task_name: str | None = None):\n    """Run the named batch task."""'
+says no "ERR_" "batch: the CLI docstring's reminder asks for no API error code" \
+  "$REPO/$PKG/batch/main.py" 'def run(task_name: str | None = None):' $'def run(task_name: str | None = None):\n    """Run the named batch task."""'
 stack '["api"]' '[]'
 write R "api without database: a write checked by its response" "$UNIT" '' "$UNREAD"
 says yes "(the MCP client)" "api: the MCP tool's reader is the MCP client" \
@@ -346,6 +348,10 @@ says yes "(the MCP client)" "api: the MCP tool's reader is the MCP client" \
 stack '["database"]' '[]'
 write 0 "database alone: a direct test"        "$UNIT" '' "$DIRECT"
 write 0 "database alone: a migration module docstring" "$MIGRATION" '' $'"""add x\n\nRevision ID: abc123\n"""\nfrom alembic import op\n'
+# Copier renders an empty test_boundaries answer as null.
+stack "$EVERY_PART" null
+write 2 "null boundaries: a direct test still stops" "$UNIT" '' "$DIRECT"
+edit 2 "null boundaries: the other checks still run" "$APP" '    y = f()' $'    try:\n        y = f()\n    except ValueError:\n        y = None'
 stack "$EVERY_PART" '["release.run"]'
 
 echo "-- config: switching a check off stops until a reason in the form sits next to it"

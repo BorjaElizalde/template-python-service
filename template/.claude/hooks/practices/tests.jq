@@ -30,7 +30,7 @@ def part_boundaries: {
 # The project's boundaries: its parts', then those its test_boundaries answer names.
 def boundaries:
   [$stack[0].parts[] | part_boundaries[.] // empty]
-  + [$stack[0].boundaries[] | {names: ["`\(.)`"], calls: ["\\b" + gsub("[.]"; "\\.") + "\\("]}];
+  + [($stack[0].boundaries // [])[] | {names: ["`\(.)`"], calls: ["\\b" + gsub("[.]"; "\\.") + "\\("]}];
 
 def either: if length > 1 then (.[:-1] | join(", ")) + " or " + .[-1] else .[0] end;
 
