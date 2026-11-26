@@ -123,20 +123,24 @@ expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$R
 # A clone gets its commit hooks from make claude, which here starts stand-ins for claude and tmux.
 no_hooks_fails_gate() {
   local out
-  ! out="$(make -s -C "$D" gate 2>&1)" && grep -q 'uv run pre-commit install' <<<"$out"
+  ! out="$(make -s -C "$D" gate 2>&1)" && grep -qF "uv run --directory '$D' pre-commit install" <<<"$out"
 }
-expect "make gate fails a clone with no commit hooks, and says how to install them" no_hooks_fails_gate
+expect "make gate fails a clone with no commit hooks, and says how to install them from its main checkout" \
+  no_hooks_fails_gate
 mkdir "$OUT/stand-ins"
 for tool in claude tmux; do printf '#!/bin/sh\n' >"$OUT/stand-ins/$tool" && chmod +x "$OUT/stand-ins/$tool"; done
 installs_hooks() {
   PATH="$OUT/stand-ins:$PATH" make -s -C "$D" claude && [ -f "$D/.git/hooks/pre-commit" ]
 }
 expect "make claude installs the commit hooks" installs_hooks
-worktree_passes_hook_check() {
-  git -C "$D" worktree add -q --detach "$OUT/worktree" &&
-    make -s -C "$OUT/worktree" commit-hooks && git -C "$D" worktree remove "$OUT/worktree"
+# The hook runs the .venv of the checkout it was installed from, and a worktree's goes with it.
+worktree_installs_from_main_checkout() {
+  rm "$D/.git/hooks/pre-commit" && git -C "$D" worktree add -q --detach "$OUT/worktree" &&
+    PATH="$OUT/stand-ins:$PATH" make -s -C "$OUT/worktree" claude && make -s -C "$OUT/worktree" commit-hooks &&
+    git -C "$D" worktree remove "$OUT/worktree" && grep -qF "$D/.venv/" "$D/.git/hooks/pre-commit"
 }
-expect "a worktree of the clone passes make gate's hook check" worktree_passes_hook_check
+expect "make claude in a worktree installs hooks that run the main checkout's .venv, and the hook check passes there" \
+  worktree_installs_from_main_checkout
 
 # The seeded pyproject.toml extends the template's base files, so a new project's package and test
 # pass the whole gate, and each shared setting reaches the project through it.

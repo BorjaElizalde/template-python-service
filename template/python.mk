@@ -5,8 +5,11 @@
 # The include is here, not in the project's Makefile, which an update never changes.
 include .claude/agentic.mk
 
-# The clone's commit hook, which its worktrees share; empty outside git.
+# The clone's commit hook, which its worktrees share, and its main checkout; empty outside git.
 COMMIT_HOOK := $(shell git rev-parse --git-path hooks/pre-commit 2>/dev/null)
+MAIN_CHECKOUT := $(shell git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
+# The hook runs the .venv of the checkout it was installed from, and a worktree's goes with it.
+INSTALL_HOOKS := uv run --directory '$(MAIN_CHECKOUT)' pre-commit install
 
 .PHONY: commit-hooks lint lint-check typecheck security duplication test gate
 
@@ -15,12 +18,11 @@ COMMIT_HOOK := $(shell git rev-parse --git-path hooks/pre-commit 2>/dev/null)
 claude: $(COMMIT_HOOK)
 
 $(COMMIT_HOOK):
-	uv run pre-commit install
+	$(INSTALL_HOOKS)
 
-# Installed from a worktree, the hook would run that worktree's .venv, which goes with the worktree.
 commit-hooks: ## Fail when this clone has no commit hooks, which make claude installs.
-	@[ -f "$(COMMIT_HOOK)" ] || { echo "This clone has no commit hooks: install them in its main" \
-	  "checkout, with uv run pre-commit install"; exit 1; }
+	@[ -f "$(COMMIT_HOOK)" ] || { echo "This clone has no commit hooks: install them with" \
+	  "$(INSTALL_HOOKS)"; exit 1; }
 
 lint: ## Fix what ruff can fix, and format every file.
 	uv run ruff check . --fix
