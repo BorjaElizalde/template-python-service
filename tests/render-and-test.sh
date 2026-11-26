@@ -128,6 +128,7 @@ rule_paths() {  # rule_paths <rule> <path...>: the rendered rule loads for exact
   [ "$got" = "$(printf '%s\n' "${@:2}")" ] || { echo "FAIL $1 loads for: ${got//$'\n'/, }"; return 1; }
 }
 expect "the Python rules load for every Python file" rule_paths python-conventions.md '**/*.py'
+# Each part's rules load for the whole service, not its own files alone: a project with every part loses no rule.
 SERVICE_PATHS=('app/api/**' 'app/batch/**' 'app/database.py' 'app/models/**' 'app/queries/**' 'app/services.py')
 expect "the API rules load for the service's files and its wire types" rule_paths api/endpoints.md \
   "${SERVICE_PATHS[@]}" 'app/types.py' 'database/**'
@@ -172,27 +173,31 @@ has_settings_of() {  # has_settings_of <project> [<part>...]: each part's tool s
   jq -e 'any(.ignore[]; . == "database/**")' "$1/.jscpd.json" >/dev/null && got+=" jscpd"
   [ "$got" = "$want" ] || { echo "FAIL settings:$got; want:$want"; return 1; }
 }
-# has_boundary_check <project> <yes|no>: the guard stops a new direct test, and testing.md holds
-# the boundary rule, exactly when the answer is yes.
+# has_boundary_check <project> <boundary|no-boundary>: the guard stops a new direct test, and
+# testing.md holds the boundary rule, exactly when the project has a boundary.
 has_boundary_check() {
-  local status=0 stops=no rule=no
+  local status=0 stops=no rule=no want=no
+  [ "$2" = boundary ] && want=yes
   jq -n --arg p "$1/tests/test_new.py" --arg c $'def test_x():\n    assert double(2) == 4\n' \
     '{tool_input: {file_path: $p, content: $c}}' | bash "$1/.claude/hooks/practices/guard.sh" >/dev/null 2>&1 ||
     status=$?
   [ "$status" -eq 2 ] && stops=yes
   grep -qx '## Boundaries' "$1/.claude/rules/testing.md" && rule=yes
-  [ "$stops $rule" = "$2 $2" ] || { echo "FAIL the guard stops: $stops; testing.md has the boundary rule: $rule"; return 1; }
+  [ "$stops $rule" = "$want $want" ] ||
+    { echo "FAIL the guard stops: $stops; testing.md has the boundary rule: $rule"; return 1; }
 }
-part_copy_holds() {  # part_copy_holds <project> <has a boundary: yes|no> [<part>...]
+part_copy_holds() {  # part_copy_holds <project> <boundary|no-boundary> [<part>...]
   has_parts "$1" "${@:3}" && names_only_rules_it_has "$1" && no_jinja_in "$1" && has_settings_of "$1" "${@:3}" &&
     has_boundary_check "$1" "$2"
 }
-expect "a copy with no part gets the Python layer alone, and a new direct test goes through" part_copy_holds "$NONE" no
-expect "a copy with the API gets its rules, checks and settings alone" part_copy_holds "$API" yes api
-expect "a copy with batch tasks gets their rules and checks alone" part_copy_holds "$BATCH" yes batch
+expect "a copy with no part gets the Python layer alone, and a new direct test goes through" \
+  part_copy_holds "$NONE" no-boundary
+expect "a copy with the API gets its rules, checks and settings alone" part_copy_holds "$API" boundary api
+expect "a copy with batch tasks gets their rules and checks alone" part_copy_holds "$BATCH" boundary batch
 expect "a copy with a database gets its rules, checks and settings alone, and no boundary" \
-  part_copy_holds "$DATABASE" no database
-expect "a copy with every part gets every part's rules, checks and settings" part_copy_holds "$D" yes api batch database
+  part_copy_holds "$DATABASE" no-boundary database
+expect "a copy with every part gets every part's rules, checks and settings" \
+  part_copy_holds "$D" boundary api batch database
 changes_parts() {
   commit "$API" copy &&
     (cd "$API" && uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml \
