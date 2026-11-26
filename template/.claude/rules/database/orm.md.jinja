@@ -1,17 +1,9 @@
 ---
 paths:
-  - "{{ package_name }}/api/**"
-  - "{{ package_name }}/batch/**"
-  - "{{ package_name }}/database.py"
-  - "{{ package_name }}/models/**"
-  - "{{ package_name }}/queries/**"
-  - "{{ package_name }}/services.py"
-  - "database/**"
+  - "**/*.py"
 ---
 
 # Database conventions
-These load when you read or edit the service's code: the API, the batch tasks, the business
-operations and the database access. `.claude/rules/python-conventions.md` applies here too.
 
 ## Code Style
 - Strategic abstractions at infrastructure (DB, ORM, queries), direct business logic

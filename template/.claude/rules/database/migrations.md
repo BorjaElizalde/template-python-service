@@ -1,13 +1,9 @@
 ---
 paths:
-  - "database/**"
-  - "tests/migrations/**"
+  - "**/*.py"
 ---
 
 # Migration conventions
-
-Loads when you touch Alembic revisions, migration-owned helpers under `database/`, or their
-tests.
 
 - A revision must emit the same SQL forever: hardcode value lists, name maps, and timestamps
   as literals; never import the live enum, config, or seed YAML.

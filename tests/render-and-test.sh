@@ -128,13 +128,10 @@ rule_paths() {  # rule_paths <rule> <path...>: the rendered rule loads for exact
   [ "$got" = "$(printf '%s\n' "${@:2}")" ] || { echo "FAIL $1 loads for: ${got//$'\n'/, }"; return 1; }
 }
 expect "the Python rules load for every Python file" rule_paths python-conventions.md '**/*.py'
-# Each part's rules load for the whole service, not its own files alone: a project with every part loses no rule.
-SERVICE_PATHS=('app/api/**' 'app/batch/**' 'app/database.py' 'app/models/**' 'app/queries/**' 'app/services.py')
-expect "the API rules load for the service's files and its wire types" rule_paths api/endpoints.md \
-  "${SERVICE_PATHS[@]}" 'app/types.py' 'database/**'
-expect "the batch rules load for the service's files" rule_paths batch/tasks.md "${SERVICE_PATHS[@]}" 'database/**'
-expect "the database rules load for the service's files" rule_paths database/orm.md "${SERVICE_PATHS[@]}" 'database/**'
-expect "the MCP rules load for the MCP tools" rule_paths api/mcp.md 'app/api/mcp/**'
+# The part's folder, there only when the project picked the part, decides where its rules apply.
+for rule in api/endpoints.md api/mcp.md batch/tasks.md database/orm.md database/migrations.md; do
+  expect "the part rules of $rule load for every Python file" rule_paths "$rule" '**/*.py'
+done
 
 # A copy for each answer to the parts question: no part, each part alone, and all three (the project
 # above). Each gets the rules, hook checks and tool settings of its parts alone.

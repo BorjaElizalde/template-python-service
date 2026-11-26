@@ -1,18 +1,9 @@
 ---
 paths:
-  - "{{ package_name }}/api/**"
-  - "{{ package_name }}/batch/**"
-  - "{{ package_name }}/database.py"
-  - "{{ package_name }}/models/**"
-  - "{{ package_name }}/queries/**"
-  - "{{ package_name }}/services.py"
-  - "{{ package_name }}/types.py"
-  - "database/**"
+  - "**/*.py"
 ---
 
 # API conventions
-These load when you read or edit the service's code: the API, the batch tasks, the business
-operations and the database access. `.claude/rules/python-conventions.md` applies here too.
 
 ## Error Handling
 - Raise `APIException.X(**context)` for structured errors — `APIException` is the enum of every wire

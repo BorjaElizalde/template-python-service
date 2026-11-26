@@ -1,11 +1,9 @@
 ---
 paths:
-  - "{{ package_name }}/api/mcp/**"
+  - "**/*.py"
 ---
 
 # MCP conventions
-These load when you read or edit the MCP tools. `.claude/rules/python-conventions.md` applies here
-too.
 
 - MCP tools and the MCP response models have outside-facing docstrings
   (`.claude/rules/python-conventions.md`, Docstrings): the LLM reads them. They name each error
