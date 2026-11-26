@@ -17,9 +17,10 @@ claude: $(COMMIT_HOOK)
 $(COMMIT_HOOK):
 	uv run pre-commit install
 
+# Installed from a worktree, the hook would run that worktree's .venv, which goes with the worktree.
 commit-hooks: ## Fail when this clone has no commit hooks, which make claude installs.
-	@[ -f "$(COMMIT_HOOK)" ] || { echo "This clone has no commit hooks: install them with" \
-	  "uv run pre-commit install"; exit 1; }
+	@[ -f "$(COMMIT_HOOK)" ] || { echo "This clone has no commit hooks: install them in its main" \
+	  "checkout, with uv run pre-commit install"; exit 1; }
 
 lint: ## Fix what ruff can fix, and format every file.
 	uv run ruff check . --fix
