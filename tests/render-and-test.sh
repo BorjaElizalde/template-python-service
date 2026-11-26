@@ -170,9 +170,9 @@ has_settings_of() {  # has_settings_of <project> [<part>...]: each part's tool s
   jq -e 'any(.ignore[]; . == "database/**")' "$1/.jscpd.json" >/dev/null && got+=" jscpd"
   [ "$got" = "$want" ] || { echo "FAIL settings:$got; want:$want"; return 1; }
 }
-# has_boundary_check <project> <boundary|no-boundary>: the guard stops a new direct test, and
-# testing.md holds the boundary rule, exactly when the project has a boundary.
-has_boundary_check() {
+# has_boundary_rule_and_check <project> <boundary|no-boundary>: the guard stops a new direct
+# test, and testing.md holds the boundary rule, exactly when the project has a boundary.
+has_boundary_rule_and_check() {
   local status=0 stops=no rule=no want=no
   [ "$2" = boundary ] && want=yes
   jq -n --arg p "$1/tests/test_new.py" --arg c $'def test_x():\n    assert double(2) == 4\n' \
@@ -185,7 +185,7 @@ has_boundary_check() {
 }
 part_copy_holds() {  # part_copy_holds <project> <boundary|no-boundary> [<part>...]
   has_parts "$1" "${@:3}" && names_only_rules_it_has "$1" && no_jinja_in "$1" && has_settings_of "$1" "${@:3}" &&
-    has_boundary_check "$1" "$2"
+    has_boundary_rule_and_check "$1" "$2"
 }
 expect "a copy with no part gets the Python layer alone, and a new direct test goes through" \
   part_copy_holds "$NONE" no-boundary
