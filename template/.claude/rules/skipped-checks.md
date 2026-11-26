@@ -17,7 +17,9 @@ paths:
 These add this stack's part to the skipped-check rules in `conventions.md`.
 
 - Python's skipped checks are `# noqa`, `# type: ignore`, `# pyright: ignore`, `# nosec`,
-  `# pragma: no cover`, `# fmt: skip/off`, a pytest skip, and `# jscpd:ignore-start` through
+  `# pragma: no cover`, `# fmt: skip/off`, a pytest skip, a warning filter other than `error`
+  set in Python (a `pytest.mark.filterwarnings` mark, or a conftest's
+  `config.addinivalue_line("filterwarnings", ...)`), and `# jscpd:ignore-start` through
   `# jscpd:ignore-end` around a copy. The docs to read first are those of ruff, basedpyright,
   bandit, pytest and jscpd. A rule's documented fix is often a Python idiom, such as
   `contextlib.suppress` for an expected exception
