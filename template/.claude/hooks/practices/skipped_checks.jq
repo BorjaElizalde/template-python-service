@@ -10,7 +10,13 @@ include "python";
 
 # Where Python code sets a warning filter for the test run: a pytest mark, or a conftest's
 # config.addinivalue_line("filterwarnings", ...), which ruff format can split before the name.
-def filter_opening: "(pytest\\.mark\\.filterwarnings\\(|[\"']filterwarnings[\"']\\s*,)";
+def warning_filter_opening: "(pytest\\.mark\\.filterwarnings\\(|[\"']filterwarnings[\"']\\s*,)";
+
+# A line that sets a warning filter other than a single error filter, which makes the tests
+# stricter. A line whose filter sits on the next line counts too.
+def may_let_warnings_pass:
+  has(warning_filter_opening)
+  and (has(warning_filter_opening + "\\s*[rf]?[\"']\\s*error\\s*(:[^\"']*)?[\"']\\s*\\)") | not);
 
 # The form to show for a line whose skipped check lacks its code or reason, or empty when it has
 # both. given($directive): the line holds $directive, and the text after it or the comment lines
@@ -51,11 +57,8 @@ def missing_reason($above):
     then empty
     else "reason=\"<the outside condition that makes this test impossible here>\", and the"
       + " Tried sentences in a comment" end
-  elif has(filter_opening) then
-    # A single error filter makes the tests stricter, so it needs no reason.
-    if has(filter_opening + "\\s*[rf]?[\"']\\s*error\\s*(:[^\"']*)?[\"']\\s*\\)")
-      or given(filter_opening + "[^#]*")
-    then empty
+  elif has(warning_filter_opening) then
+    if given(warning_filter_opening + "[^#]*") then empty
     else "<the line that sets the filter>  # <reason>" end
   elif has("pytest\\.skip\\(") then
     if has("pytest\\.skip\\(\\s*(reason\\s*=\\s*)?[rf]?[\"'][^\"']") and given("pytest\\.skip\\(")
@@ -69,7 +72,7 @@ def suppression:
   or has("#\\s*nosec\\b") or has("#\\s*pragma:?\\s*no\\s*cover") or has("#\\s*fmt:\\s*(skip|off)\\b")
   or has("#.*jscpd:ignore-start")
   or has("pytest\\.mark\\.(skip|skipif|xfail)\\b") or has("pytest\\.skip\\(")
-  or has(filter_opening);
+  or may_let_warnings_pass;
 
 def check($ctx):
   [$ctx.added[] | select(.line | suppression)

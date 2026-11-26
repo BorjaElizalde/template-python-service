@@ -41,9 +41,9 @@ def plugin_off: has("-p\\s*no:|(^|[\\s\"'])no:");
 
 def drops_tests: has("(^|[\\s\"'])-[km]|--deselect|--ignore");
 
-# An addopts line that adds a warning filter other than error. A `-W` list item counts whatever
-# filter follows it on the next line.
-def lets_warnings_pass: has("(^|[\\s\"'])(-W|--pythonwarnings)(?![\\s=\"',]*error\\b)");
+# An addopts line that adds a warning filter other than error. A `-W` list item whose filter
+# sits on the next line counts too.
+def may_let_warnings_pass: has("(^|[\\s\"'])(-W|--pythonwarnings)(?![\\s=\"',]*error\\b)");
 
 # A warning filter that makes the warnings it matches fail the test.
 def error_filter: test("^\\s*error\\s*(:|$)");
@@ -64,7 +64,7 @@ def pyproject_findings($ctx):
          or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic|standard|strict)\""))
          or (.line | has("failOnWarnings\\s*=\\s*false|check-typed-exception\\s*=\\s*false|--exit-zero"))
          or ((.key == "filterwarnings") and (.line | any(quoted[]; error_filter | not)))
-         or ((.key == "addopts") and (.line | plugin_off or drops_tests or lets_warnings_pass)))
+         or ((.key == "addopts") and (.line | plugin_off or drops_tests or may_let_warnings_pass)))
      | {text: "added `\(.line | short)`", at: $at}),
     ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section)
      | select(((.key | test("^(extend-)?select$")) and (.line | dropped($kept_rules)))
