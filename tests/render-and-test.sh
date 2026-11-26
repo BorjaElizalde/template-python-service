@@ -120,6 +120,24 @@ expect "the service rules load only for a service's parts" rule_paths service-co
   'app/api/**' 'app/batch/**' 'app/database.py' 'app/models/**' 'app/queries/**' 'app/services.py' 'database/**'
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
 
+# A clone gets its commit hooks from make claude, which here starts stand-ins for claude and tmux.
+no_hooks_fails_gate() {
+  local out
+  ! out="$(make -s -C "$D" gate 2>&1)" && grep -q 'uv run pre-commit install' <<<"$out"
+}
+expect "make gate fails a clone with no commit hooks, and says how to install them" no_hooks_fails_gate
+mkdir "$OUT/stand-ins"
+for tool in claude tmux; do printf '#!/bin/sh\n' >"$OUT/stand-ins/$tool" && chmod +x "$OUT/stand-ins/$tool"; done
+installs_hooks() {
+  PATH="$OUT/stand-ins:$PATH" make -s -C "$D" claude && [ -f "$D/.git/hooks/pre-commit" ]
+}
+expect "make claude installs the commit hooks" installs_hooks
+worktree_passes_hook_check() {
+  git -C "$D" worktree add -q --detach "$OUT/worktree" &&
+    make -s -C "$OUT/worktree" commit-hooks && git -C "$D" worktree remove "$OUT/worktree"
+}
+expect "a worktree of the clone passes make gate's hook check" worktree_passes_hook_check
+
 # The seeded pyproject.toml extends the template's base files, so a new project's package and test
 # pass the whole gate, and each shared setting reaches the project through it.
 mkdir -p "$D/app" "$D/tests"
@@ -139,12 +157,12 @@ printf 'own: ## Check what only this project checks.\n\t@echo own ran\n\ngate: o
 help_lists_each_layer() {  # each target bare make lists, after the file it is listed under
   local owners
   owners="$(make -s -C "$D" | awk '/^[^ ]/ { f = $0 } /^  / { print f, $1 }')"
-  { [ "$(grep -v '^\.claude/agentic\.mk ' <<<"$owners")" = "$(printf '%s\n' 'Makefile own' 'python.mk lint' \
-    'python.mk lint-check' 'python.mk typecheck' 'python.mk security' 'python.mk duplication' 'python.mk test' \
-    'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
+  { [ "$(grep -v '^\.claude/agentic\.mk ' <<<"$owners")" = "$(printf '%s\n' 'Makefile own' 'python.mk commit-hooks' \
+    'python.mk lint' 'python.mk lint-check' 'python.mk typecheck' 'python.mk security' 'python.mk duplication' \
+    'python.mk test' 'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
     { echo "FAIL bare make listed: ${owners//$'\n'/, }"; return 1; }
 }
-expect "bare make lists the project's own target, then python.mk's seven, and claude from the agentic fragment" help_lists_each_layer
+expect "bare make lists the project's own target, then python.mk's eight, and claude from the agentic fragment" help_lists_each_layer
 expect "make gate runs the check a project's Makefile adds as its prerequisite" \
   bash -o pipefail -c "make -s -C '$D' gate | grep -x 'own ran'"
 make_with() {  # make_with <file> <content> <target>: runs the target while the file holds the content

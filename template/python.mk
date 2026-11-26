@@ -1,10 +1,25 @@
 # From the python-service template: change the template, not this copy.
-# The local gate, included by the project's Makefile: /gate runs make gate. The project's CI runs
-# its checks itself, never through make, so relaxing a target here can't relax CI.
+# The local gate and the commit hooks, included by the project's Makefile: /gate runs make gate,
+# and make claude installs the hooks. The project's CI runs its checks itself, never through make,
+# so relaxing a target here can't relax CI.
 # The include is here, not in the project's Makefile, which an update never changes.
 include .claude/agentic.mk
 
-.PHONY: lint lint-check typecheck security duplication test gate
+# The clone's commit hook, which its worktrees share; empty outside git.
+COMMIT_HOOK := $(shell git rev-parse --git-path hooks/pre-commit 2>/dev/null)
+
+.PHONY: commit-hooks lint lint-check typecheck security duplication test gate
+
+# A Copier task would install the hooks on copy, but Copier then refuses each Renovate update:
+# Mend's Renovate app never passes --trust. So the hooks come with the first make claude.
+claude: $(COMMIT_HOOK)
+
+$(COMMIT_HOOK):
+	uv run pre-commit install
+
+commit-hooks: ## Fail when this clone has no commit hooks, which make claude installs.
+	@[ -f "$(COMMIT_HOOK)" ] || { echo "This clone has no commit hooks: install them with" \
+	  "uv run pre-commit install"; exit 1; }
 
 lint: ## Fix what ruff can fix, and format every file.
 	uv run ruff check . --fix
@@ -35,5 +50,5 @@ else
 	uv run pytest tests/ -v --cov
 endif
 
-gate: lint-check typecheck security duplication test ## Run every local check.
+gate: commit-hooks lint-check typecheck security duplication test ## Run every local check.
 	@echo "All gate checks passed!"
