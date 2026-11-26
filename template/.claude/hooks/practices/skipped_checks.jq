@@ -47,6 +47,12 @@ def missing_reason($above):
     then empty
     else "reason=\"<the outside condition that makes this test impossible here>\", and the"
       + " Tried sentences in a comment" end
+  elif has("pytest\\.mark\\.filterwarnings\\b") then
+    # A mark whose one filter is error makes the test stricter, so it needs no reason.
+    if has("pytest\\.mark\\.filterwarnings\\(\\s*[rf]?[\"']\\s*error\\s*(:[^\"']*)?[\"']\\s*\\)")
+      or given("pytest\\.mark\\.filterwarnings\\b[^)]*\\)?")
+    then empty
+    else "@pytest.mark.filterwarnings(\"<filter>\")  # <reason>" end
   elif has("pytest\\.skip\\(") then
     if has("pytest\\.skip\\(\\s*(reason\\s*=\\s*)?[rf]?[\"'][^\"']") and given("pytest\\.skip\\(")
     then empty
@@ -58,7 +64,8 @@ def suppression:
   has("#\\s*(ruff:\\s*)?noqa\\b") or has("#\\s*type:\\s*ignore\\b") or has("#\\s*pyright:")
   or has("#\\s*nosec\\b") or has("#\\s*pragma:?\\s*no\\s*cover") or has("#\\s*fmt:\\s*(skip|off)\\b")
   or has("#.*jscpd:ignore-start")
-  or has("pytest\\.mark\\.(skip|skipif|xfail)\\b") or has("pytest\\.skip\\(");
+  or has("pytest\\.mark\\.(skip|skipif|xfail|filterwarnings)\\b")
+  or has("pytest\\.skip\\(");
 
 def check($ctx):
   [$ctx.added[] | select(.line | suppression)

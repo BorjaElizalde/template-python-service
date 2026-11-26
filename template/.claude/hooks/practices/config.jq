@@ -21,7 +21,8 @@ include "config_entries";
 
 def checked_section: test("^\\s*\\[tool\\.(ruff|basedpyright|pyright|coverage|pytest|bandit|mypy)");
 
-def quoted: [scan("\"([^\"]+)\"") | .[0]];
+# The line's TOML strings, of either quote kind, leaving out those in its comment.
+def quoted: [scan("\"([^\"]*)\"|'([^']*)'|#.*") | map(values)[0] | values];
 
 # Quoted entries (rule codes, paths) the new file still lists under keys matching $re.
 def kept($ctx; $re): [$ctx.new | annotate[] | select(.key | test($re)) | .line | quoted[]] | line_set;
@@ -40,12 +41,20 @@ def plugin_off: has("-p\\s*no:|(^|[\\s\"'])no:");
 
 def drops_tests: has("(^|[\\s\"'])-[km]|--deselect|--ignore");
 
+# An addopts line that adds a warning filter other than error. A `-W` list item counts whatever
+# filter follows it on the next line.
+def lets_warnings_pass: has("(^|[\\s\"'])(-W|--pythonwarnings)(?![\\s=\"',]*error\\b)");
+
+# A warning filter that makes the warnings it matches fail the test.
+def error_filter: test("^\\s*error\\s*(:|$)");
+
 # Each finding is {text, at}: `at` is an added line's index in the new file, null for a removed line.
 def pyproject_findings($ctx):
   ($ctx.removed | line_set) as $removed
   | kept($ctx; "^(extend-)?select$") as $kept_rules
   | kept($ctx; "^(include|testpaths)$") as $kept_paths
   | kept($ctx; "^extends?$") as $kept_bases
+  | kept($ctx; "^filterwarnings$") as $kept_filters
   | ($ctx.new | annotate) as $notes
   | ($ctx.added[] | .at as $at | $notes[$at] | select(.section | checked_section)
      | select(.line | test("^\\s*(#|\\[|$)") | not)
@@ -54,12 +63,15 @@ def pyproject_findings($ctx):
          or (.line | has("^\\s*report\\w+\\s*=\\s*(false|\"(none|warning|information|hint)\")"))
          or (.line | has("typeCheckingMode\\s*=\\s*\"(off|basic|standard|strict)\""))
          or (.line | has("failOnWarnings\\s*=\\s*false|check-typed-exception\\s*=\\s*false|--exit-zero"))
-         or ((.key == "addopts") and (.line | plugin_off or drops_tests)))
+         or ((.key == "filterwarnings") and (.line | any(quoted[]; error_filter | not)))
+         or ((.key == "addopts") and (.line | plugin_off or drops_tests or lets_warnings_pass)))
      | {text: "added `\(.line | short)`", at: $at}),
     ($ctx.old | annotate[] | select($removed[.line]) | select(.section | checked_section)
      | select(((.key | test("^(extend-)?select$")) and (.line | dropped($kept_rules)))
          or ((.key | test("^(include|testpaths)$")) and (.line | dropped($kept_paths)))
          or ((.key | test("^extends?$")) and (.line | dropped($kept_bases)))
+         or ((.key == "filterwarnings")
+             and (.line | any(quoted[] | select(error_filter); $kept_filters[.] | not)))
          or (.line | has("^\\s*report\\w+\\s*=\\s*(true|\"error\")|check-typed-exception\\s*=\\s*true")))
      | {text: "removed `\(.line | short)`", at: null}),
     (if extends_ruff($ctx) then
