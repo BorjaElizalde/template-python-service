@@ -61,11 +61,11 @@ With Renovate, each release comes as an update PR.
 The template writes five files once and never updates them, so they are the project's: `Makefile`,
 `pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. A first copy keeps
 the ones the repository already has. Merge the template's copy into each, from `template/` at the
-release's tag; for `pyproject.toml`, that is its `[tool.ruff]` and `[tool.basedpyright]` tables and
-its `dev` dependency group. Then delete the targets and settings that `python.mk`,
-`.claude/agentic.mk`, `ruff.base.toml` and `basedpyright.base.json` hold. Do the same when an
-update brings a target the `Makefile` already has, such as `claude` or `help`. A first copy writes
-the template's `.pre-commit-config.yaml`: put the repository's own hooks back after
+release's tag; for `pyproject.toml`, that is its `requires-python`, its `[tool.ruff]` and
+`[tool.basedpyright]` tables and its `dev` dependency group. Then delete the targets and settings
+that `python.mk`, `.claude/agentic.mk`, `ruff.base.toml` and `basedpyright.base.json` hold. Do the
+same when an update brings a target the `Makefile` already has, such as `claude` or `help`. A first
+copy writes the template's `.pre-commit-config.yaml`: put the repository's own hooks back after
 `template-hooks`, and leave out those that `pre-commit.base.yaml` already runs.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the

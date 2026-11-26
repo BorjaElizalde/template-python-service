@@ -127,6 +127,14 @@ mkdir -p "$D/app" "$D/tests"
 printf 'def double(x: int) -> int:\n    return x * 2\n' >"$D/app/core.py"
 printf 'from app.core import double\n\n\ndef test_double():\n    assert double(2) == 4\n' >"$D/tests/test_core.py"
 expect "a new project passes make gate, its untyped test exempt from ANN" make -s -C "$D" gate
+# uv sees only the Pythons it installs, and none is installed, as on a new CI runner: it downloads
+# the newest one the project allows, whatever this machine has. The environment goes outside the
+# project, so the checks below keep make gate's.
+runs_python_314() {
+  (cd "$D" && UV_PYTHON_INSTALL_DIR="$OUT/pythons" UV_PYTHON_PREFERENCE=only-managed UV_PROJECT_ENVIRONMENT="$OUT/venv" \
+    uv run --quiet python -c 'import sys; assert sys.version_info[:2] == (3, 14), sys.version')
+}
+expect "a new project's environment runs Python 3.14, even where uv can download a newer one" runs_python_314
 printf 'own: ## Check what only this project checks.\n\t@echo own ran\n\ngate: own\n' >>"$D/Makefile"
 help_lists_each_layer() {  # each target bare make lists, after the file it is listed under
   local owners
