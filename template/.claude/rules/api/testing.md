@@ -5,8 +5,6 @@ paths:
 
 # Testing the API
 
-Loads when you read or edit tests, with `.claude/rules/testing.md`.
-
 - For nearly every test the boundary is an endpoint, called through the `client` fixture; a few
   call an MCP tool with `call_tool`
 - A read checks the response against the case's data. After a write, a GET is not the check: it

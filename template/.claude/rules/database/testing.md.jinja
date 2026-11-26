@@ -5,8 +5,6 @@ paths:
 
 # Testing with the database
 
-Loads when you read or edit tests, with `.claude/rules/testing.md`.
-
 - Functional tests with real PostgreSQL (testcontainer) - no DB mocking
 - **Test data pattern**: Use `mock_*` high-level functions from `tests/helpers/data_factory/`. The `_create_*` row builders beside them are private to their module (the type check rejects one used outside it); a new one gets the leading underscore too. Create test data in fixtures at the top of the file and reuse the fixtures across test functions. Each test runs on its own copy of a database that holds only the schema and seed data, so keep data fixtures function-scoped: rows built by a wider-scoped fixture are gone after its first test.
 - A call that writes is checked in the database: read it through `db_session` after the call and
