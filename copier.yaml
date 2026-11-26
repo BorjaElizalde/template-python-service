@@ -20,9 +20,20 @@ package_name:
   validator: >-
     {% if 'issues_repo' not in _copier_answers %}Copy a release tag: a branch holds no template-agentic, which a release bundles{% elif not package_name or package_name | lower != package_name or ' ' in package_name or '/' in package_name %}Give the package directory as a lowercase Python identifier{% endif %}
 
+parts:
+  type: str
+  help: The parts the project has, beyond the Python layer every project gets (a research lab picks none)
+  multiselect: true
+  choices:
+    An API, with FastAPI and MCP tools: api
+    Batch tasks and their CLI: batch
+    A database, with SQLAlchemy and Alembic migrations: database
+  # Every part, so an update gives a project copied before this question every part it had.
+  default: [api, batch, database]
+
 test_boundaries:
   type: yaml
-  help: Calls that also count as a test boundary, beyond endpoints, MCP tools, batch tasks and the CLI (e.g. a release step's entry point, as module.function)
+  help: Calls that also count as a test boundary, beyond those of the parts picked (e.g. a release step's entry point, as module.function)
   default: []
   validator: >-
     {% if test_boundaries is string %}Give a list of calls{% endif %}

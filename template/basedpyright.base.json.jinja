@@ -11,7 +11,8 @@
   // async call left without await.
   // Tried `_ = ` before each such call, the rule's documented fix, but on every call made for its
   // effect it adds an assignment that says nothing.
-  "reportUnusedCallResult": false,
+  "reportUnusedCallResult": false
+{%- if 'database' in parts %},
   // reportUnknownArgumentType: Alembic writes the revisions in database/versions, and it writes the
   // Double column types, such as sa.Double(), with no type argument, so each is Double[Unknown].
   // An entry's imports resolve from its root, so extraPaths adds the project's root back for a
@@ -21,4 +22,5 @@
   "executionEnvironments": [
     {"root": "database/versions", "extraPaths": ["."], "reportUnknownArgumentType": false}
   ]
+{%- endif %}
 }

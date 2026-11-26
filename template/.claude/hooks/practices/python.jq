@@ -1,11 +1,14 @@
 # From the python-service template: change the template, not this copy.
 # Python helpers for the practice modules, which include it after lib.jq (jq includes do not pass
 # on the definitions they bring in). stack.json, rendered from the template answers, names
-# the application package.
+# the application package and the parts the project picked: api, batch and database.
 include "lib";
 import "stack" as $stack;
 
 def package: $stack[0].package;
+def picked($part): any($stack[0].parts[]; . == $part);
+# $text when the project picked $part, else "": the words of a message that only that part needs.
+def when_picked($part; $text): if picked($part) then $text else "" end;
 def outside_tests: startswith("tests/") | not;
 def directive: "^\\s*#\\s*(fmt|noqa|type|pyright|nosec|pragma|ruff|jscpd|gitleaks:allow)\\b|^\\s*#!";
 def plain_comment: has("^\\s*#\\s*[a-z0-9]") and (has(directive) | not);

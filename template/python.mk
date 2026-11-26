@@ -20,7 +20,8 @@ typecheck: ## Check the types with basedpyright.
 security: ## Scan for security issues with bandit.
 	uv run bandit -r . -x ./.venv -ll -ii
 
-# jscpd reads .jscpd.json. A failure prints the fix order that python-conventions.md gives.
+# jscpd reads .jscpd.json. A failure prints the fix order that .claude/rules/python-conventions.md
+# gives.
 duplication: ## Fail on a block of code written twice, with jscpd.
 	@uv run jscpd . || { echo "For each copy jscpd lists: delete the copy that should not exist" \
 	  "first; else call the code's existing owner; extract a shared function only last. A copy" \

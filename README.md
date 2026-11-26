@@ -58,6 +58,16 @@ uvx copier update -a .copier-answers.python-service.yaml
 
 With Renovate, each release comes as an update PR.
 
+A copy asks which parts the project has: an API (`api`), batch tasks (`batch`) and a database
+(`database`), any number of them. The project receives the rules, practice checks and tool
+settings of the parts it picks; a project that picks none, such as a research lab, receives the
+Python layer alone. A project copied before this question has all three parts. To add or drop a
+part, update with the new list:
+
+```bash
+uvx copier update -a .copier-answers.python-service.yaml --data 'parts=[api, database]'
+```
+
 The template writes five files once and never updates them, so they are the project's: `Makefile`,
 `pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. A first copy keeps
 the ones the repository already has. Merge the template's copy into each, from `template/` at the

@@ -1,7 +1,8 @@
 # From the python-service template: change the template, not this copy.
 # STOP: a new except outside tests/ that does not say why it earns its keep; REMIND on one that
-# does (python-conventions.md, Error Handling). The reason is a comment on the except line or a
-# plain comment directly above or below it; whether it holds is the reader's call, not the hook's.
+# does (.claude/rules/python-conventions.md, Error Handling). The reason is a comment on the except
+# line or a plain comment directly above or below it; whether it holds is the reader's call, not
+# the hook's.
 # An except is new when its code, comment stripped, was not there before: moving, re-indenting or
 # annotating an old one is not new.
 include "lib";

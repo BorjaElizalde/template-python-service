@@ -10,9 +10,13 @@ WORK="$(mktemp -d)"
 # The checks run from a copy beside a fixture stack.json, so the cases never depend on the answers
 # this project was rendered with.
 cp "$HERE"/*.jq "$HERE/guard.sh" "$WORK/"
-printf '{"package": "app", "boundaries": ["release.run"]}\n' >"$WORK/stack.json"
-GUARD="$WORK/guard.sh"
 PKG=app
+stack() {  # stack <parts> <boundaries>: the answers the cases after it run with, as JSON lists
+  printf '{"package": "%s", "parts": %s, "boundaries": %s}\n' "$PKG" "$1" "$2" >"$WORK/stack.json"
+}
+EVERY_PART='["api", "batch", "database"]'
+stack "$EVERY_PART" '["release.run"]'
+GUARD="$WORK/guard.sh"
 REPO="$(mktemp -d)"; NOGIT="$(mktemp -d)"
 trap 'rm -rf "$REPO" "$NOGIT" "$WORK"' EXIT
 git -C "$REPO" init -q
@@ -56,7 +60,8 @@ says() {  # says <yes|no> <phrase> <desc> <path> <old> <new>: whether the guard'
   else fail=$((fail+1)); echo "FAIL (want $1, got $got) $3"; fi
 }
 
-# A reason in the form conventions.md gives follows the why with one of these per alternative.
+# A reason in the form .claude/rules/conventions.md gives follows the why with one of these per
+# alternative.
 TRIED='Tried the fix the rule gives, but it breaks the callers.'
 
 echo "-- skipped checks: no rule code, or no reason in the form (must stop)"
@@ -311,6 +316,37 @@ write R "another object's post is not a write call" "$UNIT" '' $'def test_x(clie
 edit 0 "old write test edited"          "$UNIT" "$UNREAD" "${UNREAD/json=/data=}"
 write 0 "write test in a contract check" "$REPO/tests/migrations/test_case.py" '' "$UNREAD"
 write 0 "write test in the email templates check" "$REPO/tests/contracts/test_emails.py" '' "$UNREAD"
+says yes "call a boundary (an endpoint, an MCP tool, a batch task, the batch CLI or \`release.run\`)" \
+  "the stop names every part's boundaries and the answered one" "$UNIT" '' "$DIRECT"
+
+echo "-- parts: a check that belongs to a part runs only in a project that picked it"
+stack '[]' '[]'
+write 0 "no part, no boundary: a direct test"  "$UNIT" '' "$DIRECT"
+write 0 "no part: an endpoint test"            "$UNIT" '' "$UNREAD"
+edit 2 "no part: Args: on an MCP tool"         "$TOOL" 'async def list_items(x):' $'async def list_items(x):\n'"$ARGS"
+write 2 "no part: a module docstring in database/versions" "$MIGRATION" '' $'"""add x\n\nRevision ID: abc123\n"""\nfrom alembic import op\n'
+says no "Alembic" "no part: the module docstring stop names no migration" "$APP" 'import os' $'"""Service helpers."""\nimport os'
+says yes "prefers code that explains itself" "no part: an endpoint's docstring gets the reminder for internal code" \
+  "$ROUTER" 'async def get_me():' $'async def get_me():\n    """Return the signed-in user."""'
+stack '[]' '["release.run"]'
+write 2 "no part, a boundary answered: a direct test" "$UNIT" '' "$DIRECT"
+write R "no part: through the answered boundary" "$UNIT" '' $'def test_x():\n    release.run(conn)\n'
+says yes "call a boundary (\`release.run\`)" "no part: the stop names only the answered boundary" "$UNIT" '' "$DIRECT"
+says no "mock_" "no part: the stop names no database helper" "$UNIT" '' "$DIRECT"
+stack '["batch"]' '[]'
+write R "batch: through a batch task"          "$UNIT" '' $'def test_x():\n    assert task_sync_daily()["users"] == 1\n'
+write 2 "batch: an endpoint is no boundary"    "$UNIT" '' $'def test_x(client):\n    assert client.get("/x").status_code == 200\n'
+write 2 "batch: a migration test is no contract check" "$REPO/tests/migrations/test_case.py" '' "$DIRECT"
+says yes "(--help)" "batch: the CLI docstring's reader is --help" \
+  "$REPO/$PKG/batch/main.py" 'def run(task_name: str | None = None):' $'def run(task_name: str | None = None):\n    """Run the named batch task."""'
+stack '["api"]' '[]'
+write R "api without database: a write checked by its response" "$UNIT" '' "$UNREAD"
+says yes "(the MCP client)" "api: the MCP tool's reader is the MCP client" \
+  "$TOOL" 'async def list_items():' $'async def list_items():\n    """List the team\'s items."""'
+stack '["database"]' '[]'
+write 0 "database alone: a direct test"        "$UNIT" '' "$DIRECT"
+write 0 "database alone: a migration module docstring" "$MIGRATION" '' $'"""add x\n\nRevision ID: abc123\n"""\nfrom alembic import op\n'
+stack "$EVERY_PART" '["release.run"]'
 
 echo "-- config: switching a check off stops until a reason in the form sits next to it"
 PY="$REPO/pyproject.toml"

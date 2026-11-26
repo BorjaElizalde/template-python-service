@@ -1,0 +1,25 @@
+---
+paths:
+  - "{{ package_name }}/api/**"
+  - "{{ package_name }}/batch/**"
+  - "{{ package_name }}/database.py"
+  - "{{ package_name }}/models/**"
+  - "{{ package_name }}/queries/**"
+  - "{{ package_name }}/services.py"
+  - "database/**"
+---
+
+# Batch conventions
+These load when you read or edit the service's code: the API, the batch tasks, the business
+operations and the database access. `.claude/rules/python-conventions.md` applies here too.
+
+## Logging
+- Batch tasks log nothing about their own run: `batch/main.py` logs start, finish and failure, and
+  a task's returned dict of counts rides on the finish line
+
+## Module Imports
+- `batch/main.py` is the batch tasks' composition root
+
+## Docstrings
+- The `batch/main.py` CLI command has an outside-facing docstring
+  (`.claude/rules/python-conventions.md`, Docstrings): `--help` shows it
