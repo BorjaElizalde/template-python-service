@@ -12,6 +12,13 @@ _skip_if_exists:
   - Makefile
   - pyproject.toml
 
+# A copy gets the rule folder of each part it picks. Copier renders each pattern with the answers,
+# and a pattern that renders empty excludes nothing.
+_exclude:
+  - "{% if 'api' not in parts %}.claude/rules/api{% endif %}"
+  - "{% if 'batch' not in parts %}.claude/rules/batch{% endif %}"
+  - "{% if 'database' not in parts %}.claude/rules/database{% endif %}"
+
 package_name:
   type: str
   help: The application's Python package directory (e.g. app)
