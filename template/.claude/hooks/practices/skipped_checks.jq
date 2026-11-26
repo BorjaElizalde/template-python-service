@@ -8,6 +8,10 @@
 include "lib";
 include "python";
 
+# Where Python code sets a warning filter for the test run: a pytest mark, or a conftest's
+# config.addinivalue_line("filterwarnings", ...), which ruff format can split before the name.
+def filter_opening: "(pytest\\.mark\\.filterwarnings\\(|[\"']filterwarnings[\"']\\s*,)";
+
 # The form to show for a line whose skipped check lacks its code or reason, or empty when it has
 # both. given($directive): the line holds $directive, and the text after it or the comment lines
 # above hold the reason.
@@ -47,12 +51,12 @@ def missing_reason($above):
     then empty
     else "reason=\"<the outside condition that makes this test impossible here>\", and the"
       + " Tried sentences in a comment" end
-  elif has("pytest\\.mark\\.filterwarnings\\b") then
-    # A mark whose one filter is error makes the test stricter, so it needs no reason.
-    if has("pytest\\.mark\\.filterwarnings\\(\\s*[rf]?[\"']\\s*error\\s*(:[^\"']*)?[\"']\\s*\\)")
-      or given("pytest\\.mark\\.filterwarnings\\b[^)]*\\)?")
+  elif has(filter_opening) then
+    # A single error filter makes the tests stricter, so it needs no reason.
+    if has(filter_opening + "\\s*[rf]?[\"']\\s*error\\s*(:[^\"']*)?[\"']\\s*\\)")
+      or given(filter_opening + "[^#]*")
     then empty
-    else "@pytest.mark.filterwarnings(\"<filter>\")  # <reason>" end
+    else "<the line that sets the filter>  # <reason>" end
   elif has("pytest\\.skip\\(") then
     if has("pytest\\.skip\\(\\s*(reason\\s*=\\s*)?[rf]?[\"'][^\"']") and given("pytest\\.skip\\(")
     then empty
@@ -64,8 +68,8 @@ def suppression:
   has("#\\s*(ruff:\\s*)?noqa\\b") or has("#\\s*type:\\s*ignore\\b") or has("#\\s*pyright:")
   or has("#\\s*nosec\\b") or has("#\\s*pragma:?\\s*no\\s*cover") or has("#\\s*fmt:\\s*(skip|off)\\b")
   or has("#.*jscpd:ignore-start")
-  or has("pytest\\.mark\\.(skip|skipif|xfail|filterwarnings)\\b")
-  or has("pytest\\.skip\\(");
+  or has("pytest\\.mark\\.(skip|skipif|xfail)\\b") or has("pytest\\.skip\\(")
+  or has(filter_opening);
 
 def check($ctx):
   [$ctx.added[] | select(.line | suppression)

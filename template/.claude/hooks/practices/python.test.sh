@@ -85,6 +85,11 @@ edit 2 "mark with its filter on the next line" "$TEST" 'def test_x():' \
   $'@pytest.mark.filterwarnings(\n    "error::UserWarning"\n)\ndef test_x():'
 edit 2 "filterwarnings mark, no Tried" "$TEST" 'def test_x():' \
   $'@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # the SDK warns on import\ndef test_x():'
+CONFTEST="$REPO/tests/conftest.py"
+edit 2 "conftest filter that ignores, no reason" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")'
+edit 2 "conftest filter split before its name, no reason" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line(\n        "filterwarnings", "ignore::DeprecationWarning"\n    )'
 edit 2 "jscpd ignore-start, no reason" "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()\n# jscpd:ignore-end'
 edit 2 "jscpd marker inside prose"    "$APP" 'x = c()' $'# keep this jscpd:ignore-start\nx = c()'
 write 2 "Write: new file, bare noqa"  "$APP" '' $'import os  # noqa\n'
@@ -109,8 +114,8 @@ says yes "(ruff, basedpyright, bandit, pytest, jscpd)" "the stop sends the agent
   "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()'
 says yes "Write it in this form: # noqa: <rule code> <reason>" "the noqa form shows a placeholder for the code" "$APP" 'x = 1' 'x = 1  # noqa: E501'
 says no "BLE001" "the noqa form names no code the line didn't skip" "$APP" 'x = 1' 'x = 1  # noqa: E501'
-says yes "Write it in this form: @pytest.mark.filterwarnings(\"<filter>\")  # <reason>" \
-  "the filterwarnings form shows where the reason goes" "$TEST" 'def test_x():' \
+says yes "Write it in this form: <the line that sets the filter>  # <reason>" \
+  "the warning filter form shows where the reason goes" "$TEST" 'def test_x():' \
   $'@pytest.mark.filterwarnings("ignore")\ndef test_x():'
 
 echo "-- skipped checks: rule code and a reason in the form, on the line or above (goes on)"
@@ -143,6 +148,12 @@ edit R "mark with its filter on the next line + reason above" "$TEST" 'def test_
   $'# The SDK warns on import.\n# '"$TRIED"$'\n@pytest.mark.filterwarnings(\n    "ignore::DeprecationWarning"\n)\ndef test_x():'
 edit 0 "filterwarnings mark that raises" "$TEST" 'def test_x():' \
   $'@pytest.mark.filterwarnings("error::UserWarning")\ndef test_x():'
+edit R "conftest filter + reason" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")  # The SDK warns. '"$TRIED"
+edit 0 "conftest filter that raises" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("filterwarnings", "error::UserWarning")'
+edit 0 "conftest marker line"         "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("markers", "slow: runs for minutes")'
 edit 0 "old reason rewritten into the form" "$APP" 'x = 1  # noqa: E501 long URL' "x = 1  # noqa: E501 a long URL cannot wrap. $TRIED"
 edit 2 "stop wins over a reminder"    "$APP" $'a = 1\nb = 1' $'# A comment.\na = 1\nb = 1  # noqa'
 edit 0 "edit next to an old bare noqa" "$APP" $'x = 1  # noqa\ny = 1' $'x = 1  # noqa\ny = 2'
