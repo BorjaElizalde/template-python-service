@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
 # Regression suite for await-run.sh. Run from any checkout: bash .claude/skills/release/scripts/await-run.test.sh
-# Stub gh answers `gh run list` for the Deploy workflow on commit abc123: poll n prints line n of
-# $AWAIT_TEST_STATE/ids, and the last line once past it; a line "error" fails as a network error
-# does. `gh run watch` exits with $AWAIT_TEST_STATE/watch-exit. Stub sleep returns at once, and
-# ends the script at its 20th call, so a script that would poll forever fails its case instead of
-# hanging the suite. Each stub logs its call to $AWAIT_TEST_STATE/log.
+# Stub sleep ends the script at its 20th call, so a script that would poll forever fails its case
+# instead of hanging the suite.
 # Bash takes SECONDS from the environment, so SECONDS=301 starts the script past its 300s grace.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -41,8 +38,6 @@ check() {  # check <desc> <command...>
   if "${@:2}" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS $1"
   else fail=$((fail+1)); echo "FAIL $1"; fi
 }
-# A fresh run of await-run.sh with <args>, gh answering <ids>, one per poll, and <watch exit>; its
-# stderr in $WORK/err.
 await_run() {  # await_run <ids> <watch exit> [<args>...]
   printf '%s\n' "$1" >"$AWAIT_TEST_STATE/ids"
   echo "$2" >"$AWAIT_TEST_STATE/watch-exit"

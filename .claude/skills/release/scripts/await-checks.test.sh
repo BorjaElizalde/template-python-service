@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
 # Regression suite for await-checks.sh. Run from any checkout: bash .claude/skills/release/scripts/await-checks.test.sh
-# Stub gh answers `gh pr checks` for PR 7: poll n prints line n of $AWAIT_TEST_STATE/checks, and the
-# last line once past it. Like gh, it exits 8 while a check is pending and 1 once one failed; a line
-# "error" fails as a network error does. Stub sleep returns at once, and ends the script at its 20th
-# call, so a script that would poll forever fails its case instead of hanging the suite. Each stub
-# logs its call to $AWAIT_TEST_STATE/log.
+# Like gh, stub gh exits 8 while a check is pending. Stub sleep ends the script at its 20th call, so
+# a script that would poll forever fails its case instead of hanging the suite.
 # Bash takes SECONDS from the environment, so SECONDS=301 starts the script past its 300s grace,
 # and SECONDS=3601 past its one-hour deadline.
 set -u
@@ -42,8 +39,6 @@ check() {  # check <desc> <command...>
   if "${@:2}" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS $1"
   else fail=$((fail+1)); echo "FAIL $1"; fi
 }
-# A fresh run of await-checks.sh with <args>, gh answering <answers>, one per poll; its stdout in
-# $WORK/out, its stderr in $WORK/err.
 await_checks() {  # await_checks <answers> [<args>...]
   printf '%s\n' "$1" >"$AWAIT_TEST_STATE/checks"
   : >"$AWAIT_TEST_STATE/log"

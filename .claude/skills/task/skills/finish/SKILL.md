@@ -9,9 +9,7 @@ session and deletes its folder. A task that spans repositories is finished once 
 closes with the first.
 
 Given no issue number, run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" cleanup` in place of the
-steps below. It runs step 3 for every task of this checkout whose issue is closed, such as one
-whose PR merged on GitHub, and skips open issues. It prints one line per task it finished or
-refused to finish, and goes on past a refusal. Return what it finished and each refusal.
+steps below, and return what it finished and each refusal.
 
 1. Read the issue with `gh issue view <n> -R BorjaElizalde/template-python-service --json state,title,comments` and its
    PRs with `gh pr list --state all --search "BorjaElizalde/template-python-service#<n>"`.
@@ -19,9 +17,6 @@ refused to finish, and goes on past a refusal. Return what it finished and each 
    research or a design task, a result comment on the issue. Close it with
    `gh issue close <n> -R BorjaElizalde/template-python-service --comment "<where the result is>"`. When the result is
    not delivered, stop and say what is missing.
-3. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" finish <n>`. It removes the worktree and
-   every local branch of the issue, `*/<n>-*`, and leaves remote branches to GitHub. It refuses
-   while one of those branches has commits on no remote branch and in no merged PR, or while the
-   worktree has uncommitted or untracked files. Report the refusal and stop: never force a
-   removal, and leave moving the work to the task's own session.
+3. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" finish <n>`. On a refusal, report it and
+   stop: never force a removal, and leave moving the work to the task's own session.
 4. Return what was closed and removed.

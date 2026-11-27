@@ -12,9 +12,9 @@ fail with the symptom the issue describes. The test stays in the suite, and the 
 Fix a bug without such a test only when no test can reproduce it.
 
 For a task that ends in a PR, plan before you build. Work out the smallest design that meets
-everything the issue asks: hold each thing it adds against the Design Philosophy. Read
-`.claude/rules/writing.md`, then write the plan to a file as it says, for a reader who
-has the issue and not the code:
+everything the issue asks: hold each thing it adds against the Design Philosophy. Write the plan
+to a file as the writing rule in `.claude/rules/` says, for a reader who has the issue and not
+the code:
 
 - what you will build, and where;
 - each thing it adds, such as a file, a command, a setting or a name, with the reason the issue
@@ -23,9 +23,9 @@ has the issue and not the code:
 - for a bug fix, the test that reproduces the bug and the failure it gave, or why no test can
   reproduce the bug.
 
-Post it with `bash .claude/skills/task/scripts/task.sh plan <n> <file>`, which makes it the
-issue's one pinned comment, headed `Plan`. A plan the issue already has is the task's own, from an
-earlier session or from its session in another repository: go on from it.
+Post it with `bash .claude/skills/task/scripts/task.sh plan <n> <file>`. A plan the issue already
+has is the task's own, from an earlier session or from its session in another repository: go on
+from it.
 
 Three agents review the task, and each gets the command that reads its issue,
 `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`.

@@ -5,8 +5,7 @@ allowed-tools: Bash(bash:*)
 ---
 
 1. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" cleanup`, then
-   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" status`. The status lists every open issue once:
-   one line per task under In progress, then the rest under Ready, Blocked and Parked.
+   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/task.sh" status`.
 2. Read each task's issue with `gh issue view <n> -R BorjaElizalde/template-python-service --json title,body,comments`,
    for its goal and any `Owner steps` comment, and the last message of each session that is idle or
    waiting.
@@ -18,8 +17,8 @@ allowed-tools: Bash(bash:*)
    - idle, PR open and checks passed: review the PR; the owner merges it. 👀
    - checks failed: send the session back to work with SendMessage, saying what failed. ⏳
    - idle, PR open, gate not run, and every file the PR changes (`gh pr diff <n> --name-only`) is
-     on the `paths-ignore` list in `.github/workflows/gate.yaml`: no gate runs on this PR. Review
-     it; the owner merges it. 👀
+     on the `Gate` workflow's `paths-ignore` list: no gate runs on this PR. Review it; the owner
+     merges it. 👀
    - idle, PR open and gate not run: send the session back with SendMessage to mark the PR draft,
      then ready, which starts the gate on its head. ⏳
    - idle, PR draft: its review steps have not ended, and it marks the PR ready when they do.

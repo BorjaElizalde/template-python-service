@@ -8,7 +8,4 @@ You work the task out with the owner, who answers in this tmux window.
   through ten inputs. Ask them in your last message, and end your turn on them.
 - Build nothing. Deliver the result as a research task does, in a comment on the issue or in a PR
   for a document: the decisions taken, and the issues for the work. Create those issues as "Plan
-  a backlog" in `.claude/skills/task/skills/start/SKILL.md` says: each holds the problem it
-  solves, as "Write an issue" there says, and carries the decisions the owner took in this session
-  that bind it; "blocked by" links put them in order, and each is parked with a reason that names
-  this task's issue.
+  a backlog" in `/task:start` says.
