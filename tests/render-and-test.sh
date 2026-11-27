@@ -120,20 +120,19 @@ expect "the service rules load only for a service's parts" rule_paths service-co
   'app/api/**' 'app/batch/**' 'app/database.py' 'app/models/**' 'app/queries/**' 'app/services.py' 'database/**'
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
 
-# A clone gets its commit hooks from make claude, which here starts stand-ins for claude and tmux.
 no_hooks_fails_gate() {
   local out
   ! out="$(make -s -C "$D" gate 2>&1)" && grep -qF "uv run --directory '$D' pre-commit install" <<<"$out"
 }
 expect "make gate fails a clone with no commit hooks, and says how to install them from its main checkout" \
   no_hooks_fails_gate
+# Stand-ins for claude and tmux let make claude run here without starting either.
 mkdir "$OUT/stand-ins"
 for tool in claude tmux; do printf '#!/bin/sh\n' >"$OUT/stand-ins/$tool" && chmod +x "$OUT/stand-ins/$tool"; done
 installs_hooks() {
   PATH="$OUT/stand-ins:$PATH" make -s -C "$D" claude && [ -f "$D/.git/hooks/pre-commit" ]
 }
 expect "make claude installs the commit hooks" installs_hooks
-# The hook runs the .venv of the checkout it was installed from, and a worktree's goes with it.
 worktree_installs_from_main_checkout() {
   rm "$D/.git/hooks/pre-commit" && git -C "$D" worktree add -q --detach "$OUT/worktree" &&
     PATH="$OUT/stand-ins:$PATH" make -s -C "$OUT/worktree" claude && make -s -C "$OUT/worktree" commit-hooks &&
@@ -166,7 +165,7 @@ help_lists_each_layer() {  # each target bare make lists, after the file it is l
     'python.mk test' 'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
     { echo "FAIL bare make listed: ${owners//$'\n'/, }"; return 1; }
 }
-expect "bare make lists the project's own target, then python.mk's eight, and claude from the agentic fragment" help_lists_each_layer
+expect "bare make lists the project's own target, then python.mk's, and claude from the agentic fragment" help_lists_each_layer
 expect "make gate runs the check a project's Makefile adds as its prerequisite" \
   bash -o pipefail -c "make -s -C '$D' gate | grep -x 'own ran'"
 make_with() {  # make_with <file> <content> <target>: runs the target while the file holds the content

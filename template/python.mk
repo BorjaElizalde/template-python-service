@@ -1,7 +1,6 @@
 # From the python-service template: change the template, not this copy.
-# The local gate and the commit hooks, included by the project's Makefile: /gate runs make gate,
-# and make claude installs the hooks. The project's CI runs its checks itself, never through make,
-# so relaxing a target here can't relax CI.
+# The local gate, included by the project's Makefile: /gate runs make gate. The project's CI runs
+# its checks itself, never through make, so relaxing a target here can't relax CI.
 # The include is here, not in the project's Makefile, which an update never changes.
 include .claude/agentic.mk
 
@@ -14,13 +13,13 @@ INSTALL_HOOKS := uv run --directory '$(MAIN_CHECKOUT)' pre-commit install
 .PHONY: commit-hooks lint lint-check typecheck security duplication test gate
 
 # A Copier task would install the hooks on copy, but Copier then refuses each Renovate update:
-# Mend's Renovate app never passes --trust. So the hooks come with the first make claude.
+# Mend's Renovate app never passes --trust.
 claude: $(COMMIT_HOOK)
 
 $(COMMIT_HOOK):
 	$(INSTALL_HOOKS)
 
-commit-hooks: ## Fail when this clone has no commit hooks, which make claude installs.
+commit-hooks: ## Fail when this clone has no commit hooks.
 	@[ -f "$(COMMIT_HOOK)" ] || { echo "This clone has no commit hooks: install them with" \
 	  "$(INSTALL_HOOKS)"; exit 1; }
 
