@@ -60,7 +60,7 @@ says() {  # says <yes|no> <phrase> <desc> <path> <old> <new>: whether the guard'
   else fail=$((fail+1)); echo "FAIL (want $1, got $got) $3"; fi
 }
 
-# A reason in the form conventions.md gives follows the why with one of these per alternative.
+# A reason in the form the rules give follows the why with one of these per alternative.
 TRIED='Tried the fix the rule gives, but it breaks the callers.'
 
 echo "-- skipped checks: no rule code, or no reason in the form (must stop)"

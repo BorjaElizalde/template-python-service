@@ -1,11 +1,10 @@
 # From the python-service template: change the template, not this copy.
 # STOP: a new test that goes through no boundary, or that calls a write endpoint and does not use
-# `db_session` after it (testing.md); REMIND on the others. A test is new when its name was not in
-# the file before: moving, re-indenting or editing one is not new. Its text runs from the def to
-# the next line indented no deeper. The contract and shipped-data checks below are the only tests
-# that need no boundary; adding a place to that list is a reviewed change.
-# A project with no boundary, from a part it picked or from its test_boundaries answer, gets no
-# test check.
+# `db_session` after it (.claude/rules/); REMIND on the others. A test is new when its name was
+# not in the file before: moving, re-indenting or editing one is not new. Its text runs from the
+# def to the next line indented no deeper. The contract and shipped-data checks below are the only
+# tests that need no boundary; adding a place to that list is a reviewed change. A project with no
+# boundary, from a part it picked or from its test_boundaries answer, gets no test check.
 include "lib";
 include "python";
 import "stack" as $stack;
@@ -67,21 +66,21 @@ def check($ctx):
   | map(select(.unread) | .name) as $unread
   | if ($direct + $unread | length) > 0 then
       ($direct | select(length > 0)
-       | {level: "stop", text: ("Stopped by the practices hook, test rule (.claude/rules/testing.md)."
+       | {level: "stop", text: ("Stopped by the practices hook, test rule (in .claude/rules/)."
            + " This test calls the code directly:\n" + bullets
            + "\nTests here build the case's data" + when_picked("database"; " with `mock_*`")
            + ", call a boundary (" + ($boundaries | map(.names[]) | either) + "), and check the"
            + " result. To reach a branch, give data that makes the boundary reach it. If no data"
            + " can, the branch is dead code: tell the owner instead of testing it.")}),
       ($unread | select(length > 0)
-       | {level: "stop", text: ("Stopped by the practices hook, the database part's test rule."
+       | {level: "stop", text: ("Stopped by the practices hook, test rule (in .claude/rules/)."
            + " This test calls a write endpoint and does not read the database after it:\n" + bullets
            + "\nAfter a write, call `db_session.expire_all()`, read the rows through `db_session` and"
            + " check the specific changed result. After a refused write, check that nothing changed"
            + " in the database. A read checks the response against the mock data. A GET after the"
            + " write is not the check: it shows only what the API exposes.")})
     else
-      {level: "remind", text: ("Practices hook, test rule (.claude/rules/testing.md). This edit adds"
+      {level: "remind", text: ("Practices hook, test rule (in .claude/rules/). This edit adds"
         + " a test: `\(.[0].name)`. Check it follows the three steps: the case's data built"
         + when_picked("database"; " with `mock_*`") + ", the boundary called, then the check"
         + when_picked("database"; ": a write reads the changed rows through `db_session`, a refused"

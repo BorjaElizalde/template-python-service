@@ -1,6 +1,6 @@
 # From the python-service template: change the template, not this copy.
 # STOP: a skipped check (a suppression such as `# noqa`) without its rule code, or without a reason
-# in the form conventions.md gives, after the directive or on the comment lines above it. The
+# in the form the rules give, after the directive or on the comment lines above it. The
 # hook checks the form; review judges whether the reason holds. Reason places were checked against
 # each tool: ruff, basedpyright, bandit and jscpd honour text after the directive; `# fmt: skip`
 # only behind a second `#`; `# fmt: off` only standing alone, so its reason goes on the comment
@@ -81,7 +81,7 @@ def check($ctx):
    | "- `\($line | short)`\n  Write it in this form: \($form)"]
   | select(length > 0)
   | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
-      + " (.claude/rules/skipped-checks.md). This edit skips a check without a reason in the"
+      + " (in .claude/rules/). This edit skips a check without a reason in the"
       + " required form.\n" + reason_steps("skipping the check"; "the skipped check"; checkers)
       + "The reason goes after the directive and its rule code, on the same line. When that line"
       + " would pass 100 columns, it goes on the comment lines directly above, and the line keeps"

@@ -1,5 +1,5 @@
 # From the python-service template: change the template, not this copy.
-# STOP: a skip of the secret scan without a reason in the form conventions.md gives. gitleaks skips
+# STOP: a skip of the secret scan without a reason in the form the rules give. gitleaks skips
 # a finding whose line holds `gitleaks:allow`, in a file of any type; one whose fingerprint the
 # root .gitleaksignore lists; and one the root .gitleaks.toml allowlists or whose rule it disables.
 # A .gitleaks.toml without `useDefault = true` drops gitleaks's own rules. The hook checks the
@@ -54,7 +54,7 @@ def check($ctx):
    else empty end]
   | select(length > 0)
   | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
-      + " (.claude/rules/skipped-checks.md). This edit skips a finding of the secret scan,"
+      + " (in .claude/rules/). This edit skips a finding of the secret scan,"
       + " gitleaks, without a reason in the required form. A skip hides a real secret as well as a"
       + " false one: revoke a real secret and take it out of the code instead.\n"
       + reason_steps("skipping the finding"; "the skip"; "gitleaks")

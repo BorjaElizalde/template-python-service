@@ -1,6 +1,6 @@
 # From the python-service template: change the template, not this copy.
 # STOP: an edit that switches a check off in the lint, type-check, duplication, test or pre-commit
-# setup without a reason in the form conventions.md gives. An added line's reason sits in its
+# setup without a reason in the form the rules give. An added line's reason sits in its
 # comment or on the comment lines above it; a removed line leaves no place, so the edit adds the
 # reason as a comment.
 # Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
@@ -117,12 +117,13 @@ def check($ctx):
       + " it, so an edit here is lost or conflicts. Change the template instead"
       + (if $ctx.rel | endswith(".jscpd.json") then
            ". A copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,"
-           + " with its reason (.claude/rules/skipped-checks.md)."
-         else ". Where this project's own settings go: .claude/rules/skipped-checks.md." end))}
+           + " with its reason (in .claude/rules/)."
+         else ". Where this project's own settings go: the skipped-check rules in"
+           + " .claude/rules/." end))}
   elif $ctx.rel | test("(^|/)(\\.bandit|\\.?pytest\\.(ini|toml)|\\.?ruff\\.toml)$") then
     select(reason_on_own_lines($ctx) | not)
     | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
-        + " (.claude/rules/skipped-checks.md). The gate's bandit, pytest or ruff can read its"
+        + " (in .claude/rules/). The gate's bandit, pytest or ruff can read its"
         + " settings from \($ctx.rel), and pytest and ruff then ignore those in pyproject.toml. The"
         + " hook does not check this file's entries, so every edit here stops until it adds a"
         + " reason in the required form.\n"
@@ -138,7 +139,7 @@ def check($ctx):
      | select(entry_reasoned($ctx) | not) | "- \(.text)"]
     | select(length > 0)
     | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
-        + " (.claude/rules/skipped-checks.md). This edit may switch off a check in \($ctx.rel)"
+        + " (in .claude/rules/). This edit may switch off a check in \($ctx.rel)"
         + " without a reason in the required form.\n"
         + reason_steps("switching the check off"; "the config change"; checkers)
         + "The reason goes in a comment on the entry's line, or on the comment lines directly above"
