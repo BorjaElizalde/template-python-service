@@ -7,21 +7,16 @@ include .claude/agentic.mk
 # The clone's commit hook, which its worktrees share, and its main checkout; empty outside git.
 COMMIT_HOOK := $(shell git rev-parse --git-path hooks/pre-commit 2>/dev/null)
 MAIN_CHECKOUT := $(shell git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
-# The hook runs the .venv of the checkout it was installed from, and a worktree's goes with it.
-INSTALL_HOOKS := uv run --directory '$(MAIN_CHECKOUT)' pre-commit install
 
-.PHONY: commit-hooks lint lint-check typecheck security duplication test gate
+.PHONY: lint lint-check typecheck security duplication test gate
 
 # A Copier task would install the hooks on copy, but Copier then refuses each Renovate update:
-# Mend's Renovate app never passes --trust.
-claude: $(COMMIT_HOOK)
-
+# Mend's Renovate app never passes --trust. The hook runs the .venv of the checkout it was
+# installed from, and a worktree's goes with it.
 $(COMMIT_HOOK):
-	$(INSTALL_HOOKS)
+	uv run --directory '$(MAIN_CHECKOUT)' pre-commit install
 
-commit-hooks: ## Fail when this clone has no commit hooks.
-	@[ -f "$(COMMIT_HOOK)" ] || { echo "This clone has no commit hooks: install them with" \
-	  "$(INSTALL_HOOKS)"; exit 1; }
+claude: $(COMMIT_HOOK)
 
 lint: ## Fix what ruff can fix, and format every file.
 	uv run ruff check . --fix
@@ -52,5 +47,5 @@ else
 	uv run pytest tests/ -v --cov
 endif
 
-gate: commit-hooks lint-check typecheck security duplication test ## Run every local check.
+gate: lint-check typecheck security duplication test ## Run every local check.
 	@echo "All gate checks passed!"

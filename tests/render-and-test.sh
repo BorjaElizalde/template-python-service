@@ -207,27 +207,6 @@ expect "an update that changes the parts adds the files of the part added and de
   changes_parts
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
 
-no_hooks_fails_gate() {
-  local out
-  ! out="$(make -s -C "$D" gate 2>&1)" && grep -qF "uv run --directory '$D' pre-commit install" <<<"$out"
-}
-expect "make gate fails a clone with no commit hooks, and says how to install them from its main checkout" \
-  no_hooks_fails_gate
-# Stand-ins for claude and tmux let make claude run here without starting either.
-mkdir "$OUT/stand-ins"
-for tool in claude tmux; do printf '#!/bin/sh\n' >"$OUT/stand-ins/$tool" && chmod +x "$OUT/stand-ins/$tool"; done
-installs_hooks() {
-  PATH="$OUT/stand-ins:$PATH" make -s -C "$D" claude && [ -f "$D/.git/hooks/pre-commit" ]
-}
-expect "make claude installs the commit hooks" installs_hooks
-worktree_installs_from_main_checkout() {
-  rm "$D/.git/hooks/pre-commit" && git -C "$D" worktree add -q --detach "$OUT/worktree" &&
-    PATH="$OUT/stand-ins:$PATH" make -s -C "$OUT/worktree" claude && make -s -C "$OUT/worktree" commit-hooks &&
-    git -C "$D" worktree remove "$OUT/worktree" && grep -qF "$D/.venv/" "$D/.git/hooks/pre-commit"
-}
-expect "make claude in a worktree installs hooks that run the main checkout's .venv, and the hook check passes there" \
-  worktree_installs_from_main_checkout
-
 # The seeded pyproject.toml extends the template's base files, so a new project's package and test
 # pass the whole gate, and each shared setting reaches the project through it.
 mkdir -p "$D/app" "$D/tests"
@@ -235,6 +214,19 @@ mkdir -p "$D/app" "$D/tests"
 printf 'def double(x: int) -> int:\n    return x * 2\n' >"$D/app/core.py"
 printf 'from app.core import double\n\n\ndef test_double():\n    assert double(2) == 4\n' >"$D/tests/test_core.py"
 expect "a new project passes make gate, its untyped test exempt from ANN" make -s -C "$D" gate
+# Stand-ins for claude and tmux let make claude run here without starting either.
+mkdir "$OUT/stand-ins"
+for tool in claude tmux; do printf '#!/bin/sh\n' >"$OUT/stand-ins/$tool" && chmod +x "$OUT/stand-ins/$tool"; done
+HOOK="$D/.git/hooks/pre-commit"
+installs_hooks() {  # installs_hooks <checkout>: make claude there installs the clone's missing hook
+  rm -f "$HOOK" && PATH="$OUT/stand-ins:$PATH" make -s -C "$1" claude && [ -f "$HOOK" ]
+}
+expect "make claude installs the commit hooks in a clone that has none" installs_hooks "$D"
+worktree_installs_from_main_checkout() {
+  git -C "$D" worktree add -q --detach "$OUT/worktree" && installs_hooks "$OUT/worktree" &&
+    git -C "$D" worktree remove "$OUT/worktree" && grep -qF "$D/.venv/" "$HOOK"
+}
+expect "make claude in a worktree installs hooks that run the main checkout's .venv" worktree_installs_from_main_checkout
 # uv sees only the Pythons it installs, and none is installed, as on a new CI runner: it downloads
 # the newest one the project allows, whatever this machine has. The environment goes outside the
 # project, so the checks below keep make gate's.
@@ -247,12 +239,12 @@ printf 'own: ## Check what only this project checks.\n\t@echo own ran\n\ngate: o
 help_lists_each_layer() {  # each target bare make lists, after the file it is listed under
   local owners
   owners="$(make -s -C "$D" | awk '/^[^ ]/ { f = $0 } /^  / { print f, $1 }')"
-  { [ "$(grep -v '^\.claude/agentic\.mk ' <<<"$owners")" = "$(printf '%s\n' 'Makefile own' 'python.mk commit-hooks' \
-    'python.mk lint' 'python.mk lint-check' 'python.mk typecheck' 'python.mk security' 'python.mk duplication' \
-    'python.mk test' 'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
+  { [ "$(grep -v '^\.claude/agentic\.mk ' <<<"$owners")" = "$(printf '%s\n' 'Makefile own' 'python.mk lint' \
+    'python.mk lint-check' 'python.mk typecheck' 'python.mk security' 'python.mk duplication' 'python.mk test' \
+    'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
     { echo "FAIL bare make listed: ${owners//$'\n'/, }"; return 1; }
 }
-expect "bare make lists the project's own target, then the Python fragment's, and claude from the agentic fragment" help_lists_each_layer
+expect "bare make lists the project's own target, then python.mk's seven, and claude from the agentic fragment" help_lists_each_layer
 expect "make gate runs the check a project's Makefile adds as its prerequisite" \
   bash -o pipefail -c "make -s -C '$D' gate | grep -x 'own ran'"
 make_with() {  # make_with <file> <content> <target>: runs the target while the file holds the content
