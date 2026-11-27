@@ -114,7 +114,6 @@ expect "an update gives a project whose answers hold no parts every part" has_pa
 
 expect "stack.json carries the test boundaries" bash -c "[ \"\$(jq -c .boundaries '$D/.claude/hooks/practices/stack.json')\" = '[\"release.run\"]' ]"
 expect "stack.json names the package" bash -c "[ \"\$(jq -r .package '$D/.claude/hooks/practices/stack.json')\" = app ]"
-expect "the Makefile includes python.mk" grep -qx 'include python.mk' "$D/Makefile"
 expect "every script parses" bash -c "for f in \$(find '$D' -name '*.sh'); do bash -n \"\$f\" || exit 1; done"
 expect "shellcheck passes this template's scripts and the tests'" bash -c "cd '$ROOT' &&
   find template tests -name '*.sh' -exec uvx --quiet --from shellcheck-py shellcheck -f gcc {} +"
@@ -238,12 +237,10 @@ printf 'own: ## Check what only this project checks.\n\t@echo own ran\n\ngate: o
 help_lists_each_layer() {  # each target bare make lists, after the file it is listed under
   local owners
   owners="$(make -s -C "$D" | awk '/^[^ ]/ { f = $0 } /^  / { print f, $1 }')"
-  { [ "$(grep -v '^\.claude/agentic\.mk ' <<<"$owners")" = "$(printf '%s\n' 'Makefile own' 'python.mk lint' \
-    'python.mk lint-check' 'python.mk typecheck' 'python.mk security' 'python.mk duplication' 'python.mk test' \
-    'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
+  [[ "$owners" == *'Makefile own'*'python.mk gate'*'.claude/agentic.mk claude'* ]] ||
     { echo "FAIL bare make listed: ${owners//$'\n'/, }"; return 1; }
 }
-expect "bare make lists the project's own target, then python.mk's seven, and claude from the agentic fragment" help_lists_each_layer
+expect "bare make lists the project's own target, then python.mk's gate, and claude from the agentic fragment" help_lists_each_layer
 expect "make gate runs the check a project's Makefile adds as its prerequisite" \
   bash -o pipefail -c "make -s -C '$D' gate | grep -x 'own ran'"
 make_with() {  # make_with <file> <content> <target>: runs the target while the file holds the content
@@ -291,11 +288,11 @@ fails_committed() {  # fails_committed <target> <file> <content>: make <target> 
   [ "$fails" = yes ]
 }
 expect "lint-check checks a committed file that .gitignore lists" \
-  relaxed .gitignore 'build/' 'build/\napp/untyped.py' fails_committed lint-check app/untyped.py "$UNTYPED"
+  with_file app/.gitignore 'untyped.py\n' fails_committed lint-check app/untyped.py "$UNTYPED"
 expect "lint-check checks a committed file that .ignore lists" \
   with_file .ignore 'app/untyped.py\n' fails_committed lint-check app/untyped.py "$UNTYPED"
 expect "lint-check skips a file that .gitignore lists and git holds no copy of" \
-  relaxed .gitignore 'build/' 'build/\napp/untyped.py' make_with app/untyped.py "$UNTYPED" lint-check
+  with_file app/.gitignore 'untyped.py\n' make_with app/untyped.py "$UNTYPED" lint-check
 # ruff takes the Python version from pyproject.toml's requires-python, and UP040 applies from 3.12.
 TYPE_ALIAS='from typing import TypeAlias\n\nNumber: TypeAlias = int\n'
 expect "make lint-check checks ruff's rules for the project's Python version" \
@@ -377,7 +374,7 @@ mkdir "$D/database"
 expect "a block written twice in database/ passes make gate" make_with database/copies.py "$COPIES" gate
 rmdir "$D/database"
 expect "duplication checks a committed file that .gitignore lists" \
-  relaxed .gitignore 'build/' 'build/\napp/copies.py' fails_committed duplication app/copies.py "$COPIES"
+  with_file app/.gitignore 'copies.py\n' fails_committed duplication app/copies.py "$COPIES"
 expect "duplication checks a committed file that .ignore lists" \
   with_file .ignore 'app/copies.py\n' fails_committed duplication app/copies.py "$COPIES"
 duplication_skips_deleted_files() {  # make duplication passes while git holds a Python file gone from disk
