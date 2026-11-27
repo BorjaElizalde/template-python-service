@@ -18,11 +18,11 @@ pass=0; fail=0
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
 
-mkdir -p "$FIX/app/api/mcp/tools" "$FIX/tools" "$FIX/.github/workflows" \
+mkdir -p "$FIX/app/api/tools" "$FIX/tools" "$FIX/.github/workflows" \
          "$FIX/.claude/memory" "$FIX/.claude/agent-memory/some-agent"
 : > "$FIX/app/config.py"
-: > "$FIX/app/api/mcp/tools/items.py"
-: > "$FIX/tools/prepare_db.py"
+: > "$FIX/app/api/tools/search.py"
+: > "$FIX/tools/release.sh"
 : > "$FIX/.github/workflows/gate.yaml"
 
 store() { printf '%s' "$FIX/.claude/agent-memory/$1"; }
@@ -63,9 +63,7 @@ printf -- '- [T](a.md) — a hook suffix\n' > "$(store some-agent)/MEMORY.md"
 topic some-agent a '---' 'name: a' 'metadata:' '  type: feedback' '---' 'Live path `app/config.py`.'
 t 0 "main store: metadata.type + hooked index bullet"
 
-# A note with no path at all is fine now: negative facts ("there is no X") have no subject in the
-# tree by construction, and they are among the most valuable things memory holds. The retired
-# `navigation` type required a live path, which would have rejected exactly those.
+# Negative facts ("there is no X") cite no path, and they are among the most valuable notes.
 reset_store
 printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
 topic some-agent a '---' 'name: a' 'metadata:' '  type: project' '---' 'There is no cache-control middleware.'
@@ -79,17 +77,11 @@ for accepted in user feedback project reference; do
 done
 
 echo "-- true positives (must fail)"
-
-# The retired agent-only dialect and vocabulary. Both must now read as an undeclared type.
 reset_store
 printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
-topic some-agent a '---' 'name: a' 'memory_type: navigation' '---' 'Live `app/config.py`.'
-t 1 "retired 'memory_type:' spelling is rejected" "[policy]"
+topic some-agent a '---' 'name: a' 'metadata:' '  type: note' '---' 'Live `app/config.py`.'
+t 1 "a type outside the four kinds is rejected" "[policy]"
 
-reset_store
-printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
-topic some-agent a '---' 'name: a' 'metadata:' '  type: maintainer-guidance' '---' 'Live `app/config.py`.'
-t 1 "retired 'maintainer-guidance' value is rejected" "[policy]"
 reset_store
 printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
 topic some-agent a '---' 'name: a' 'metadata:' '  type: project' '---' 'Gone: `app/gone.py`.'
@@ -133,17 +125,17 @@ else
   fail=$((fail+1)); echo "FAIL secret-bearing file was not reported at all"
 fi
 
-echo "-- false positives that used to fire (must pass clean)"
+echo "-- text that is no broken reference (must pass clean)"
 reset_store
 printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
 topic some-agent a '---' 'name: a' 'metadata:' '  type: project' '---' \
-  'Deploy lives in `devops/.github/workflows/deploy-backend.yaml`, ours in `.github/workflows/gate.yaml`.'
-t 0 "sibling-repo devops/ path is not this repo's, and must not be chopped into .github/"
+  'Release lives in `sibling/.github/workflows/release.yaml`, ours in `.github/workflows/gate.yaml`.'
+t 0 "a sibling repository's path is not this repo's, and must not be chopped into .github/"
 
 reset_store
 printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
 topic some-agent a '---' 'name: a' 'metadata:' '  type: project' '---' \
-  'See `app/api/mcp/tools/items.py`.'
+  'See `api/tools/search.py`.'
 t 0 "mid-path 'tools/' segment is not a separate broken reference"
 
 reset_store
@@ -151,11 +143,11 @@ printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
 topic some-agent a '---' 'name: a' 'metadata:' '  type: project' '---' \
   'Owner said user-curated rows win. Promotion runs on `origin/main` and `origin/staging`.' \
   'Verified 2026-08-11. `app/config.py`'
-t 0 "prose lint is gone: user-curated, origin/ refs and dates are not findings"
+t 0 "prose is not checked: user-curated, origin/ refs and dates are not findings"
 
 reset_store
 printf -- '- [T](a.md)\n' > "$(store some-agent)/MEMORY.md"
-topic some-agent a '---' 'name: a' 'metadata:' '  type: project' '---' 'Top-level `tools/prepare_db.py`.'
+topic some-agent a '---' 'name: a' 'metadata:' '  type: project' '---' 'Top-level `tools/release.sh`.'
 t 0 "top-level tools/ path resolves"
 
 echo "-- hook contract: git commit blocks on broken or unstaged memory"

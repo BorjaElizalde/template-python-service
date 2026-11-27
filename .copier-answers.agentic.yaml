@@ -1,7 +1,8 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: '20261125.1'
+_commit: '20261126.1'
 _src_path: https://github.com/BorjaElizalde/template-agentic.git
 agent_merges: false
 deploy_workflow: Build
+gate_paths_ignore: {}
 issues_repo: BorjaElizalde/template-python-service
 worktree_root: ../../worktrees
