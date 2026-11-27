@@ -1,7 +1,7 @@
 ## Judgment Guidelines
 
-Any judgment call you need to take, or you want to delegate, is decided against the Product Stage
-in CLAUDE.md and the two subsections below. These override your default instincts.
+Any judgment call you need to take, or you want to delegate, is decided against the two
+subsections below. These override your default instincts.
 
 ### Agentic Coding Economics
 This codebase is built by coding agents. You are trained on human-effort economics, so you will

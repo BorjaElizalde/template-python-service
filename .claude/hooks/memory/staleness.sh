@@ -55,11 +55,7 @@ resolve_path() {
 # cites_symbol <path> <repo>: a name with no extension under a folder that exists names a symbol.
 cites_symbol() { [[ "$(basename "$1")" != *.* ]] && [ -n "$(resolve_path "$2" "$(dirname "$1")")" ]; }
 
-# One dialect, one vocabulary: every store writes the harness shape, a `metadata:` block with an
-# indented `type:` drawn from the harness's four kinds. The agent-only spellings `memory_type:`,
-# `navigation` and `maintainer-guidance` are gone. `navigation` in particular named the content that
-# rotted fastest — a note defined by citing paths, symbols and line numbers is invalidated by every
-# refactor and can be regenerated with one `rg`, so it cost more than it paid.
+# Every store writes a topic's type as Claude Code does: one of its four kinds, under `metadata:`.
 # The parser tolerates trailing whitespace and optional quotes: a value that visibly declares a type
 # but fails to parse produces a hard finding naming the wrong problem, and blocks a commit.
 topic_memory_type() {

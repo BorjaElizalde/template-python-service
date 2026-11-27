@@ -17,6 +17,11 @@ allowed-tools: Bash(bash:*)
      session back to work past it. ✋
    - idle, PR open and checks passed: review the PR; the owner merges it. 👀
    - checks failed: send the session back to work with SendMessage, saying what failed. ⏳
+   - idle, PR open, gate not run, and every file the PR changes (`gh pr diff <n> --name-only`) is
+     on the `paths-ignore` list in `.github/workflows/gate.yaml`: no gate runs on this PR. Review
+     it; the owner merges it. 👀
+   - idle, PR open and gate not run: send the session back with SendMessage to mark the PR draft,
+     then ready, which starts the gate on its head. ⏳
    - idle, PR draft: its review steps have not ended, and it marks the PR ready when they do.
      Send the session back to them with SendMessage. ⏳
    - idle, no PR: its last message holds a result to close the issue on, a blocker, or a
