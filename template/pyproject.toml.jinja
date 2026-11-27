@@ -1,7 +1,8 @@
 [project]
 name = "{{ package_name }}"
 version = "0.1.0"
-requires-python = ">=3.14"
+# One minor version: under a floor, uv can take a newer Python that some packages have no wheel for.
+requires-python = "==3.14.*"
 dependencies = []
 
 [dependency-groups]

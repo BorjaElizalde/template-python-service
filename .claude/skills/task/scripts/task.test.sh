@@ -31,7 +31,7 @@ cat >"$WORK/bin/gh" <<'EOF'
 cd "$TASK_TEST_STATE" || exit 1
 title() {
   case "$1" in
-    42) echo "Name make close_claude_session in backend CLAUDE.md" ;;
+    42) echo "Add a retry_limit setting to the upload client" ;;
     7) echo "Second task" ;;
     5) echo "Already done" ;;
     23) echo "Task 23, with a title longer than the forty characters of a task line" ;;
@@ -224,18 +224,18 @@ run_in() {  # run_in <folder> <task.sh args...>: its own task.sh, run from insid
   (cd "$1" && bash .claude/skills/task/scripts/task.sh "${@:2}") >"$WORK/out" 2>&1
 }
 
-ISSUE42="$WORK/repos/worktrees/42-name-make-close-claude-session-in"
+ISSUE42="$WORK/repos/worktrees/42-add-a-retry-limit-setting-to-the-upload"
 ISSUE7="$WORK/repos/worktrees/7-second-task"
 
 echo "-- start: one folder per issue, one subfolder per repository"
 tmux_main "$BACKEND"
 check "backend starts issue 42"                run_in "$BACKEND" start 42
 check "the worktree is <root>/<n>-<slug>/backend" test -d "$ISSUE42/backend"
-check "its branch is feat/<n>-<slug>"          test "$(branch_of "$ISSUE42/backend")" = feat/42-name-make-close-claude-session-in
+check "its branch is feat/<n>-<slug>"          test "$(branch_of "$ISSUE42/backend")" = feat/42-add-a-retry-limit-setting-to-the-upload
 check "it branches off origin/develop"         git -C "$ISSUE42/backend" merge-base --is-ancestor origin/develop HEAD
 check "the main checkout's memory points at it" test "$(memory_of "$BACKEND")" = "$BACKEND/.claude/memory"
-check "its session opens with the issue name"  test "$(sessions '#42 backend: Name make close_claude_session in')" -eq 1
-check "and the start names its mode"           grep -qxF '✓ session opened in execution mode: #42 backend: Name make close_claude_session in' "$WORK/out"
+check "its session opens with the issue name"  test "$(sessions '#42 backend: Add a retry_limit setting to the upload')" -eq 1
+check "and the start names its mode"           grep -qxF '✓ session opened in execution mode: #42 backend: Add a retry_limit setting to the upload' "$WORK/out"
 check "with a first prompt that reads its issue" bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'gh issue view 42 -R acme/tasks --json title,body,comments'"
 check "and names no orchestrator, as no session runs the start" bash -c "! tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Your orchestrator'"
 check "an interactive claude, never -p or --print, its window's only process" interactive
@@ -269,7 +269,7 @@ check "and the same first prompt"              bash -c "tail -n 1 '$TASK_TEST_ST
 check "which names that session its orchestrator" bash -c "tail -n 1 '$TASK_TEST_STATE/launches' | grep -qF 'Your orchestrator, the session that started this task, is \`a task session\`.'"
 check "still interactive"                      interactive
 check "a running session"                      run_in "$BACKEND" start 42
-check "is left where it runs"                  grep -qxF '✓ session already running in execution mode: #42 backend: Name make close_claude_session in' "$WORK/out"
+check "is left where it runs"                  grep -qxF '✓ session already running in execution mode: #42 backend: Add a retry_limit setting to the upload' "$WORK/out"
 check "and never opened twice"                 test "$(sessions '#42 backend:')" -eq 3
 check "while the main window stays in view"    in_view backend
 sessions_exit
@@ -351,7 +351,7 @@ echo "-- finish: closed issue, nothing unshipped"
 check "a pushed branch finishes"               task "$BACKEND" finish 42
 check "its session ended, and its window closed" closes backend '#42'
 check "its worktree is gone"                   test ! -e "$ISSUE42/backend"
-check "its local branch is gone"               bash -c "! git -C '$BACKEND' rev-parse -q --verify feat/42-name-make-close-claude-session-in"
+check "its local branch is gone"               bash -c "! git -C '$BACKEND' rev-parse -q --verify feat/42-add-a-retry-limit-setting-to-the-upload"
 check "the issue folder stays for frontend"    test -d "$ISSUE42/frontend"
 check "a branch with no commits finishes"      task "$FRONTEND" finish 42
 check "the last one removes the issue folder"  test ! -e "$ISSUE42"
@@ -428,9 +428,13 @@ echo "$ISSUE11/backend $LISTED_PID idle" >"$TASK_TEST_STATE/running"
 transcript "$ISSUE11/backend" old 200001010000
 transcript "$ISSUE11/backend"
 PENDING='{"__typename": "CheckRun", "name": "gate", "status": "IN_PROGRESS", "conclusion": ""}'
-PASSED='{"__typename": "CheckRun", "name": "gate", "status": "COMPLETED", "conclusion": "SUCCESS"}'
+PASSED='{"__typename": "CheckRun", "name": "gate / checks", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "SUCCESS"}'
+GATE_SKIPPED='{"__typename": "CheckRun", "name": "gate / checks", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "SKIPPED"}'
+READ_DRAFT='{"__typename": "CheckRun", "name": "read-draft", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-01-01T00:00:10Z"}'
+READ_DRAFT_CANCELLED='{"__typename": "CheckRun", "name": "read-draft", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "CANCELLED", "startedAt": "2026-01-01T00:00:00Z"}'
+OTHER_GATE='{"__typename": "CheckRun", "name": "gate", "workflowName": "Lint", "status": "COMPLETED", "conclusion": "SUCCESS"}'
 SKIPPED='{"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "SKIPPED"}'
-FAILED='{"__typename": "CheckRun", "name": "gate", "status": "COMPLETED", "conclusion": "FAILURE"}'
+FAILED='{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "FAILURE"}'
 NO_CONCLUSION='{"__typename": "CheckRun", "name": "gate", "status": "COMPLETED", "conclusion": ""}'
 CONTEXT='{"__typename": "StatusContext", "context": "ci", "state": "SUCCESS"}'
 pr_from feat/11-task-11 OPEN false "[$PENDING, $CONTEXT]"
@@ -447,6 +451,18 @@ check "a failed check outweighs a pending one" bash -c "grep -qF '#11 Task 11: s
 pr_from feat/11-task-11 OPEN true "[$PASSED, $SKIPPED, $CONTEXT]"
 run_in "$BACKEND" status
 check "a draft whose checks passed or skipped" bash -c "grep -qF 'PR #21 draft, checks passed,' '$WORK/out'"
+pr_from feat/11-task-11 OPEN false "[$GATE_SKIPPED, $SKIPPED, $CONTEXT]"
+run_in "$BACKEND" status
+check "a PR whose gate skipped has not passed" bash -c "grep -qF 'PR #21 open, gate not run,' '$WORK/out'"
+pr_from feat/11-task-11 OPEN false "[$READ_DRAFT, $GATE_SKIPPED, $CONTEXT]"
+run_in "$BACKEND" status
+check "nor one whose gate skipped where the Gate workflow's read-draft passed" bash -c "grep -qF 'PR #21 open, gate not run,' '$WORK/out'"
+pr_from feat/11-task-11 OPEN false "[$READ_DRAFT, $READ_DRAFT_CANCELLED, $PASSED]"
+run_in "$BACKEND" status
+check "a check counts by its newest run, not by an earlier one cancelled" bash -c "grep -qF 'PR #21 open, checks passed,' '$WORK/out'"
+pr_from feat/11-task-11 OPEN false "[$OTHER_GATE, $CONTEXT]"
+run_in "$BACKEND" status
+check "nor one whose only passed gate is from another workflow" bash -c "grep -qF 'PR #21 open, gate not run,' '$WORK/out'"
 pr_from feat/11-task-11 OPEN false "[$PASSED, $NO_CONCLUSION]"
 run_in "$BACKEND" status
 check "a check completed with no conclusion has not passed" bash -c "grep -qF 'PR #21 open, checks failed,' '$WORK/out'"

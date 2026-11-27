@@ -80,7 +80,7 @@ done
 [ ${#dirty[@]} -gt 0 ] || exit 0
 
 if ! findings="$(bash "$CHECKER" "${dirty[@]}" 2>&1)"; then
-  # Explain the staging rule here rather than in CLAUDE.md: it is only needed at the moment of the
+  # Explain the staging rule here, not in .claude/rules/: it is only needed at the moment of the
   # block, and an agent seeing an untracked finding on a commit has no other way to work out why.
   case "$findings" in
     *"untracked memory file"*)

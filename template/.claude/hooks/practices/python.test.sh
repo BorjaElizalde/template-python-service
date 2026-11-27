@@ -10,9 +10,13 @@ WORK="$(mktemp -d)"
 # The checks run from a copy beside a fixture stack.json, so the cases never depend on the answers
 # this project was rendered with.
 cp "$HERE"/*.jq "$HERE/guard.sh" "$WORK/"
-printf '{"package": "app", "boundaries": ["release.run"]}\n' >"$WORK/stack.json"
-GUARD="$WORK/guard.sh"
 PKG=app
+stack() {  # stack <parts> <boundaries>: the answers the cases after it run with, as JSON
+  printf '{"package": "%s", "parts": %s, "boundaries": %s}\n' "$PKG" "$1" "$2" >"$WORK/stack.json"
+}
+EVERY_PART='["api", "batch", "database"]'
+stack "$EVERY_PART" '["release.run"]'
+GUARD="$WORK/guard.sh"
 REPO="$(mktemp -d)"; NOGIT="$(mktemp -d)"
 trap 'rm -rf "$REPO" "$NOGIT" "$WORK"' EXIT
 git -C "$REPO" init -q
@@ -56,7 +60,7 @@ says() {  # says <yes|no> <phrase> <desc> <path> <old> <new>: whether the guard'
   else fail=$((fail+1)); echo "FAIL (want $1, got $got) $3"; fi
 }
 
-# A reason in the form conventions.md gives follows the why with one of these per alternative.
+# A reason in the form the rules give follows the why with one of these per alternative.
 TRIED='Tried the fix the rule gives, but it breaks the callers.'
 
 echo "-- skipped checks: no rule code, or no reason in the form (must stop)"
@@ -75,6 +79,21 @@ edit 2 "fmt off, nothing above"       "$APP" 'x = [1]' $'# fmt: off\nx = [1]'
 edit 2 "mark.skip, no reason"         "$TEST" 'def test_x():' $'@pytest.mark.skip\ndef test_x():'
 edit 2 "skipif, no reason"            "$TEST" 'def test_x():' $'@pytest.mark.skipif(sys.platform == "win32")\ndef test_x():'
 edit 2 "pytest.skip()"                "$TEST" '    pass' '    pytest.skip()'
+edit 2 "filterwarnings mark that ignores, no reason" "$TEST" 'def test_x():' \
+  $'@pytest.mark.filterwarnings("ignore::DeprecationWarning")\ndef test_x():'
+edit 2 "module mark that shows warnings, no reason" "$TEST" 'import pytest' \
+  $'import pytest\n\npytestmark = pytest.mark.filterwarnings("default")'
+edit 2 "mark with error and another filter" "$TEST" 'def test_x():' \
+  $'@pytest.mark.filterwarnings("error", "ignore::UserWarning")\ndef test_x():'
+edit 2 "mark with its filter on the next line" "$TEST" 'def test_x():' \
+  $'@pytest.mark.filterwarnings(\n    "error::UserWarning"\n)\ndef test_x():'
+edit 2 "filterwarnings mark, no Tried" "$TEST" 'def test_x():' \
+  $'@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # the SDK warns on import\ndef test_x():'
+CONFTEST="$REPO/tests/conftest.py"
+edit 2 "conftest filter that ignores, no reason" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")'
+edit 2 "conftest filter split before its name, no reason" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line(\n        "filterwarnings", "ignore::DeprecationWarning"\n    )'
 edit 2 "jscpd ignore-start, no reason" "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()\n# jscpd:ignore-end'
 edit 2 "jscpd marker inside prose"    "$APP" 'x = c()' $'# keep this jscpd:ignore-start\nx = c()'
 write 2 "Write: new file, bare noqa"  "$APP" '' $'import os  # noqa\n'
@@ -99,6 +118,9 @@ says yes "(ruff, basedpyright, bandit, pytest, jscpd)" "the stop sends the agent
   "$APP" 'x = c()' $'# jscpd:ignore-start\nx = c()'
 says yes "Write it in this form: # noqa: <rule code> <reason>" "the noqa form shows a placeholder for the code" "$APP" 'x = 1' 'x = 1  # noqa: E501'
 says no "BLE001" "the noqa form names no code the line didn't skip" "$APP" 'x = 1' 'x = 1  # noqa: E501'
+says yes "Write it in this form: <the line that sets the filter>  # <reason>" \
+  "the warning filter form shows where the reason goes" "$TEST" 'def test_x():' \
+  $'@pytest.mark.filterwarnings("ignore")\ndef test_x():'
 
 echo "-- skipped checks: rule code and a reason in the form, on the line or above (goes on)"
 edit 0 "noqa code + reason"           "$APP" 'x = c()' "x = c()  # noqa: F821 defined by the plugin loader. $TRIED"
@@ -124,6 +146,18 @@ edit R "skipif + reason + Tried comment" "$TEST" 'def test_x():' \
   $'@pytest.mark.skipif(sys.platform == "win32", reason="no fork on Windows")  # '"$TRIED"$'\ndef test_x():'
 edit R "pytest.skip + reason above"   "$TEST" '    pass' \
   $'    # The icon list lives only upstream.\n    # '"$TRIED"$'\n    pytest.skip(f"Lucide icon source unreachable: {exc}")'
+edit R "filterwarnings mark + reason" "$TEST" 'def test_x():' \
+  $'@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # The SDK warns on import. '"$TRIED"$'\ndef test_x():'
+edit R "mark with its filter on the next line + reason above" "$TEST" 'def test_x():' \
+  $'# The SDK warns on import.\n# '"$TRIED"$'\n@pytest.mark.filterwarnings(\n    "ignore::DeprecationWarning"\n)\ndef test_x():'
+edit 0 "filterwarnings mark that raises" "$TEST" 'def test_x():' \
+  $'@pytest.mark.filterwarnings("error::UserWarning")\ndef test_x():'
+edit R "conftest filter + reason" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")  # The SDK warns. '"$TRIED"
+edit 0 "conftest filter that raises" "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("filterwarnings", "error::UserWarning")'
+edit 0 "conftest marker line"         "$CONFTEST" 'def pytest_configure(config):' \
+  $'def pytest_configure(config):\n    config.addinivalue_line("markers", "slow: runs for minutes")'
 edit 0 "old reason rewritten into the form" "$APP" 'x = 1  # noqa: E501 long URL' "x = 1  # noqa: E501 a long URL cannot wrap. $TRIED"
 edit 2 "stop wins over a reminder"    "$APP" $'a = 1\nb = 1' $'# A comment.\na = 1\nb = 1  # noqa'
 edit 0 "edit next to an old bare noqa" "$APP" $'x = 1  # noqa\ny = 1' $'x = 1  # noqa\ny = 2'
@@ -311,6 +345,43 @@ write R "another object's post is not a write call" "$UNIT" '' $'def test_x(clie
 edit 0 "old write test edited"          "$UNIT" "$UNREAD" "${UNREAD/json=/data=}"
 write 0 "write test in a contract check" "$REPO/tests/migrations/test_case.py" '' "$UNREAD"
 write 0 "write test in the email templates check" "$REPO/tests/contracts/test_emails.py" '' "$UNREAD"
+says yes "call a boundary (an endpoint, an MCP tool, a batch task, the batch CLI or \`release.run\`)" \
+  "the stop names every part's boundaries and the answered one" "$UNIT" '' "$DIRECT"
+
+echo "-- parts: a check that belongs to a part runs only in a project that picked it"
+stack '[]' '[]'
+write 0 "no part, no boundary: a direct test"  "$UNIT" '' "$DIRECT"
+write 0 "no part: an endpoint test"            "$UNIT" '' "$UNREAD"
+edit 2 "no part: Args: on an MCP tool"         "$TOOL" 'async def list_items(x):' $'async def list_items(x):\n'"$ARGS"
+write 2 "no part: a module docstring in database/versions" "$MIGRATION" '' $'"""add x\n\nRevision ID: abc123\n"""\nfrom alembic import op\n'
+says no "Alembic" "no part: the module docstring stop names no migration" "$APP" 'import os' $'"""Service helpers."""\nimport os'
+says yes "prefers code that explains itself" "no part: an endpoint's docstring gets the reminder for internal code" \
+  "$ROUTER" 'async def get_me():' $'async def get_me():\n    """Return the signed-in user."""'
+stack '[]' '["release.run"]'
+write 2 "no part, a boundary answered: a direct test" "$UNIT" '' "$DIRECT"
+write R "no part: through the answered boundary" "$UNIT" '' $'def test_x():\n    release.run(conn)\n'
+says yes "call a boundary (\`release.run\`)" "no part: the stop names only the answered boundary" "$UNIT" '' "$DIRECT"
+says no "mock_" "no part: the stop names no database helper" "$UNIT" '' "$DIRECT"
+stack '["batch"]' '[]'
+write R "batch: through a batch task"          "$UNIT" '' $'def test_x():\n    assert task_sync_daily()["users"] == 1\n'
+write 2 "batch: an endpoint is no boundary"    "$UNIT" '' $'def test_x(client):\n    assert client.get("/x").status_code == 200\n'
+write 2 "batch: a migration test is no contract check" "$REPO/tests/migrations/test_case.py" '' "$DIRECT"
+says yes "(--help)" "batch: the CLI docstring's reader is --help" \
+  "$REPO/$PKG/batch/main.py" 'def run(task_name: str | None = None):' $'def run(task_name: str | None = None):\n    """Run the named batch task."""'
+says no "ERR_" "batch: the CLI docstring's reminder asks for no API error code" \
+  "$REPO/$PKG/batch/main.py" 'def run(task_name: str | None = None):' $'def run(task_name: str | None = None):\n    """Run the named batch task."""'
+stack '["api"]' '[]'
+write R "api without database: a write checked by its response" "$UNIT" '' "$UNREAD"
+says yes "(the MCP client)" "api: the MCP tool's reader is the MCP client" \
+  "$TOOL" 'async def list_items():' $'async def list_items():\n    """List the team\'s items."""'
+stack '["database"]' '[]'
+write 0 "database alone: a direct test"        "$UNIT" '' "$DIRECT"
+write 0 "database alone: a migration module docstring" "$MIGRATION" '' $'"""add x\n\nRevision ID: abc123\n"""\nfrom alembic import op\n'
+# Copier renders an empty test_boundaries answer as null.
+stack "$EVERY_PART" null
+write 2 "null boundaries: a direct test still stops" "$UNIT" '' "$DIRECT"
+edit 2 "null boundaries: the other checks still run" "$APP" '    y = f()' $'    try:\n        y = f()\n    except ValueError:\n        y = None'
+stack "$EVERY_PART" '["release.run"]'
 
 echo "-- config: switching a check off stops until a reason in the form sits next to it"
 PY="$REPO/pyproject.toml"
@@ -361,6 +432,37 @@ edit_in R "type-check mode lowered, reason above" "$PY" "$BASE" 'typeCheckingMod
 edit_in 0 "type-check mode raised"        "$PY" "$BASE" 'typeCheckingMode = "recommended"' 'typeCheckingMode = "all"'
 edit_in 0 "type-check scope widened"      "$PY" "$BASE" 'include = ["app"]' 'include = ["app", "tests"]'
 edit_in 0 "unrelated section"             "$PY" "$BASE" 'dependencies = ["fastapi"]' 'dependencies = ["fastapi", "exclude-me"]'
+edit_in 2 "single-quoted rule removed from select" "$PY" $'[tool.ruff.lint]\nselect = [\'F\', \'E\']\n' \
+  "select = ['F', 'E']" "select = ['F']"
+
+echo "-- config: a warning filter other than error lets a warning pass the tests"
+FW=$'[tool.pytest.ini_options]\nfilterwarnings = [\n    "error",\n]\n'
+FW1=$'[tool.pytest.ini_options]\nfilterwarnings = ["error"]\n'
+edit_in 2 "error filter removed"          "$PY" "$FW" $'    "error",\n' ''
+edit_in 2 "filterwarnings line removed"   "$PY" "$FW1" $'filterwarnings = ["error"]\n' ''
+edit_in 2 "filterwarnings emptied"        "$PY" "$FW1" 'filterwarnings = ["error"]' 'filterwarnings = []'
+edit_in 2 "ignore filter added"           "$PY" "$FW" '    "error",' $'    "error",\n    "ignore::DeprecationWarning",'
+edit_in 2 "single-quoted ignore filter added" "$PY" "$FW" '    "error",' \
+  $'    "error",\n    \'ignore:function ham\\(\\) is deprecated:DeprecationWarning\','
+edit_in 2 "filter that shows warnings, beside the error filter" "$PY" "$FW1" 'filterwarnings = ["error"]' \
+  'filterwarnings = ["error", "default::UserWarning"]'
+edit_in 2 "warning filter in addopts"     "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -W ignore::DeprecationWarning"'
+edit_in 2 "warning filter in addopts, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-W", "ignore"]'
+edit_in 2 "warning filter in addopts, glued to its -W" "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -Wignore"'
+edit_in 2 "-W alone on its line, whatever filter follows" "$PY" $'[tool.pytest.ini_options]\naddopts = [\n    "-v",\n]\n' \
+  '    "-v",' $'    "-v",\n    "-W",\n    "error",'
+edit_in R "ignore filter added, reason on its line" "$PY" "$FW" '    "error",' \
+  $'    "error",\n    "ignore::DeprecationWarning",  # The SDK warns on import. '"$TRIED"
+edit_in R "error filter removed, reason where it was" "$PY" "$FW" $'    "error",\n' \
+  "    # The suite checks each warning with pytest.warns. $TRIED"$'\n'
+edit_in 0 "error filter for a category added" "$PY" "$FW" '    "error",' $'    "error",\n    "error::UserWarning",'
+edit_in 0 "single-quoted error filter added" "$PY" "$FW" '    "error",' $'    "error",\n    \'error::UserWarning\','
+edit_in 0 "ignore filter removed"         "$PY" $'[tool.pytest.ini_options]\nfilterwarnings = [\n    "error",\n    "ignore::DeprecationWarning",\n]\n' \
+  $'    "ignore::DeprecationWarning",\n' ''
+edit_in 0 "error filter kept as its list grows into lines" "$PY" "$FW1" 'filterwarnings = ["error"]' \
+  $'filterwarnings = [\n    "error",\n]'
+edit_in 0 "error filter in addopts"       "$PY" "$BASE" 'addopts = "-v"' 'addopts = "-v -W error::UserWarning"'
+edit_in 0 "error filter in addopts, as list items" "$PY" "$BASE" 'addopts = "-v"' 'addopts = ["-v", "-W", "error"]'
 
 echo "-- config: a select in a ruff config that extends another replaces that config's rule list"
 EXT=$'[tool.ruff]\nextend = "ruff.base.toml"\n\n[tool.ruff.lint]\nextend-select = ["B"]\n'

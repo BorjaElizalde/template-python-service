@@ -21,7 +21,8 @@ code around them and of their callers to establish behaviour, but report only wh
 introduces or exposes.
 
 The rules of `.claude/rules/` are authoritative: hold the change to them, not to a checklist of
-your own. Read in full a stack layer's rule file whose `paths:` match a changed file.
+your own. Read in full each rule file whose `paths:` match a changed file, at the root of
+`.claude/rules/` or in a subfolder at any depth.
 
 Others check the rest, so leave it out:
 

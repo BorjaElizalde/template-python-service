@@ -1,0 +1,33 @@
+---
+paths:
+  - "**/*.py"
+---
+
+# API conventions
+
+## Error Handling
+- Raise `APIException.X(**context)` for structured errors — `APIException` is the enum of every wire
+  code and the only place one is spelled; calling a member builds a fresh `APIError`, and the context
+  keywords (ids, a reason) are what the refusal log line says beyond the code; never a shared
+  instance or a free-form message
+- OpenAPI error responses are derived from the raise statements (`{{ package_name }}/api/openapi_errors.py`),
+  never declared on a route. The derivation follows bare-name calls between module-level functions
+  under `{{ package_name }}.api`; a raise reached any other way — a method, `module.func()`, another package
+  — reaches no operation, and a gate test fails naming the function
+
+## Code Style
+- A dependency a route runs only for its effect, such as a permission check whose value the route
+  never reads, goes in the decorator's `dependencies=[Depends(...)]`, or the `APIRouter`'s for all
+  its routes: FastAPI's idiom. As a parameter, it fails ruff's ARG
+- The API's shared symbols have established owners: API responses in
+  `{{ package_name }}/api/v1/responses.py`, API-facing types in `{{ package_name }}/api/v1/types.py`
+  and structured errors in `{{ package_name }}/api/errors.py`
+
+## Module Imports
+- `api/main.py` is the API's composition root. `APIRouter()` with its route decorators and the
+  MCP tool registry are declarative registration, so they stay module-level
+
+## Docstrings
+- Every outside-facing docstring names each error that comes back by its ``ERR_...`` code
+- The FastAPI endpoints and the models in the OpenAPI schema have outside-facing docstrings: they
+  become the SDK's hover text. An endpoint with `include_in_schema=False` has no outside reader
