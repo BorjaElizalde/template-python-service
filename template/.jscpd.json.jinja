@@ -6,13 +6,17 @@
     "copy of 10 lines or more. It at times counts the blank lines after a copy too, which makes",
     "the check stricter, never looser. Imports are left out: modules share them, and no fix",
     "removes them.",
+{%- if 'database' in parts %}
     "Tests are left out, and so is database/, whose migrations keep their own copy of the code",
-    "they run (migrations.md)."
+    "they run (the migration rules in .claude/rules/)."
+{%- else %}
+    "Tests are left out."
+{%- endif %}
   ],
   "format": ["python"],
   "minLines": 9,
   "minTokens": 50,
-  "ignore": [".venv/**", "tests/**", "database/**"],
+  "ignore": [".venv/**", "tests/**"{% if 'database' in parts %}, "database/**"{% endif %}],
   "ignorePattern": ["(?m)^[ \\t]*(?:from[ \\t]+\\S+[ \\t]+)?import[ \\t]+(?:\\([^)]*\\)|.*)"],
   "exitCode": 1,
   "noTips": true
