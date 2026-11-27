@@ -288,11 +288,11 @@ fails_committed() {  # fails_committed <target> <file> <content>: make <target> 
   [ "$fails" = yes ]
 }
 expect "lint-check checks a committed file that .gitignore lists" \
-  relaxed .gitignore 'build/' 'build/\napp/untyped.py' fails_committed lint-check app/untyped.py "$UNTYPED"
+  with_file app/.gitignore 'untyped.py\n' fails_committed lint-check app/untyped.py "$UNTYPED"
 expect "lint-check checks a committed file that .ignore lists" \
   with_file .ignore 'app/untyped.py\n' fails_committed lint-check app/untyped.py "$UNTYPED"
 expect "lint-check skips a file that .gitignore lists and git holds no copy of" \
-  relaxed .gitignore 'build/' 'build/\napp/untyped.py' make_with app/untyped.py "$UNTYPED" lint-check
+  with_file app/.gitignore 'untyped.py\n' make_with app/untyped.py "$UNTYPED" lint-check
 # ruff takes the Python version from pyproject.toml's requires-python, and UP040 applies from 3.12.
 TYPE_ALIAS='from typing import TypeAlias\n\nNumber: TypeAlias = int\n'
 expect "make lint-check checks ruff's rules for the project's Python version" \
@@ -374,7 +374,7 @@ mkdir "$D/database"
 expect "a block written twice in database/ passes make gate" make_with database/copies.py "$COPIES" gate
 rmdir "$D/database"
 expect "duplication checks a committed file that .gitignore lists" \
-  relaxed .gitignore 'build/' 'build/\napp/copies.py' fails_committed duplication app/copies.py "$COPIES"
+  with_file app/.gitignore 'copies.py\n' fails_committed duplication app/copies.py "$COPIES"
 expect "duplication checks a committed file that .ignore lists" \
   with_file .ignore 'app/copies.py\n' fails_committed duplication app/copies.py "$COPIES"
 duplication_skips_deleted_files() {  # make duplication passes while git holds a Python file gone from disk
