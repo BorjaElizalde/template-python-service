@@ -55,7 +55,9 @@ commit "$TWO" two-layers
 (cd "$TWO" && uvx --quiet copier update --quiet --defaults -a .copier-answers.agentic.yaml --vcs-ref HEAD)
 commit "$TWO" agentic
 D="$OUT/project"
-uvx --quiet copier copy --quiet --defaults "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" "$V" "$D"
+# The two-layer project's agentic layer records gate_paths_ignore as empty, so D answers the same.
+uvx --quiet copier copy --quiet --defaults "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" \
+  --data 'gate_paths_ignore={}' "$V" "$D"
 like_two_layers() {
   diff -rq --exclude .git --exclude '.copier-answers.*' --exclude renovate.json --exclude MEMORY.md "$TWO" "$D" &&
     [ "$(cd "$D" && ls -d .copier-answers.*)" = .copier-answers.python-service.yaml ] &&
@@ -145,6 +147,9 @@ part_copy "$NONE" '[]'
 part_copy "$API" '[api]'
 part_copy "$BATCH" '[batch]'
 part_copy "$DATABASE" '[database]'
+expect "a new project's Gate workflow skips a PR that changes only the files no check of this template reads" bash -c "
+  [ \"\$(uvx --quiet yq -c '.on.pull_request[\"paths-ignore\"]' '$NONE/.github/workflows/gate.yaml')\" = \
+    '[\"**.md\",\"**.ipynb\",\".claude/*/**\"]' ]"
 names_only_rules_it_has() {  # names_only_rules_it_has <project>: each rule file a file names by its path is there
   local ref
   while read -r ref; do
