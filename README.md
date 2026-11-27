@@ -61,12 +61,10 @@ With Renovate, each release comes as an update PR.
 The template writes five files once and never updates them, so they are the project's: `Makefile`,
 `pyproject.toml`, `.gitignore`, `renovate.json` and `.claude/memory/MEMORY.md`. A first copy keeps
 the ones the repository already has. Merge the template's copy into each, from `template/` at the
-release's tag; for `pyproject.toml`, that is its `requires-python`, its `[tool.ruff]` and
-`[tool.basedpyright]` tables and its `dev` dependency group. Then delete the targets and settings
-that `python.mk`, `.claude/agentic.mk`, `ruff.base.toml` and `basedpyright.base.json` hold. Do the
-same when an update brings a target the `Makefile` already has, such as `claude` or `help`. A first
-copy writes the template's `.pre-commit-config.yaml`: put the repository's own hooks back after
-`template-hooks`, and leave out those that `pre-commit.base.yaml` already runs.
+release's tag. Then delete each target and setting that the template already defines. Do the same
+when an update brings a target the `Makefile` already has. A first copy writes the template's
+`.pre-commit-config.yaml`: put the repository's own hooks back after `template-hooks`, and leave
+out those it already runs.
 
 Once per repository, create `main`, `staging` and `develop` on GitHub, with `develop` as the
 default branch:
@@ -114,18 +112,11 @@ run `make claude` in the repository.
 Apart from the project's five files and its own hooks in `.pre-commit-config.yaml`, every file the
 template writes is the template's: change it there, not in the project.
 
-- **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select` and
-  banned APIs with `extend-banned-api`. Never use `select` or `banned-api`: each replaces the
-  shared list. An exception goes in the code, as `# noqa: <code>` on its line or
-  `# ruff: noqa: <code>` at the top of its file, with the reason
-  `.claude/rules/skipped-checks.md` asks for.
-- **basedpyright**: an override goes in `pyproject.toml`.
+- **ruff** and **basedpyright**: their settings go in `pyproject.toml`.
 - **jscpd**: a copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,
-  with the reason `.claude/rules/skipped-checks.md` asks for.
+  with the reason the rules in `.claude/rules/` ask for.
 - **gitleaks**: a finding that holds no secret goes in `.gitleaksignore` as the fingerprint gitleaks
-  prints, with the reason `.claude/rules/skipped-checks.md` asks for on the comment lines above it.
+  prints, with the reason the rules in `.claude/rules/` ask for.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
   redefining `gate`.
-- **Commit hooks**, in `.pre-commit-config.yaml`: add the project's own hooks after
-  `template-hooks`, which runs the template's hooks from `pre-commit.base.yaml`.
-- **Tests**: with no `tests/` folder, `make gate` skips pytest. An empty `tests/` fails it.
+- **Commit hooks**, in `.pre-commit-config.yaml`: add the project's hooks after `template-hooks`.

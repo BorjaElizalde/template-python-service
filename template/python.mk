@@ -37,12 +37,12 @@ typecheck: ## Check the types with basedpyright.
 security: ## Scan for security issues with bandit.
 	uv run bandit -r . -x ./.venv -ll -ii
 
-# jscpd reads .jscpd.json. A failure prints the fix order that python-conventions.md gives.
+# jscpd reads .jscpd.json.
 duplication: ## Fail on a block of code written twice, with jscpd.
 	@uv run jscpd $(PYTHON_FILES) || { echo "For each copy jscpd lists: delete the copy that should not exist" \
 	  "first; else call the code's existing owner; extract a shared function only last. A copy" \
 	  "that must stay goes between # jscpd:ignore-start and # jscpd:ignore-end, with its reason" \
-	  "(.claude/rules/skipped-checks.md). No jscpd? uv add --dev jscpd"; exit 1; }
+	  "(.claude/rules/). No jscpd? uv add --dev jscpd"; exit 1; }
 
 # No tests/ skips pytest. An empty tests/ still fails it, with exit 5: a mistake, not a choice.
 test: ## Run pytest with coverage, or skip it when there is no tests/ folder.
