@@ -17,23 +17,25 @@ $(COMMIT_HOOK):
 
 claude: $(COMMIT_HOOK)
 
+# The files git holds or would add, of the kinds ruff reads, and that are on disk. ruff and jscpd
+# take them by name: in a folder it walks, each skips a file that a .gitignore or .ignore lists.
+# --force-exclude keeps ruff's excludes, such as notebooks, for a named file.
+PYTHON_FILES = $(wildcard $(shell git ls-files --cached --others --exclude-standard \
+  -- '*.py' '*.pyi' '*.ipynb'))
+
 lint: ## Fix what ruff can fix, and format every file.
-	uv run ruff check . --fix
-	uv run ruff format .
+	uv run ruff check --fix --force-exclude $(PYTHON_FILES)
+	uv run ruff format --force-exclude $(PYTHON_FILES)
 
 lint-check: ## Check ruff's rules and the format, and change no file.
-	uv run ruff check .
-	uv run ruff format --check .
+	uv run ruff check --force-exclude $(PYTHON_FILES)
+	uv run ruff format --check --force-exclude $(PYTHON_FILES)
 
 typecheck: ## Check the types with basedpyright.
 	uv run basedpyright
 
 security: ## Scan for security issues with bandit.
 	uv run bandit -r . -x ./.venv -ll -ii
-
-# The Python files git holds or would add, and that are on disk. jscpd takes them by name: in a
-# folder it walks, it skips a file that a .gitignore or .ignore lists.
-PYTHON_FILES = $(wildcard $(shell git ls-files --cached --others --exclude-standard -- '*.py'))
 
 # jscpd reads .jscpd.json. A failure prints the fix order that python-conventions.md gives.
 duplication: ## Fail on a block of code written twice, with jscpd.

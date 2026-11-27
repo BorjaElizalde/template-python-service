@@ -256,6 +256,7 @@ make_with() {  # make_with <file> <content> <target>: runs the target while the 
 fails_with() { ! make_with "$@"; }
 UNTYPED='def f(x):\n    return x\n'
 expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED" lint-check
+expect "lint-check reads a stub file" fails_with app/untyped.pyi "$UNTYPED" lint-check
 # Ruff takes any module path as a banned-api key, so only a banned call shows that the key is right.
 CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 expect "lint-check applies the base's ban on typing.cast" fails_with app/cast.py "$CAST" lint-check
@@ -293,6 +294,8 @@ expect "lint-check checks a committed file that .gitignore lists" \
   relaxed .gitignore 'build/' 'build/\napp/untyped.py' fails_committed lint-check app/untyped.py "$UNTYPED"
 expect "lint-check checks a committed file that .ignore lists" \
   with_file .ignore 'app/untyped.py\n' fails_committed lint-check app/untyped.py "$UNTYPED"
+expect "lint-check skips a file that .gitignore lists and git holds no copy of" \
+  relaxed .gitignore 'build/' 'build/\napp/untyped.py' make_with app/untyped.py "$UNTYPED" lint-check
 # ruff takes the Python version from pyproject.toml's requires-python, and UP040 applies from 3.12.
 TYPE_ALIAS='from typing import TypeAlias\n\nNumber: TypeAlias = int\n'
 expect "make lint-check checks ruff's rules for the project's Python version" \
