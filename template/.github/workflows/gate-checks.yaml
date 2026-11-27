@@ -49,7 +49,7 @@ jobs:
         run: uv run bandit -r . -x ./.venv -ll -ii --ini .github/gate-checks/bandit.ini
       # Each Python file git tracks, named: in a folder it walks, jscpd skips a file that a
       # .gitignore or .ignore lists. As in python.mk, a failure prints the fix order
-      # .claude/rules/python-conventions.md gives.
+      # python-conventions.md gives.
       - name: Find duplicated code with jscpd
         run: |
           files=()

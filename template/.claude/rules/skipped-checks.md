@@ -52,5 +52,5 @@ paths:
   their own: bandit and pytest read a `#` after an INI entry as part of its value
 - The practices hook (`.claude/hooks/practices/`) stops an edit that adds a skipped check or
   loosens a config without the rule code or without a reason in the form the general rules give,
-  and its message repeats that rule's steps. The hook checks
-  only the form; review judges whether the reason holds
+  and its message repeats that rule's steps. The hook checks only the form; review judges whether
+  the reason holds

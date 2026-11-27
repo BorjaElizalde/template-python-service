@@ -45,11 +45,11 @@ paths:
   where it applies. A body left empty gets `pass`, or `...` in a Protocol or abstract stub
 
 ## Duplicated Code
-- The gate fails on a block of 10 lines or more written twice, imports aside, outside the folders
-  that `.jscpd.json` leaves out, such as `tests/` (jscpd). Fix each copy in this order: first
-  delete the copy that should not exist; else call the code's existing owner; extract a shared
-  function only last. Never extract a helper only to pass the check: that is the premature
-  abstraction the Design Philosophy forbids
+- The gate fails on a block of 10 lines or more written twice outside `tests/`,
+  imports aside (jscpd, set in `.jscpd.json`). Fix each copy in this order: first delete the copy
+  that should not exist; else call the code's existing owner; extract a shared function only last.
+  Never extract a helper only to pass the check: that is the premature abstraction the Design
+  Philosophy forbids
 - Keep both copies only when they look alike but change for different reasons. Then the copy goes
   between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with its reason in the form a skipped
   check's reason takes

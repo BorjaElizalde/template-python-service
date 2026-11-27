@@ -19,7 +19,5 @@ paths:
 - PostgreSQL refuses `ALTER COLUMN ... TYPE` on a column any view selects from — a revision
   changing such a column's type must inline `DROP VIEW IF EXISTS <view>` first.
 - A revision in `database/versions/` has a module docstring, the one exception to the rule on
-  module docstrings: `alembic history` shows it
-  as the revision message.
-- The duplication check skips `database/` (`.jscpd.json`): a revision keeps its own copy of the
-  code it runs.
+  module docstrings: `alembic history` shows it as the revision message.
+- The duplication check skips `database/`: a revision keeps its own copy of the code it runs.

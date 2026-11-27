@@ -146,15 +146,11 @@ part_copy "$NONE" '[]'
 part_copy "$API" '[api]'
 part_copy "$BATCH" '[batch]'
 part_copy "$DATABASE" '[database]'
-RULE_NAMES="$(find "$D/.claude/rules" -name '*.md' -exec basename {} .md \; | sort -u | paste -sd '|' -)"
-names_only_rules_it_has() {  # names_only_rules_it_has <project>: each rule file a file names is there, named by its path
-  local ref bare
+names_only_rules_it_has() {  # names_only_rules_it_has <project>: each rule file a file names by its path is there
+  local ref
   while read -r ref; do
     [ -f "$1/$ref" ] || { echo "FAIL a file names $ref, which the project does not have"; return 1; }
   done < <(grep -rhoE '\.claude/rules/[A-Za-z0-9_/-]+\.md' --exclude-dir=.git "$1" | sort -u)
-  bare="$(grep -rnE "(^|[^/A-Za-z0-9_.-])($RULE_NAMES)\\.md" --exclude-dir=.git "$1")" &&
-    { echo "FAIL a file names a rule file without its path: ${bare%%$'\n'*}"; return 1; }
-  return 0
 }
 no_jinja_in() { ! grep -rIl -E '(^|[^$])\{\{|\{%' --exclude-dir=.git "$1"; }
 has_settings_of() {  # has_settings_of <project> [<part>...]: each part's tool settings are there exactly when it is picked

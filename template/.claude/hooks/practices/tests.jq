@@ -1,11 +1,11 @@
 # From the python-service template: change the template, not this copy.
-# STOP: a new test that goes through no boundary (.claude/rules/testing.md), or that calls a write
-# endpoint and does not use `db_session` after it (the database part's test rules); REMIND on the
-# others. A project with no boundary, from a part it picked or from its test_boundaries answer,
-# gets no test check. A test is new when its name was not in the file before: moving, re-indenting
-# or editing one is not new. Its text runs from the def to the next line indented no deeper. The
-# contract and shipped-data checks below are the only tests that need no boundary; adding a place
-# to that list is a reviewed change.
+# STOP: a new test that goes through no boundary, or that calls a write endpoint and does not use
+# `db_session` after it (testing.md); REMIND on the others. A test is new when its name was not in
+# the file before: moving, re-indenting or editing one is not new. Its text runs from the def to
+# the next line indented no deeper. The contract and shipped-data checks below are the only tests
+# that need no boundary; adding a place to that list is a reviewed change.
+# A project with no boundary, from a part it picked or from its test_boundaries answer, gets no
+# test check.
 include "lib";
 include "python";
 import "stack" as $stack;
