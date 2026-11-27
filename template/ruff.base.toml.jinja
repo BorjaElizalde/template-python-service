@@ -1,11 +1,11 @@
 # From the python-service template: change the template, not this copy.
-# The ruff settings every service shares. CI reads its copy of this file alone. make gate reads it
-# through the project's pyproject.toml, which extends it: a setting added there applies to make
-# gate only, and a select or a banned-api there would replace the whole list below.
+# The ruff settings every service shares. make gate reads them through the project's
+# pyproject.toml, which extends this file: a select or a banned-api there would replace the whole
+# list below.
 line-length = 100
-# ruff infers no version for a settings file passed with --config, as CI passes its copy.
-target-version = "py314"
 extend-exclude = ["*.ipynb"]
+# Else ruff skips a committed file that a .gitignore or .ignore lists.
+respect-gitignore = false
 
 [lint]
 # Preview rules run only when named in `select`; PLC2701 is the one named.

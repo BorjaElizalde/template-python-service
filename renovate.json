@@ -2,6 +2,10 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "The pre-commit manager is off by default, and its default file pattern does not match pre-commit.base.yaml.",
   "extends": ["github>BorjaElizalde/template-agentic//renovate/base"],
+  "github-actions": {
+    "description": "The Gate workflow is template-agentic's: its action pins arrive in that template's update PR, and a pin bumped here would differ from the release the answers record.",
+    "ignorePaths": [".github/workflows/gate.yaml"]
+  },
   "pre-commit": {
     "enabled": true,
     "managerFilePatterns": ["/(^|/)pre-commit\\.base\\.yaml$/"]

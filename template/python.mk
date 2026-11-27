@@ -1,6 +1,5 @@
 # From the python-service template: change the template, not this copy.
-# The local gate, included by the project's Makefile: /gate runs make gate. The project's CI runs
-# its checks itself, never through make, so relaxing a target here can't relax CI.
+# The gate, included by the project's Makefile: /gate and CI run make gate.
 # The include is here, not in the project's Makefile, which an update never changes.
 include .claude/agentic.mk
 
@@ -32,9 +31,13 @@ typecheck: ## Check the types with basedpyright.
 security: ## Scan for security issues with bandit.
 	uv run bandit -r . -x ./.venv -ll -ii
 
+# The Python files git holds or would add, and that are on disk. jscpd takes them by name: in a
+# folder it walks, it skips a file that a .gitignore or .ignore lists.
+PYTHON_FILES = $(wildcard $(shell git ls-files --cached --others --exclude-standard -- '*.py'))
+
 # jscpd reads .jscpd.json. A failure prints the fix order that python-conventions.md gives.
 duplication: ## Fail on a block of code written twice, with jscpd.
-	@uv run jscpd . || { echo "For each copy jscpd lists: delete the copy that should not exist" \
+	@uv run jscpd $(PYTHON_FILES) || { echo "For each copy jscpd lists: delete the copy that should not exist" \
 	  "first; else call the code's existing owner; extract a shared function only last. A copy" \
 	  "that must stay goes between # jscpd:ignore-start and # jscpd:ignore-end, with its reason" \
 	  "(.claude/rules/skipped-checks.md). No jscpd? uv add --dev jscpd"; exit 1; }

@@ -259,86 +259,12 @@ expect "lint-check applies the base's rules" fails_with app/untyped.py "$UNTYPED
 # Ruff takes any module path as a banned-api key, so only a banned call shows that the key is right.
 CAST='from typing import cast\n\n\ndef k(x: int) -> int:\n    return cast(int, x)\n'
 expect "lint-check applies the base's ban on typing.cast" fails_with app/cast.py "$CAST" lint-check
-
-# CI's checks call each tool directly with CI's own settings, so no edit outside .github can relax
-# them: not one to the local gate, to the project's copies of the shared settings, or to a tool's
-# own settings file.
-CI="$D/.github/workflows/gate-checks.yaml"
-CI_SETTINGS="$D/.github/gate-checks"
-expect "the CI workflow is a valid workflow" uvx --quiet check-jsonschema --builtin-schema vendor.github-workflows "$CI"
-# GitHub runs the template's copy only in a project, so a break of its contract with the Gate
-# workflow would first show there, failing every PR.
-keeps_gates_contract() {
-  local triggers declared passed conditions
-  triggers="$(uvx --quiet yq -c '.on | keys' "$CI")"
-  declared="$(uvx --quiet yq -c '[.on.workflow_call.inputs | keys]' "$CI")"
-  passed="$(uvx --quiet yq -c '[.jobs[] | select(.uses == "./.github/workflows/gate-checks.yaml") | .with | keys]' \
-    "$D/.github/workflows/gate.yaml")"
-  conditions="$(uvx --quiet yq -c '[.jobs[].if] | unique' "$CI")"
-  [ "$triggers" = '["workflow_call"]' ] && [ "$passed" = "$declared" ] &&
-    [ "$conditions" = "[\"\${{ !inputs.skip }}\"]" ] ||
-    { echo "FAIL triggers $triggers; inputs declared $declared, passed $passed; jobs run if $conditions"; return 1; }
-}
-expect "the Gate workflow calls the CI workflow with the inputs it declares, and each job skips on skip" keeps_gates_contract
-expect "CI's copies of the shared settings match the project's" bash -c "
-  cmp -s '$D/ruff.base.toml' '$CI_SETTINGS/ruff.base.toml' && cmp -s '$D/.jscpd.json' '$CI_SETTINGS/.jscpd.json' &&
-  cmp -s '$D/basedpyright.base.json' '$CI_SETTINGS/basedpyright.base.json'"
-# The CI job's run steps, as {name, run}, in the order CI runs them.
-STEPS="$(uvx --quiet yq -c '[.jobs.checks.steps[] | select(.run) | {name, run}]' "$CI")"
-step_scripts_pass_shellcheck() {
-  local i
-  for ((i = 0; i < $(jq length <<<"$STEPS"); i++)); do
-    jq -r ".[$i].run" <<<"$STEPS" | uvx --quiet --from shellcheck-py shellcheck -s bash -f gcc - || return 1
-  done
-}
-expect "shellcheck passes the script of each CI step" step_scripts_pass_shellcheck
-# ci: runs CI's steps on what a commit would hold, each in its own bash as GitHub runs it, and stops
-# at the first that fails, whose name it prints. It stages the project for the steps that read git's
-# files, and removes the files the steps write.
-ci() {
-  local i status=0
-  git -C "$D" add -A
-  for ((i = 0; i < $(jq length <<<"$STEPS"); i++)); do
-    (cd "$D" && RUNNER_TEMP="$OUT" bash --noprofile --norc -eo pipefail \
-      -c "$(jq -r ".[$i].run" <<<"$STEPS")") >/dev/null 2>&1 || { jq -r ".[$i].name" <<<"$STEPS"; status=1; break; }
-  done
-  git -C "$D" clean -fq
-  return "$status"
-}
-ci_with() {  # ci_with <file> <content>: runs CI while the file holds the content, committed even if ignored
-  printf '%b' "$2" >"$D/$1"
-  git -C "$D" add -f "$1"
-  ci
-  local status=$?
-  rm "$D/$1"
-  return "$status"
-}
-ci_step_of() {  # ci_step_of <target>: the name of CI's step that runs what make <target> runs
-  case $1 in
-    lint-check) echo 'Lint with ruff' ;;
-    typecheck) echo 'Check types with basedpyright' ;;
-    security) echo 'Scan for security issues with bandit' ;;
-    duplication) echo 'Find duplicated code with jscpd' ;;
-    test) echo 'Run tests with pytest' ;;
-  esac
-}
-# ci_fails_at <target> <command...>: the command, ci or ci_with, fails at the step that runs what
-# make <target> runs.
-ci_fails_at() {
-  local failed
-  if failed="$("${@:2}")"; then
-    echo "FAIL CI passed"
-    return 1
-  fi
-  [ "$failed" = "$(ci_step_of "$1")" ] || { echo "FAIL CI failed at $failed"; return 1; }
-}
-expect "CI's checks pass a new project" ci_with app/typed.py 'def g(x: int) -> int:\n    return x\n'
-fails_both() {  # fails_both <target> <file> <content>: make <target> fails the file, and so does CI's step for it
-  fails_with "$2" "$3" "$1" && ci_fails_at "$1" ci_with "$2" "$3"
-}
-passes_both() {  # passes_both <file> <content>: make gate and CI's checks each pass the file
-  make_with "$1" "$2" gate && ci_with "$1" "$2"
-}
+# Strict mode passes an explicit Any; recommended warns, and a warning fails the check.
+EXPLICIT_ANY='from typing import Any\n\n\ndef echo(x: Any) -> Any:\n    return x\n'
+expect "make typecheck checks types in basedpyright's recommended mode" \
+  fails_with app/explicit_any.py "$EXPLICIT_ANY" typecheck
+expect "a call made only for its effect passes make gate" \
+  make_with app/effect.py 'def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n' gate
 with_file() {  # with_file <file> <content> <command...>: runs the command while the file holds the content
   printf '%b' "$2" >"$D/$1"
   "${@:3}"
@@ -346,12 +272,6 @@ with_file() {  # with_file <file> <content> <command...>: runs the command while
   rm "$D/$1"
   return "$status"
 }
-# Strict mode passes an explicit Any; recommended warns, and a warning fails the check.
-EXPLICIT_ANY='from typing import Any\n\n\ndef echo(x: Any) -> Any:\n    return x\n'
-expect "make typecheck and CI check types in basedpyright's recommended mode" \
-  fails_both typecheck app/explicit_any.py "$EXPLICIT_ANY"
-expect "a call made only for its effect passes make gate and CI" \
-  passes_both app/effect.py 'def first(d: dict[str, int]) -> None:\n    d.setdefault("a", 0)\n'
 relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the command while the file reads so
   local f="$D/$1" status
   cp "$f" "$OUT/relaxed.bak"
@@ -362,66 +282,40 @@ relaxed() {  # relaxed <file> <text> <replacement> <command...>: runs the comman
   cp "$OUT/relaxed.bak" "$f"
   return "$status"
 }
-local_only() {  # local_only <target> <file> <content>: make <target> passes the file, CI's step for it fails it
-  make_with "$2" "$3" "$1" && ci_fails_at "$1" ci_with "$2" "$3"
+fails_committed() {  # fails_committed <target> <file> <content>: make <target> fails the file while git holds it
+  local fails=no
+  printf '%b' "$3" >"$D/$2" && git -C "$D" add -f "$2"
+  make -s -C "$D" "$1" >/dev/null 2>&1 || fails=yes
+  git -C "$D" rm -qf "$2"
+  [ "$fails" = yes ]
 }
-ISINSTANCE='def k(x: int) -> bool:\n    return isinstance(x, int)\n'
-expect "a no-op typecheck target in python.mk relaxes make typecheck, not CI" \
-  relaxed python.mk 'uv run basedpyright' 'true' local_only typecheck app/isinstance.py "$ISINSTANCE"
-expect "a rule dropped from the project's ruff.base.toml relaxes lint-check, not CI" \
-  relaxed ruff.base.toml '"ANN",' '' local_only lint-check app/untyped.py "$UNTYPED"
-expect "pyproject.toml that stops extending ruff's base relaxes lint-check, not CI" \
-  relaxed pyproject.toml 'extend = "ruff.base.toml"' '' local_only lint-check app/untyped.py "$UNTYPED"
-expect "an ignore in pyproject.toml's ruff settings relaxes lint-check, not CI" \
-  relaxed pyproject.toml 'extend = "ruff.base.toml"' 'extend = "ruff.base.toml"\nlint.ignore = ["ANN"]' \
-  local_only lint-check app/untyped.py "$UNTYPED"
-expect "a ruff.toml relaxes lint-check, not CI" with_file ruff.toml 'extend = "ruff.base.toml"\n\n[lint]\nignore = ["ANN"]\n' \
-  local_only lint-check app/untyped.py "$UNTYPED"
-expect "a committed file that .gitignore lists relaxes lint-check, not CI" \
-  relaxed .gitignore 'build/' 'build/\napp/untyped.py' local_only lint-check app/untyped.py "$UNTYPED"
-expect "a committed file that .ignore lists relaxes lint-check, not CI" \
-  with_file .ignore 'app/untyped.py\n' local_only lint-check app/untyped.py "$UNTYPED"
-# ruff infers no Python version for a settings file passed with --config, and UP040 applies from 3.12.
+expect "lint-check checks a committed file that .gitignore lists" \
+  relaxed .gitignore 'build/' 'build/\napp/untyped.py' fails_committed lint-check app/untyped.py "$UNTYPED"
+expect "lint-check checks a committed file that .ignore lists" \
+  with_file .ignore 'app/untyped.py\n' fails_committed lint-check app/untyped.py "$UNTYPED"
+# ruff takes the Python version from pyproject.toml's requires-python, and UP040 applies from 3.12.
 TYPE_ALIAS='from typing import TypeAlias\n\nNumber: TypeAlias = int\n'
-expect "make lint-check and CI check ruff's rules for the template's Python version" \
-  fails_both lint-check app/alias.py "$TYPE_ALIAS"
-expect "a basedpyright override in pyproject.toml relaxes typecheck, not CI" \
-  relaxed pyproject.toml 'extends = "basedpyright.base.json"' 'extends = "basedpyright.base.json"\nreportUnnecessaryIsInstance = false' \
-  local_only typecheck app/isinstance.py "$ISINSTANCE"
-with_baseline() {  # with_baseline <file> <content> <command...>: runs the command while basedpyright's baseline lists the file's errors
-  printf '%b' "$2" >"$D/$1"
-  (cd "$D" && uv run basedpyright --writebaseline) >/dev/null 2>&1
-  rm "$D/$1"
-  "${@:3}"
-  local status=$?
-  rm -r "$D/.basedpyright"
-  return "$status"
-}
-expect "a basedpyright baseline relaxes typecheck, not CI" \
-  with_baseline app/isinstance.py "$ISINSTANCE" local_only typecheck app/isinstance.py "$ISINSTANCE"
-WARNS='import warnings\n\n\ndef test_warns():\n    warnings.warn("old", DeprecationWarning, stacklevel=1)\n'
-expect "a filterwarnings in pyproject.toml relaxes test, not CI" \
-  relaxed pyproject.toml 'filterwarnings = ["error"]' 'filterwarnings = ["ignore"]' local_only test tests/test_warns.py "$WARNS"
+expect "make lint-check checks ruff's rules for the project's Python version" \
+  fails_with app/alias.py "$TYPE_ALIAS" lint-check
 
-# Both gates check every Python file in the repository, not only the package: in a second
-# top-level folder, each tool fails the file that breaks its rule, and only its rule.
+# make gate checks every Python file in the repository, not only the package: in a second
+# top-level folder, each tool fails the file that breaks its rule.
 mkdir -p "$D/commons"
+ISINSTANCE='def k(x: int) -> bool:\n    return isinstance(x, int)\n'
 INSECURE='import hashlib\n\n\ndef digest(data: bytes) -> str:\n    return hashlib.md5(data).hexdigest()\n'
-expect "ruff checks a second top-level folder, locally and in CI" fails_both lint-check commons/untyped.py "$UNTYPED"
-expect "basedpyright checks a second top-level folder, locally and in CI" fails_both typecheck commons/isinstance.py "$ISINSTANCE"
-expect "bandit checks a second top-level folder, locally and in CI" fails_both security commons/insecure.py "$INSECURE"
-expect "a .bandit that skips a test relaxes security, not CI" \
-  with_file .bandit '[bandit]\nskips = B324\n' local_only security commons/insecure.py "$INSECURE"
-# The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes both gates.
+expect "ruff checks a second top-level folder" fails_with commons/untyped.py "$UNTYPED" lint-check
+expect "basedpyright checks a second top-level folder" fails_with commons/isinstance.py "$ISINSTANCE" typecheck
+expect "bandit checks a second top-level folder" fails_with commons/insecure.py "$INSECURE" security
+# The one exclusion: a notebook that breaks ruff's and basedpyright's rules passes make gate.
 NOTEBOOK='{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, "outputs": [],
   "source": ["import os\\n", "x: int = None\\n"]}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
-expect "a bad notebook leaves make gate and CI green" passes_both explore.ipynb "$NOTEBOOK"
+expect "a bad notebook leaves make gate green" make_with explore.ipynb "$NOTEBOOK" gate
 expect "ruff.base.toml's exclude is what keeps the notebook out of lint-check" \
   relaxed ruff.base.toml 'extend-exclude = ["*.ipynb"]' '' fails_with explore.ipynb "$NOTEBOOK" lint-check
 expect "basedpyright.base.json's exclude is what keeps the notebook out of typecheck" \
   relaxed basedpyright.base.json '"exclude": ["**/*.ipynb"],' '' fails_with explore.ipynb "$NOTEBOOK" typecheck
 
-# Both gates check an Alembic revision against the SQLAlchemy and Alembic the project installs. The
+# make gate checks an Alembic revision against the SQLAlchemy and Alembic the project installs. The
 # revision is as Alembic writes it once ruff has fixed it, and its sa.Double() is Double[Unknown].
 cp "$D/pyproject.toml" "$D/uv.lock" "$OUT/"
 (cd "$D" && uv add --quiet sqlalchemy alembic)
@@ -448,13 +342,13 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("price")
 '
-expect "an Alembic revision passes make gate and CI" passes_both database/versions/b2c3_add_a_price.py "$REVISION"
-expect "basedpyright checks an Alembic revision, locally and in CI" \
-  fails_both typecheck database/versions/b2c3_add_a_price.py "${REVISION/drop_table/drop_tabel}"
+expect "an Alembic revision passes make gate" make_with database/versions/b2c3_add_a_price.py "$REVISION" gate
+expect "basedpyright checks an Alembic revision" \
+  fails_with database/versions/b2c3_add_a_price.py "${REVISION/drop_table/drop_tabel}" typecheck
 rm -r "$D/database"
 cp "$OUT/pyproject.toml" "$OUT/uv.lock" "$D/"
 
-# Both gates fail a block of 10 lines or more written twice, and only that: every other check
+# make gate fails a block of 10 lines or more written twice, and only that: every other check
 # passes the same file once its copy sits between the ignore markers. The two returns differ, so
 # each copy ends inside its return line: jscpd at times counts the blank lines after a copy too.
 copy() {  # copy <name> <lines> <returned>: a block of <lines> lines, from the def to the return
@@ -472,31 +366,35 @@ COPIES="$(twice 10)\n"
 MARKED="$(copy total_a 10 totals
   printf '\n\n# jscpd:ignore-start the totals change apart. Tried calling total_a, but its fees differ.\n'
   copy total_b 10 'dict(totals)'; printf '\n\n# jscpd:ignore-end')\n"
-expect "a 10-line block written twice fails make gate and CI" fails_both duplication app/copies.py "$COPIES"
-expect "the same file passes make gate and CI with its copy between the markers" passes_both app/copies.py "$MARKED"
-expect "a 9-line block written twice passes make gate and CI" passes_both app/copies.py "$(twice 9)\n"
-expect "a block written twice in tests/ passes make gate and CI" passes_both tests/copies.py "$COPIES"
+expect "a 10-line block written twice fails make duplication" fails_with app/copies.py "$COPIES" duplication
+expect "the same file passes make gate with its copy between the markers" make_with app/copies.py "$MARKED" gate
+expect "a 9-line block written twice passes make gate" make_with app/copies.py "$(twice 9)\n" gate
+expect "a block written twice in tests/ passes make gate" make_with tests/copies.py "$COPIES" gate
 mkdir "$D/database"
-expect "a block written twice in database/ passes make gate and CI" passes_both database/copies.py "$COPIES"
+expect "a block written twice in database/ passes make gate" make_with database/copies.py "$COPIES" gate
 rmdir "$D/database"
-expect "a minLines raised in the project's .jscpd.json relaxes duplication, not CI" \
-  relaxed .jscpd.json '"minLines": 9' '"minLines": 99' local_only duplication app/copies.py "$COPIES"
-expect "a committed file that .gitignore lists relaxes duplication, not CI" \
-  relaxed .gitignore 'build/' 'build/\napp/copies.py' local_only duplication app/copies.py "$COPIES"
-expect "a committed file that .ignore lists relaxes duplication, not CI" \
-  with_file .ignore 'app/copies.py\n' local_only duplication app/copies.py "$COPIES"
+expect "duplication checks a committed file that .gitignore lists" \
+  relaxed .gitignore 'build/' 'build/\napp/copies.py' fails_committed duplication app/copies.py "$COPIES"
+expect "duplication checks a committed file that .ignore lists" \
+  with_file .ignore 'app/copies.py\n' fails_committed duplication app/copies.py "$COPIES"
+held_but_deleted() {  # make duplication runs while git holds a Python file that is gone from disk
+  printf 'x = 1\n' >"$D/app/gone.py" && git -C "$D" add app/gone.py && rm "$D/app/gone.py"
+  make -s -C "$D" duplication >/dev/null 2>&1
+  local status=$?
+  git -C "$D" rm -q --cached app/gone.py
+  return "$status"
+}
+expect "duplication passes while git holds a Python file that is gone from disk" held_but_deleted
 expect "ruff.base.toml's jscpd task tag is what keeps the markers out of ERA001" \
   relaxed ruff.base.toml ', "jscpd"]' ']' fails_with app/copies.py "$MARKED" lint-check
 
-# A project may have no tests/: both gates skip pytest, with the seeded pyproject.toml unchanged.
-# An empty tests/ fails both; the passing runs before it show that pytest is what fails them.
+# A project may have no tests/: make gate skips pytest, with the seeded pyproject.toml unchanged.
+# An empty tests/ fails it; the passing run before it shows that pytest is what fails it.
 mv "$D/tests" "$OUT/tests"
 expect "a project with no tests/ passes make gate, which says it skipped pytest" \
   bash -o pipefail -c "make -s -C '$D' gate | grep 'pytest skipped'"
-expect "CI's checks pass a project with no tests/" ci
 mkdir "$D/tests"
 expect "make gate fails a project with an empty tests/" bash -c "! make -s -C '$D' gate"
-expect "CI's checks fail a project with an empty tests/, at pytest" ci_fails_at test ci
 rm -r "$D/tests"
 mv "$OUT/tests" "$D/tests"
 

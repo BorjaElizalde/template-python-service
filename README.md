@@ -2,8 +2,8 @@
 
 A [Copier](https://copier.readthedocs.io/) template that sets up agentic coding in a Python
 service. Each release bundles the Claude Code harness of `template-agentic` and adds the Python
-layer: the Python rules and practice checks, a ruff format hook, `make gate`, the checks CI runs on
-each PR, commit hooks, and the ruff, basedpyright and jscpd settings every Python service shares.
+layer: the Python rules and practice checks, a ruff format hook, `make gate`, which CI runs on each
+PR, commit hooks, and the ruff, basedpyright and jscpd settings every Python service shares.
 
 ## Set up the machine
 
@@ -112,27 +112,20 @@ run `make claude` in the repository.
 ## Extend
 
 Apart from the project's five files and its own hooks in `.pre-commit-config.yaml`, every file the
-template writes is the template's: change it there, not in the project. CI checks with the
-template's settings, not the project's: a setting the project adds for ruff, basedpyright, bandit,
-jscpd or pytest applies to `make gate` only. Coverage is the one exception: its settings in
-`pyproject.toml`, a floor among them, apply in CI too.
+template writes is the template's: change it there, not in the project.
 
 - **ruff**, under `[tool.ruff.lint]` in `pyproject.toml`: add rules with `extend-select` and
   banned APIs with `extend-banned-api`. Never use `select` or `banned-api`: each replaces the
   shared list. An exception goes in the code, as `# noqa: <code>` on its line or
   `# ruff: noqa: <code>` at the top of its file, with the reason
-  `.claude/rules/skipped-checks.md` asks for. An `ignore` or `per-file-ignores` entry in
-  `pyproject.toml` passes `make gate` and fails CI.
-- **basedpyright**, in `pyproject.toml`: an override applies to `make gate` only.
+  `.claude/rules/skipped-checks.md` asks for.
+- **basedpyright**: an override goes in `pyproject.toml`.
 - **jscpd**: a copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,
   with the reason `.claude/rules/skipped-checks.md` asks for.
 - **gitleaks**: a finding that holds no secret goes in `.gitleaksignore` as the fingerprint gitleaks
   prints, with the reason `.claude/rules/skipped-checks.md` asks for on the comment lines above it.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
-  redefining `gate`. It runs in `make gate` only, not in CI.
+  redefining `gate`.
 - **Commit hooks**, in `.pre-commit-config.yaml`: add the project's own hooks after
   `template-hooks`, which runs the template's hooks from `pre-commit.base.yaml`.
-- **Tests**: with no `tests/` folder, `make gate` and CI skip pytest. An empty `tests/` fails both.
-  A pytest setting the tests need, such as a custom mark, goes in `tests/conftest.py`, which CI
-  also runs: for a mark, `config.addinivalue_line("markers", "<name>: <meaning>")` in
-  `pytest_configure`.
+- **Tests**: with no `tests/` folder, `make gate` skips pytest. An empty `tests/` fails it.
