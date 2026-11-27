@@ -377,14 +377,14 @@ expect "duplication checks a committed file that .gitignore lists" \
   relaxed .gitignore 'build/' 'build/\napp/copies.py' fails_committed duplication app/copies.py "$COPIES"
 expect "duplication checks a committed file that .ignore lists" \
   with_file .ignore 'app/copies.py\n' fails_committed duplication app/copies.py "$COPIES"
-held_but_deleted() {  # make duplication runs while git holds a Python file that is gone from disk
+duplication_skips_deleted_files() {  # make duplication passes while git holds a Python file gone from disk
   printf 'x = 1\n' >"$D/app/gone.py" && git -C "$D" add app/gone.py && rm "$D/app/gone.py"
   make -s -C "$D" duplication >/dev/null 2>&1
   local status=$?
   git -C "$D" rm -q --cached app/gone.py
   return "$status"
 }
-expect "duplication passes while git holds a Python file that is gone from disk" held_but_deleted
+expect "duplication passes while git holds a Python file that is gone from disk" duplication_skips_deleted_files
 expect "ruff.base.toml's jscpd task tag is what keeps the markers out of ERA001" \
   relaxed ruff.base.toml ', "jscpd"]' ']' fails_with app/copies.py "$MARKED" lint-check
 
