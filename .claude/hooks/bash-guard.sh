@@ -68,16 +68,19 @@ RE_WRAPPER='(^|[[:space:]])((ba)?sh[[:space:]]+-c|eval)[[:space:]]+'
 
 # One PR lookup answers every merge question: "<base> <head> <head sha> <owner/name> <verdict>".
 # The verdict is green when every check on the head has passed (succeeded, or was neutral or
-# skipped) and a check of the Gate workflow succeeded among them, whatever its job is named. A
-# CheckRun counts only once COMPLETED; a StatusContext reads its state.
+# skipped) and a `gate / <job>` check of the Gate workflow succeeded, as the rulesets require. Its
+# read-draft check does not count, since it passes on a draft too. A check counts by its newest
+# run, as in `gh pr checks`: the head keeps the checks of every run, a run cancelled by a later one
+# included. A CheckRun counts only once COMPLETED; a StatusContext reads its state.
 # $c and $repo are jq's variables. Tried double quotes, but then every " and $ of the program
 # needs a backslash.
 # shellcheck disable=SC2016
-JQ_PR='[.statusCheckRollup[]? | if .__typename == "StatusContext" then {workflow: null, conclusion: .state}
-    else {workflow: .workflowName,
+JQ_PR='[.statusCheckRollup // [] | group_by([.workflowName, .name, .context])[] | max_by(.startedAt)
+    | if .__typename == "StatusContext" then {gate: false, conclusion: .state}
+    else {gate: (.workflowName == "Gate" and (.name | startswith("gate / "))),
       conclusion: (if .status == "COMPLETED" then .conclusion else "PENDING" end)} end] as $c
   | (.url | capture("github\\.com/(?<r>[^/]+/[^/]+)/pull/").r | ascii_downcase) as $repo
-  | (if any($c[]; .workflow == "Gate" and .conclusion == "SUCCESS") | not then "no-passed-gate"
+  | (if any($c[]; .gate and .conclusion == "SUCCESS") | not then "no-passed-gate"
      elif all($c[]; .conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") then "green"
      else "a-check-not-passed" end) as $verdict
   | [.baseRefName, .headRefName, .headRefOid, $repo, $verdict] | join(" ")'
@@ -135,7 +138,7 @@ agent_may_merge() {
   elif [ "$match" != "$oid" ]; then
     MERGE_WHY="merging into develop without pinning the head the checks ran on: pass --match-head-commit $oid, the PR's head, so a later push cannot land unchecked."
   elif [ "$verdict" != green ]; then
-    MERGE_WHY="merging into develop before every check on $oid has passed with a check of the Gate workflow among them ($verdict). Wait with 'gh pr checks <n> --watch', then merge."
+    MERGE_WHY="merging into develop before every check on $oid has passed with a gate / … check of the Gate workflow among them ($verdict). Wait with 'gh pr checks <n> --watch', then merge."
   else
     return 0
   fi

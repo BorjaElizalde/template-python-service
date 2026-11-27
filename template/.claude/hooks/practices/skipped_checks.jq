@@ -1,12 +1,22 @@
 # From the python-service template: change the template, not this copy.
 # STOP: a skipped check (a suppression such as `# noqa`) without its rule code, or without a reason
-# in the form conventions.md gives, after the directive or on the comment lines above it. The
+# in the form the rules give, after the directive or on the comment lines above it. The
 # hook checks the form; review judges whether the reason holds. Reason places were checked against
 # each tool: ruff, basedpyright, bandit and jscpd honour text after the directive; `# fmt: skip`
 # only behind a second `#`; `# fmt: off` only standing alone, so its reason goes on the comment
 # lines above (same for `# pyright:` file directives).
 include "lib";
 include "python";
+
+# Where Python code sets a warning filter for the test run: a pytest mark, or a conftest's
+# config.addinivalue_line("filterwarnings", ...), which ruff format can split before the name.
+def warning_filter_opening: "(pytest\\.mark\\.filterwarnings\\(|[\"']filterwarnings[\"']\\s*,)";
+
+# A line that sets a warning filter other than a single error filter, which makes the tests
+# stricter. A line whose filter sits on the next line counts too.
+def may_let_warnings_pass:
+  has(warning_filter_opening)
+  and (has(warning_filter_opening + "\\s*[rf]?[\"']\\s*error\\s*(:[^\"']*)?[\"']\\s*\\)") | not);
 
 # The form to show for a line whose skipped check lacks its code or reason, or empty when it has
 # both. given($directive): the line holds $directive, and the text after it or the comment lines
@@ -47,6 +57,9 @@ def missing_reason($above):
     then empty
     else "reason=\"<the outside condition that makes this test impossible here>\", and the"
       + " Tried sentences in a comment" end
+  elif has(warning_filter_opening) then
+    if given(warning_filter_opening + "[^#]*") then empty
+    else "<the line that sets the filter>  # <reason>" end
   elif has("pytest\\.skip\\(") then
     if has("pytest\\.skip\\(\\s*(reason\\s*=\\s*)?[rf]?[\"'][^\"']") and given("pytest\\.skip\\(")
     then empty
@@ -58,7 +71,8 @@ def suppression:
   has("#\\s*(ruff:\\s*)?noqa\\b") or has("#\\s*type:\\s*ignore\\b") or has("#\\s*pyright:")
   or has("#\\s*nosec\\b") or has("#\\s*pragma:?\\s*no\\s*cover") or has("#\\s*fmt:\\s*(skip|off)\\b")
   or has("#.*jscpd:ignore-start")
-  or has("pytest\\.mark\\.(skip|skipif|xfail)\\b") or has("pytest\\.skip\\(");
+  or has("pytest\\.mark\\.(skip|skipif|xfail)\\b") or has("pytest\\.skip\\(")
+  or may_let_warnings_pass;
 
 def check($ctx):
   [$ctx.added[] | select(.line | suppression)
@@ -67,7 +81,7 @@ def check($ctx):
    | "- `\($line | short)`\n  Write it in this form: \($form)"]
   | select(length > 0)
   | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"
-      + " (.claude/rules/skipped-checks.md). This edit skips a check without a reason in the"
+      + " (in .claude/rules/). This edit skips a check without a reason in the"
       + " required form.\n" + reason_steps("skipping the check"; "the skipped check"; checkers)
       + "The reason goes after the directive and its rule code, on the same line. When that line"
       + " would pass 100 columns, it goes on the comment lines directly above, and the line keeps"

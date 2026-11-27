@@ -1,0 +1,21 @@
+---
+paths:
+  - "tests/**/*.py"
+---
+
+# Testing with the database
+
+- Functional tests with real PostgreSQL (testcontainer) - no DB mocking
+- **Test data pattern**: Use `mock_*` high-level functions from `tests/helpers/data_factory/`. The `_create_*` row builders beside them are private to their module (the type check rejects one used outside it); a new one gets the leading underscore too. Create test data in fixtures at the top of the file and reuse the fixtures across test functions. Each test runs on its own copy of a database that holds only the schema and seed data, so keep data fixtures function-scoped: rows built by a wider-scoped fixture are gone after its first test.
+- A call that writes is checked in the database: read it through `db_session` after the call and
+  check the specific changed result. A refused write checks that nothing changed in the database.
+  Call `db_session.expire_all()` before the read: the session keeps the objects the `mock_*`
+  helpers built and hands them back with their old values, so a "nothing changed" check passes
+  whatever the call did
+- The migration checks live in `tests/migrations/`: like the contract checks, they need no
+  boundary
+
+One harness behaviour produces a green test for the wrong reason:
+- **Event loop.** The async sessionmaker resets between tests, not between phases of one test. Do
+  not mix TestClient DB work with `asyncio.run` DB work, or make two `asyncio.run` DB calls in one
+  test — the pooled asyncpg connection stays bound to the first loop. Split them into separate tests.

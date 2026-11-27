@@ -5,6 +5,12 @@ as options, designs or approaches, take the one you would recommend, judged agai
 Guidelines. Say which you took and why in your reply, and go on. Before you choose, you may think
 another turn or spawn subagents to research.
 
+When the task fixes a bug in the project's code, not in its CI/CD, show the bug in a test before
+you design the fix. Write a test that reproduces the bug, as the project's rule on how a test is
+written says; in a project with no such rule, follow the tests beside the code. Run it, and see it
+fail with the symptom the issue describes. The test stays in the suite, and the fix makes it pass.
+Fix a bug without such a test only when no test can reproduce it.
+
 For a task that ends in a PR, plan before you build. Work out the smallest design that meets
 everything the issue asks: hold each thing it adds against the Design Philosophy. Read
 `.claude/rules/writing.md`, then write the plan to a file as it says, for a reader who
@@ -13,7 +19,9 @@ has the issue and not the code:
 - what you will build, and where;
 - each thing it adds, such as a file, a command, a setting or a name, with the reason the issue
   needs it;
-- each choice between designs: the one you took, and why.
+- each choice between designs: the one you took, and why;
+- for a bug fix, the test that reproduces the bug and the failure it gave, or why no test can
+  reproduce the bug.
 
 Post it with `bash .claude/skills/task/scripts/task.sh plan <n> <file>`, which makes it the
 issue's one pinned comment, headed `Plan`. A plan the issue already has is the task's own, from an

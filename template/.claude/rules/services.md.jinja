@@ -1,0 +1,11 @@
+---
+paths:
+  - "**/*.py"
+---
+
+# Service conventions
+
+- Business operations are owned by `{{ package_name }}/services.py`, and technical helpers by
+  `{{ package_name }}/utils/`. Every entry point calls them there
+- The `config` and `services.py` singletons are built at import: the sanctioned exception to a
+  module running no work at import

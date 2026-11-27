@@ -1,5 +1,5 @@
 # From the python-service template: change the template, not this copy.
-# REMIND: every new prose comment in Python, TOML, YAML and the Makefile (conventions.md), with
+# REMIND: every new prose comment in Python, TOML, YAML and the Makefile (.claude/rules/), with
 # one more line when it reads like history. A comment is new when its text was not in the file
 # before: moving or re-indenting an old one is not new.
 # Directives such as `# noqa` or `# fmt: off` are not prose, and neither is a `#` line inside a
@@ -36,7 +36,7 @@ def check($ctx):
   | select(length > 0)
   | (first(.[] | history_marker | select(. != null) | [.]) // []) as $history
   | {level: "remind", text: ("Practices hook, comment rule"
-      + " (.claude/rules/conventions.md). This edit adds a comment: `\(.[0] | short)`"
+      + " (in .claude/rules/). This edit adds a comment: `\(.[0] | short)`"
       + (if length > 1 then " (and \(length - 1) more)" else "" end) + "."
       + " This codebase keeps comments to a minimum: the code and its names should explain"
       + " themselves. Before keeping it, ask whether a clearer name or a simpler structure would"
@@ -48,6 +48,6 @@ def check($ctx):
       + " data-integrity rule, a contract callers must respect, or the reason for a skipped check"
       + " or an except. If it restates the code, the history or the diff, delete it. Keep what"
       + " stays to one line, except a skipped check's reason and the comment that opens a TOML,"
-      + " YAML or Makefile file, which take the forms conventions.md gives."
+      + " YAML or Makefile file, which take the forms the rules give."
       + ($history | map("\nIt reads like history (`\(.)`): say what holds and why, not what"
           + " changed.") | add // ""))};

@@ -1,6 +1,6 @@
 # From the python-service template: change the template, not this copy.
 # STOP: a new except outside tests/ that does not say why it earns its keep; REMIND on one that
-# does (python-conventions.md, Error Handling). The reason is a comment on the except line or a
+# does (Error Handling in .claude/rules/). The reason is a comment on the except line or a
 # plain comment directly above or below it; whether it holds is the reader's call, not the hook's.
 # An except is new when its code, comment stripped, was not there before: moving, re-indenting or
 # annotating an old one is not new.
@@ -21,7 +21,7 @@ def check($ctx):
   | map(select(reasoned($ctx.new; .at) | not) | .line) as $bare
   | if ($bare | length) > 0 then
       {level: "stop", text: ("Stopped by the practices hook, except rule"
-        + " (.claude/rules/python-conventions.md, Error Handling). This edit adds an except without"
+        + " (Error Handling in .claude/rules/). This edit adds an except without"
         + " saying why it earns its keep:\n" + ($bare | map("- `\(short)`") | join("\n"))
         + "\nErrors propagate to the boundary in this codebase; an except stays only when it"
         + " handles a failure that can really happen better than the boundary would. Add a"
@@ -29,8 +29,8 @@ def check($ctx):
         + " failure and why handling it here beats the boundary. If no such sentence holds, remove"
         + " the except and let the error propagate.")}
     else
-      {level: "remind", text: ("Practices hook, except rule (.claude/rules/python-conventions.md,"
-        + " Error Handling). This edit adds an except: `\(.[0].line | short)`. Errors propagate to"
+      {level: "remind", text: ("Practices hook, except rule (Error Handling in .claude/rules/)."
+        + " This edit adds an except: `\(.[0].line | short)`. Errors propagate to"
         + " the boundary in this codebase. Keep it only if its comment holds: the failure can"
         + " really happen here (bad user input, a provider or network error, a race), not a case"
         + " our own code already rules out (input a model has validated, a value the database"
