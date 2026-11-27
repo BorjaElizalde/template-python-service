@@ -35,9 +35,14 @@ stop at the first one that leaves it out:
 ## Git
 Use standard git commands (`git status`, `git diff`, `git log`) without the `-C` flag when working in this directory. The `-C` flag is unnecessary and triggers extra permission prompts.
 
-**Tasks:** every task, and every subagent session, is an issue in BorjaElizalde/template-python-service, with its own worktree and session: start it with `/task:start`. Write each issue, and each comment that briefs a task, as "Write an issue" in `.claude/skills/task/skills/start/SKILL.md` says. Only the owner's word parks or releases an issue.
+**Tasks:** every task, and every subagent session, is an issue in BorjaElizalde/template-python-service, with its own worktree and session: start it with `/task:start`. Write each issue, and each comment that briefs a task, as "Write an issue" in `/task:start` says. Only the owner's word parks or releases an issue.
 
-**Following tasks:** report the status of the tasks through `/task:status` in your first reply after a session starts or resumes in the main checkout, and each time the owner asks. A main session that runs a `/loop` runs `bash .claude/skills/task/scripts/task.sh status` on each round, and `/task:status` when a line ends in `needs attention`. When a task session sends you a loose end outside its task, or leaves one in its last message, resolve it yourself or bring it to the owner.
+**Following tasks:** report the status of the tasks through `/task:status` in your first reply after a session starts or resumes in the main checkout, and each time the owner asks. A main session that runs a `/loop` runs `bash .claude/skills/task/scripts/task.sh status` on each round, and `/task:status` when a task needs attention. When a task session sends you a loose end outside its task, or leaves one in its last message, resolve it yourself or bring it to the owner.
+
+**Choices:** start every ready issue without asking the owner, and keep its session working until its PR is open or its result is on the issue. Ask the owner only in three cases:
+- You need a decision that no issue, rule or owner's comment answers.
+- A rule says the owner decides, such as parking an issue.
+- A permission check blocked an action.
 
 **Worktrees:** all feature work happens in the task's worktree, never in the main checkout. Never call EnterWorktree.
 

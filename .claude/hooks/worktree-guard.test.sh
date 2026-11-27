@@ -10,8 +10,8 @@ WORK="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$WORK"' EXIT
 pass=0; fail=0
 
-# The guard reads WORKTREE_ROOT from the agentic.conf beside its folder. Its copy runs beside a
-# fixture answer, so the cases never depend on the answers this project was rendered with.
+# The guard's copy runs beside a fixture answer, so the cases never depend on the answers this
+# project was rendered with.
 mkdir -p "$WORK/.claude/hooks" "$WORK/scratch"
 cp "$HERE/worktree-guard.sh" "$WORK/.claude/hooks/"
 printf 'WORKTREE_ROOT=../trees\n' >"$WORK/.claude/agentic.conf"

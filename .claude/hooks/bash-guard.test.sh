@@ -5,16 +5,23 @@
 # Exit 2 = guard blocked, 0 = guard allowed. Every case documents a policy decision or a class
 # that once regressed or bypassed.
 set -u
-SRC="$(cd "$(dirname "$0")" && pwd)/bash-guard.sh"
+HERE="$(cd "$(dirname "$0")" && pwd)"
 pass=0; fail=0
 
-# A stub gh answers the guard's PR lookup, `gh pr view [<pr>] [--repo <r>] --json ...`, with the
-# PR's JSON in the shape gh prints. The PR's repository is the --repo it names, else the origin of
-# the folder gh runs in, else acme/app. Every PR's head is $H.
+check_run() {  # check_run <name> <workflow> <status> <conclusion> [<started at>]
+  printf '{"__typename":"CheckRun","name":"%s","workflowName":"%s","status":"%s","conclusion":"%s","startedAt":"%s"}' \
+    "$1" "$2" "$3" "$4" "${5:-}"
+}
+status_context() { printf '{"__typename":"StatusContext","context":"%s","state":"%s"}' "$1" "$2"; }
+GATE_NAME=gate
+GATE="$(check_run "$GATE_NAME" Gate COMPLETED SUCCESS)"
+FAILED="$(check_run test Test COMPLETED FAILURE)"
+
+# A stub gh answers the guard's PR lookup with the PR's JSON in the shape gh prints.
 STUB="$(mktemp -d)"
 trap 'rm -rf "$STUB"' EXIT
 H=1111111111111111111111111111111111111111
-printf '#!/usr/bin/env bash\nH=%s\n' "$H" >"$STUB/gh"
+{ echo '#!/usr/bin/env bash'; declare -p H GATE FAILED; } >"$STUB/gh"
 cat >>"$STUB/gh" <<'EOF'
 [ "$1 $2" = "pr view" ] || exit 1
 shift 2
@@ -31,12 +38,6 @@ done
 if [ -z "$repo" ]; then
   url="$(git remote get-url origin 2>/dev/null)" && repo="${url#https://github.com/}" && repo="${repo%.git}"
 fi
-run() {  # run <name> <workflow> <status> <conclusion> [<started at>]
-  printf '{"__typename":"CheckRun","name":"%s","workflowName":"%s","status":"%s","conclusion":"%s","startedAt":"%s"}' \
-    "$1" "$2" "$3" "$4" "${5:-}"
-}
-ctx() { printf '{"__typename":"StatusContext","context":"%s","state":"%s"}' "$1" "$2"; }
-GATE="$(run 'gate / checks' Gate COMPLETED SUCCESS)"
 pr_json() {  # pr_json <base> <head> <checks>
   printf '{"baseRefName":"%s","headRefName":"%s","headRefOid":"%s","url":"https://github.com/%s/pull/%s","statusCheckRollup":[%s]}\n' \
     "$1" "$2" "$H" "${repo:-acme/app}" "${pr:-1}" "$3"
@@ -48,32 +49,19 @@ case "$pr" in
   14) pr_json feat/x fix/y "$GATE" ;;
   15) pr_json main feat/x "$GATE" ;;
   16) pr_json staging bugfix/x "$GATE" ;;
+  17) pr_json develop feat/x "$GATE,$FAILED" ;;
   "") pr_json feat/x fix/y "$GATE" ;;
-  # The opt-in cases' PRs into develop, each with its checks.
-  21) pr_json develop feat/x "$(run read-draft Gate COMPLETED SUCCESS),$GATE,$(run docs Docs COMPLETED SKIPPED),$(ctx legacy/ci SUCCESS)" ;;
-  22) pr_json develop feat/x "$(run 'gate / checks' Gate IN_PROGRESS '')" ;;
-  23) pr_json develop feat/x "$(run lint Lint COMPLETED SUCCESS)" ;;
-  24) pr_json develop feat/x "$GATE,$(run test Test COMPLETED FAILURE)" ;;
-  25) pr_json develop feat/x "$GATE,$(ctx legacy/ci PENDING)" ;;
-  26) pr_json develop feat/x "" ;;
-  27) pr_json develop feat/x "$GATE,$(run test Test COMPLETED '')" ;;
-  28) pr_json develop feat/x "$GATE,$(run up-to-date 'Branch protection' COMPLETED SUCCESS),$(ctx up-to-date FAILURE)" ;;
-  29) pr_json develop feat/x "$(run gate Lint COMPLETED SUCCESS)" ;;
-  30) pr_json develop feat/x "$(run 'gate / checks' Gate COMPLETED SKIPPED)" ;;
-  31) pr_json develop feat/x "$(run read-draft Gate COMPLETED SUCCESS),$(run 'gate / checks' Gate COMPLETED SKIPPED)" ;;
-  32) pr_json develop feat/x "$(run read-draft Gate COMPLETED SUCCESS 2026-01-01T00:00:10Z),$(run read-draft Gate COMPLETED CANCELLED 2026-01-01T00:00:00Z),$GATE" ;;
   *) exit 1 ;;
 esac
 EOF
 chmod +x "$STUB/gh"
 export PATH="$STUB:$PATH"
 
-# The guard reads agent_merges from the agentic.conf beside its folder, and its own repository from
-# its checkout's origin. Each copy below runs beside a fixture answer, so the cases never depend on
-# the answers this project was rendered with.
+# Each guard copy below runs beside a fixture answer and origin, so the cases never depend on the
+# answers this project was rendered with.
 fixture() {  # fixture <dir> <agent_merges> [<origin>]
   mkdir -p "$1/.claude/hooks"
-  cp "$SRC" "$1/.claude/hooks/bash-guard.sh"
+  cp "$HERE/bash-guard.sh" "$HERE/pr-checks.jq" "$1/.claude/hooks/"
   printf 'AGENT_MERGES=%s\n' "$2" >"$1/.claude/agentic.conf"
   git init -q "$1"
   [ -z "${3:-}" ] || git -C "$1" remote add origin "$3"
@@ -106,6 +94,12 @@ says() {  # says <phrase> <desc> <command>: the opt-in guard blocks, naming <phr
   out="$(cd "$STUB" && jq -n --arg c "$3" '{tool_input:{command:$c}}' | bash "$STUB/on/.claude/hooks/bash-guard.sh" 2>&1)"
   if [[ "$out" == *"$1"* ]]; then pass=$((pass+1)); echo "PASS (says) $2"
   else fail=$((fail+1)); echo "FAIL (want '$1') $2 :: $out"; fi
+}
+verdict_is() {  # verdict_is <verdict> <desc> <checks>: the verdict on a PR with those checks
+  local got
+  got="$(jq -r -L "$HERE" 'import "pr-checks" as checks; checks::verdict' <<<"{\"statusCheckRollup\": [$3]}")"
+  if [ "$got" = "$1" ]; then pass=$((pass+1)); echo "PASS ($got) $2"
+  else fail=$((fail+1)); echo "FAIL (want $1, got $got) $2 :: [$3]"; fi
 }
 
 echo "-- protected pushes (must block)"
@@ -154,8 +148,7 @@ t 2 "bash -c in bash -c"               "bash -c \"bash -c 'git push origin main'
 t 0 "bash -c of an allowed command"    'bash -c "git status"'
 t 0 "bash -c commit whose msg names a push" 'bash -c "git commit -m \"a; git push origin main\""'
 
-echo "-- merges: only 'gh pr merge <pr> --merge' and 'gh pr merge <n> --squash --match-head-commit"
-echo "   <sha>' (PR 11 feat→develop, 12 develop→staging, 13 staging→main, 14 fix→feat, 15 feat→main)"
+echo "-- merges: only 'gh pr merge <pr> --merge' and 'gh pr merge <n> --squash --match-head-commit <sha>'"
 t 2 "feature PR into develop"          'gh pr merge 11 --merge'
 t 2 "feature PR into main"             "gh pr merge 15 --squash --match-head-commit $H"
 t 2 "after cd"                         'cd /tmp && gh pr merge 11 --merge'
@@ -174,42 +167,41 @@ t 0 "PR lookup only"                   'gh pr view 11'
 t 0 "REST read of merge state"         'gh api repos/o/r/pulls/11/merge'
 t 0 "msg mentions a merge"             'git commit -m "gh pr merge 11"'
 t 0 "local merge into a feature branch" 'git merge origin/develop'
-t 2 "without agent_merges, a green pinned squash is still the owner's" "gh pr merge 21 --squash --match-head-commit $H"
+t 2 "without agent_merges, a green pinned squash is still the owner's" "gh pr merge 11 --squash --match-head-commit $H"
 
-echo "-- agent_merges: the agent's own PR into develop, squashed, pinned to a head whose every check"
-echo "   passed with a gate / … check among them (PR 21 green; 22 gate running; 23 no gate; 24 a check"
-echo "   failed; 25 a status pending; 26 no checks; 27 a check completed with no conclusion;"
-echo "   28 develop moved on after its checks passed; 29 a check named gate from another workflow;"
-echo "   30 gate skipped; 31 gate skipped where the Gate workflow's read-draft passed;"
-echo "   32 read-draft passed in a later run than the one that cancelled it; 16 bugfix→staging)"
-t_on 0 "own green PR, squash, pinned head"   "gh pr merge 21 --squash --match-head-commit $H"
-t_on 0 "promotion still passes"              'gh pr merge 12 --merge'
-t_on 2 "pin to another commit"               'gh pr merge 21 --squash --match-head-commit 2222222222222222222222222222222222222222'
-t_on 2 "a merge commit into develop"         'gh pr merge 21 --merge'
-t_on 2 "--auto"                              "gh pr merge 21 --squash --auto --match-head-commit $H"
-t_on 2 "gate still running"                  "gh pr merge 22 --squash --match-head-commit $H"
-t_on 2 "no gate among the checks"            "gh pr merge 23 --squash --match-head-commit $H"
-t_on 2 "a check failed"                      "gh pr merge 24 --squash --match-head-commit $H"
-t_on 2 "a status still pending"              "gh pr merge 25 --squash --match-head-commit $H"
-t_on 2 "no checks at all"                    "gh pr merge 26 --squash --match-head-commit $H"
+echo "-- the verdict on a PR's checks, which the merge guard and the status line both give"
+verdict_is "checks passed" "every check passed, skipped or neutral, the gate among them" "$(check_run read-draft Gate COMPLETED SUCCESS),$GATE,$(check_run docs Docs COMPLETED SKIPPED),$(status_context legacy/ci SUCCESS)"
+verdict_is "checks pending" "the gate still running" "$(check_run "$GATE_NAME" Gate IN_PROGRESS '')"
+verdict_is "gate not run" "no gate among the checks" "$(check_run lint Lint COMPLETED SUCCESS)"
+verdict_is "checks failed" "a check failed" "$GATE,$FAILED"
+verdict_is "checks failed" "a failed check outweighs a pending one" "$(check_run lint Lint IN_PROGRESS ''),$FAILED"
+verdict_is "checks pending" "a status still pending" "$GATE,$(status_context legacy/ci PENDING)"
+verdict_is "no checks" "no checks at all" ""
 # An empty conclusion is not a pass, even on a check that says it completed.
-t_on 2 "a check completed with no conclusion" "gh pr merge 27 --squash --match-head-commit $H"
-t_on 2 "a failed up-to-date status, though the checks passed" "gh pr merge 28 --squash --match-head-commit $H"
-t_on 2 "a check named gate from another workflow" "gh pr merge 29 --squash --match-head-commit $H"
-t_on 2 "gate skipped"                        "gh pr merge 30 --squash --match-head-commit $H"
-t_on 2 "gate skipped, read-draft passed"     "gh pr merge 31 --squash --match-head-commit $H"
-t_on 0 "a check counts by its newest run, not by an earlier one cancelled" "gh pr merge 32 --squash --match-head-commit $H"
-t_on 2 "another repository after cd"         "cd $STUB/other && gh pr merge 21 --squash --match-head-commit $H"
+verdict_is "checks failed" "a check completed with no conclusion" "$GATE,$(check_run test Test COMPLETED '')"
+verdict_is "checks failed" "a failed up-to-date status, though the checks passed" "$GATE,$(check_run up-to-date 'Branch protection' COMPLETED SUCCESS),$(status_context up-to-date FAILURE)"
+verdict_is "gate not run" "the gate's check name from another workflow" "$(check_run "$GATE_NAME" Lint COMPLETED SUCCESS)"
+verdict_is "gate not run" "the gate skipped" "$(check_run "$GATE_NAME" Gate COMPLETED SKIPPED)"
+verdict_is "gate not run" "the gate skipped, read-draft passed" "$(check_run read-draft Gate COMPLETED SUCCESS),$(check_run "$GATE_NAME" Gate COMPLETED SKIPPED)"
+verdict_is "checks passed" "a check counts by its newest run, not by an earlier one cancelled" "$(check_run read-draft Gate COMPLETED SUCCESS 2026-01-01T00:00:10Z),$(check_run read-draft Gate COMPLETED CANCELLED 2026-01-01T00:00:00Z),$GATE"
+
+echo "-- agent_merges: the agent's own PR into develop, squashed, pinned to a head whose checks passed"
+t_on 0 "own green PR, squash, pinned head"   "gh pr merge 11 --squash --match-head-commit $H"
+t_on 0 "promotion still passes"              'gh pr merge 12 --merge'
+t_on 2 "pin to another commit"               'gh pr merge 11 --squash --match-head-commit 2222222222222222222222222222222222222222'
+t_on 2 "a merge commit into develop"         'gh pr merge 11 --merge'
+t_on 2 "--auto"                              "gh pr merge 11 --squash --auto --match-head-commit $H"
+t_on 2 "checks not passed"                   "gh pr merge 17 --squash --match-head-commit $H"
+t_on 2 "another repository after cd"         "cd $STUB/other && gh pr merge 11 --squash --match-head-commit $H"
 t_on 2 "bugfix into staging stays the owner's" "gh pr merge 16 --squash --match-head-commit $H"
 t_on 2 "feature into main stays the owner's" "gh pr merge 15 --squash --match-head-commit $H"
 t_on 2 "a squashed promotion still blocks"   "gh pr merge 12 --squash --match-head-commit $H"
-t_on 2 "REST merge route still blocks"       'gh api -X PUT repos/acme/app/pulls/21/merge'
-guard_case "$STUB/on-ssh/.claude/hooks/bash-guard.sh" 0 "own repo from an ssh origin" "gh pr merge 21 --squash --match-head-commit $H"
-guard_case "$STUB/on-no-origin/.claude/hooks/bash-guard.sh" 2 "no origin, so no own repository" "gh pr merge 21 --squash --match-head-commit $H"
-says "--match-head-commit <sha>', word for word" "a merge in another form names the two forms" 'gh pr merge 21 --squash'
-says "a-check-not-passed" "a failed check is named in the verdict" "gh pr merge 24 --squash --match-head-commit $H"
-says "a-check-not-passed" "a check with no conclusion is named in the verdict" "gh pr merge 27 --squash --match-head-commit $H"
-says "only its own repository" "another repository is named as not this project's" "cd $STUB/other && gh pr merge 21 --squash --match-head-commit $H"
+t_on 2 "REST merge route still blocks"       'gh api -X PUT repos/acme/app/pulls/11/merge'
+guard_case "$STUB/on-ssh/.claude/hooks/bash-guard.sh" 0 "own repo from an ssh origin" "gh pr merge 11 --squash --match-head-commit $H"
+guard_case "$STUB/on-no-origin/.claude/hooks/bash-guard.sh" 2 "no origin, so no own repository" "gh pr merge 11 --squash --match-head-commit $H"
+says "--match-head-commit <sha>', word for word" "a merge in another form names the two forms" 'gh pr merge 11 --squash'
+says "read 'checks failed'" "checks not passed are named by their verdict" "gh pr merge 17 --squash --match-head-commit $H"
+says "only its own repository" "another repository is named as not this project's" "cd $STUB/other && gh pr merge 11 --squash --match-head-commit $H"
 
 echo "-- skipping the commit hooks (must block)"
 t 2 "commit --no-verify"               'git commit --no-verify -m "x"'

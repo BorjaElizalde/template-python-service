@@ -13,8 +13,8 @@ allowed-tools: Bash(bash:*), Bash(gh pr merge:*)
 
 Every promotion PR carries the `branch-protection` check: it passes only a PR from the branch below
 its base (`develop` into `staging`, `staging` into `main`). The project's checks don't run on a
-promotion, whose code passed them before it reached its source branch: `gate / …` shows as skipped
-on the PR into `staging`, and no `gate / …` runs on the PR into `main`. The PR into `staging`
+promotion, whose code passed them before it reached its source branch: the gate shows as skipped
+on the PR into `staging`, and no Gate run starts on the PR into `main`. The PR into `staging`
 also shows `up-to-date`, the run that the last push to `develop` started to mark the PRs it left
 behind. A failed `up-to-date` says nothing about a promotion, so it is no red and the wait script
 passes it. Report it all the same: on the PR into `staging`, that marking run failed and needs a

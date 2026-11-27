@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# Regression suite for the guard's protocol (registry lookup, verdict levels, fail-open paths) and
-# for the reason form in lib.jq. Run from any checkout: bash .claude/hooks/practices/guard.test.sh
-# The guard runs from a copy beside a fixture registry whose single practice turns the words STOP
-# and REMIND on an added line into that level, and stops a SKIP: line whose text after it is not
-# a reason in the form, so no stack practice is involved.
+# Regression suite for the guard and for the reason form in lib.jq. Run from any checkout:
+# bash .claude/hooks/practices/guard.test.sh
+# The guard runs from a copy beside a fixture registry, so no stack practice is involved.
 # Expect 2 = stopped, R = goes on with a reminder, 0 = silent.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
