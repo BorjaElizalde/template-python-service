@@ -51,5 +51,5 @@ gate_paths_ignore:
   help: The files that no check reads, each GitHub paths-ignore pattern mapped to its reason. A PR that changes only these files gets no Gate run. Leave it empty where a ruleset requires the gate.
   default:
     "**.md": no check reads Markdown
-    "**.ipynb": ruff and basedpyright exclude them. Tried notebooks/**, but it has .py files.
+    "**.ipynb": no check reads them. Tried notebooks/**, but it has .py files.
     ".claude/*/**": no check reads them. Tried .claude/**, but make reads .claude/agentic.mk.

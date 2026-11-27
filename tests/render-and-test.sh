@@ -75,6 +75,8 @@ branch_copy_fails() {
     grep -q 'Copy a release tag' <<<"$out"
 }
 expect "a copy of a branch fails and says to copy a release, even given the agentic answers" branch_copy_fails
+expect "this template's gate_paths_ignore has the type and help of template-agentic's" bash -c "
+  diff <(sed -n '/^gate_paths_ignore:/,/^  help:/p' '$OUT/agentic/copier.yaml') <(sed -n '/^gate_paths_ignore:/,/^  help:/p' '$ROOT/copier.yaml')"
 
 printf 'own:\n\t@echo own\n' >>"$TWO/Makefile"
 printf '{}\n' >"$TWO/renovate.json"
@@ -147,10 +149,8 @@ part_copy "$NONE" '[]'
 part_copy "$API" '[api]'
 part_copy "$BATCH" '[batch]'
 part_copy "$DATABASE" '[database]'
-expect "a new project's Gate workflow skips the files no check of this template reads, not template-agentic's none" \
+expect "a new project's Gate workflow takes this template's gate_paths_ignore default, not template-agentic's empty one" \
   uvx --quiet yq -e '.on.pull_request["paths-ignore"] | length > 0' "$NONE/.github/workflows/gate.yaml"
-expect "this template's gate_paths_ignore has the type and help of template-agentic's" bash -c "
-  diff <(sed -n '/^gate_paths_ignore:/,/^  help:/p' '$OUT/agentic/copier.yaml') <(sed -n '/^gate_paths_ignore:/,/^  help:/p' '$ROOT/copier.yaml')"
 names_only_rules_it_has() {  # names_only_rules_it_has <project>: each rule file a file names by its path is there
   local ref
   while read -r ref; do
