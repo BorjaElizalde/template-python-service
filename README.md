@@ -76,12 +76,6 @@ git push origin main main:staging main:develop
 gh repo edit --default-branch develop
 ```
 
-Once per clone, install the commit hooks:
-
-```bash
-uv run pre-commit install
-```
-
 ### Move a project from two answers files to one
 
 Pick a release of this template, then:

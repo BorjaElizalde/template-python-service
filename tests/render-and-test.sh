@@ -214,6 +214,19 @@ mkdir -p "$D/app" "$D/tests"
 printf 'def double(x: int) -> int:\n    return x * 2\n' >"$D/app/core.py"
 printf 'from app.core import double\n\n\ndef test_double():\n    assert double(2) == 4\n' >"$D/tests/test_core.py"
 expect "a new project passes make gate, its untyped test exempt from ANN" make -s -C "$D" gate
+# Stand-ins for claude and tmux let make claude run here without starting either.
+mkdir "$OUT/stand-ins"
+for tool in claude tmux; do printf '#!/bin/sh\n' >"$OUT/stand-ins/$tool" && chmod +x "$OUT/stand-ins/$tool"; done
+HOOK="$D/.git/hooks/pre-commit"
+installs_hooks() {  # installs_hooks <checkout>: make claude there installs the clone's missing hook
+  rm -f "$HOOK" && PATH="$OUT/stand-ins:$PATH" make -s -C "$1" claude && [ -f "$HOOK" ]
+}
+expect "make claude installs the commit hooks in a clone that has none" installs_hooks "$D"
+worktree_installs_from_main_checkout() {
+  git -C "$D" worktree add -q --detach "$OUT/worktree" && installs_hooks "$OUT/worktree" &&
+    git -C "$D" worktree remove "$OUT/worktree" && grep -qF "$D/.venv/" "$HOOK"
+}
+expect "make claude in a worktree installs hooks that run the main checkout's .venv" worktree_installs_from_main_checkout
 # uv sees only the Pythons it installs, and none is installed, as on a new CI runner: it downloads
 # the newest one the project allows, whatever this machine has. The environment goes outside the
 # project, so the checks below keep make gate's.
