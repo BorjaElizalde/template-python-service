@@ -14,6 +14,9 @@ TMUX_SESSION := $(subst .,_,$(TMUX_SOCKET))
 # The main session's command. The shell reads prompt, which make exports; -- stops a flag like
 # --remote-control [name] taking it.
 MAIN_SESSION = $(KEEP_AWAKE) claude $(CLAUDE_FLAGS) $(args) $${prompt:+-- "$$prompt"}
+# The variables GNU make adds to a recipe's environment: its own, and those its command line sets.
+MAKE_VARS = MAKEFLAGS MAKELEVEL MFLAGS MAKEOVERRIDES MAKE_TERMOUT MAKE_TERMERR \
+  $(foreach v,$(.VARIABLES),$(if $(findstring command line,$(origin $v)),$v))
 comma := ,
 # Inside tmux, TMUX holds "<socket path>,<pid>,<session>".
 TMUX_SOCKET_IN := $(firstword $(subst $(comma), ,$(TMUX)))
@@ -22,9 +25,10 @@ TMUX_SOCKET_IN := $(firstword $(subst $(comma), ,$(TMUX)))
 help: ## List every target, under the file that defines it.
 	@awk -F ':.*## ' '/^[a-zA-Z0-9_-]+:.*## / { if (FILENAME != f) { f = FILENAME; printf "\n%s\n", f } printf "  %-14s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-# The repository's tmux server starts from this shell, so claude in its first window has this
-# shell's environment; a closed terminal window only detaches tmux, so it stops neither claude nor
-# the keep-awake that wraps it. tmux refuses a client nested into its own server, so inside the
-# repository's tmux claude runs in place.
+# claude and the repository's tmux start without make's variables: every make that claude runs, or
+# that runs in a window of that tmux, would read them. The repository's tmux server starts from
+# this shell, so claude in its first window has this shell's environment; a closed terminal window
+# only detaches tmux, so it stops neither claude nor the keep-awake that wraps it. tmux refuses a
+# client nested into its own server, so inside the repository's tmux claude runs in place.
 claude: ## Start Claude in this repository's tmux, or attach to it, kept awake until Claude exits; inside that tmux, start it in place: args="--continue" prompt="/loop ..."
-	@$(if $(filter %/$(TMUX_SOCKET),$(TMUX_SOCKET_IN)),$(MAIN_SESSION),tmux -L '$(TMUX_SOCKET)' source-file .claude/tmux.conf \; new-session -A -s '$(TMUX_SESSION)' -n main $(MAIN_SESSION))
+	@env $(addprefix -u ,$(MAKE_VARS)) $(if $(filter %/$(TMUX_SOCKET),$(TMUX_SOCKET_IN)),$(MAIN_SESSION),tmux -L '$(TMUX_SOCKET)' source-file .claude/tmux.conf \; new-session -A -s '$(TMUX_SESSION)' -n main $(MAIN_SESSION))
