@@ -165,7 +165,7 @@ help_lists_each_layer() {  # each target bare make lists, after the file it is l
     'python.mk test' 'python.mk gate')" ] && grep -qx '.claude/agentic.mk claude' <<<"$owners"; } ||
     { echo "FAIL bare make listed: ${owners//$'\n'/, }"; return 1; }
 }
-expect "bare make lists the project's own target, then python.mk's, and claude from the agentic fragment" help_lists_each_layer
+expect "bare make lists the project's own target, then the Python fragment's, and claude from the agentic fragment" help_lists_each_layer
 expect "make gate runs the check a project's Makefile adds as its prerequisite" \
   bash -o pipefail -c "make -s -C '$D' gate | grep -x 'own ran'"
 make_with() {  # make_with <file> <content> <target>: runs the target while the file holds the content
