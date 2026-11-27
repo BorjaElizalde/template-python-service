@@ -216,16 +216,25 @@ expect "a new project passes make gate, its untyped test exempt from ANN" make -
 # Stand-ins for claude and tmux let make claude run here without starting either.
 mkdir "$OUT/stand-ins"
 for tool in claude tmux; do printf '#!/bin/sh\n' >"$OUT/stand-ins/$tool" && chmod +x "$OUT/stand-ins/$tool"; done
-HOOK="$D/.git/hooks/pre-commit"
-installs_hooks() {  # installs_hooks <checkout>: make claude there installs the clone's missing hook
-  rm -f "$HOOK" && PATH="$OUT/stand-ins:$PATH" make -s -C "$1" claude && [ -f "$HOOK" ]
+installs_hooks() {  # installs_hooks <main checkout> <hook> <checkout>: make claude in the checkout installs the missing hook
+  rm -f "$2" && PATH="$OUT/stand-ins:$PATH" make -s -C "$3" claude && grep -qF "$1/.venv/" "$2"
 }
-expect "make claude installs the commit hooks in a clone that has none" installs_hooks "$D"
-worktree_installs_from_main_checkout() {
-  git -C "$D" worktree add -q --detach "$OUT/worktree" && installs_hooks "$OUT/worktree" &&
-    git -C "$D" worktree remove "$OUT/worktree" && grep -qF "$D/.venv/" "$HOOK"
+worktree_installs_hooks() {  # worktree_installs_hooks <main checkout> <hook>: as installs_hooks, in a new worktree
+  git -C "$1" worktree add -q --detach "$OUT/worktree" && installs_hooks "$1" "$2" "$OUT/worktree" &&
+    git -C "$1" worktree remove "$OUT/worktree"
 }
-expect "make claude in a worktree installs hooks that run the main checkout's .venv" worktree_installs_from_main_checkout
+REPOSITORY=("$D" "$D/.git/hooks/pre-commit")
+expect "make claude installs the commit hooks in a clone that has none" installs_hooks "${REPOSITORY[@]}" "$D"
+expect "make claude in a worktree installs hooks that run the main checkout's .venv" \
+  worktree_installs_hooks "${REPOSITORY[@]}"
+# git submodule add makes a fresh clone of the project, with no .venv and its git data in the parent's .git.
+git init -q "$OUT/parent"
+git -C "$OUT/parent" -c protocol.file.allow=always submodule add -q "$D" backend
+SUBMODULE=("$OUT/parent/backend" "$OUT/parent/.git/modules/backend/hooks/pre-commit")
+expect "make claude in a fresh clone of a submodule installs hooks that run its .venv" \
+  installs_hooks "${SUBMODULE[@]}" "${SUBMODULE[0]}"
+expect "make claude in a worktree of a submodule installs hooks that run the main checkout's .venv" \
+  worktree_installs_hooks "${SUBMODULE[@]}"
 # uv sees only the Pythons it installs, and none is installed, as on a new CI runner: it downloads
 # the newest one the project allows, whatever this machine has. The environment goes outside the
 # project, so the checks below keep make gate's.

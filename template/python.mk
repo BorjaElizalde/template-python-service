@@ -5,7 +5,11 @@ include .claude/agentic.mk
 
 # The clone's commit hook, which its worktrees share, and its main checkout; empty outside git.
 COMMIT_HOOK := $(shell git rev-parse --git-path hooks/pre-commit 2>/dev/null)
-MAIN_CHECKOUT := $(shell git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
+# git lists a submodule's git data folder as its first worktree; that folder records the checkout
+# in core.worktree, which --show-toplevel reads there. A repository's .git records none.
+MAIN_CHECKOUT := $(shell common=$$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && \
+  { git -C "$$common" rev-parse --show-toplevel 2>/dev/null || \
+  git worktree list --porcelain | sed -n '1s/^worktree //p'; })
 
 .PHONY: lint lint-check typecheck security duplication test gate
 
