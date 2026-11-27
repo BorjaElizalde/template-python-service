@@ -1,5 +1,5 @@
 # From the agentic template: change the template, not this copy.
-# The develop and staging rulesets require its checks, `gate / <job>`.
+# In the template repositories, the develop and staging rulesets require its checks, `gate / <job>`.
 name: Gate
 
 on:
@@ -15,9 +15,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  read-draft:
+    # Whether the PR is a draft as the run starts. Tried the event's draft flag, but a push's event
+    # holds the PR's state at the time of the push, and a mark ready seconds later would leave the
+    # new head with only a skipped gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      draft: ${{ steps.read.outputs.draft }}
+    steps:
+      - name: Read whether the PR is a draft
+        id: read
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          draft="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .draft)"
+          echo "draft=$draft" >>"$GITHUB_OUTPUT"
+
   gate:
     # The stack's checks, each tool called directly, and each job of them skips when skip is true.
     # A project's CI never runs make gate, so a change that relaxes the local gate can't relax CI.
+    needs: read-draft
     uses: ./.github/workflows/gate-checks.yaml
     with:
       # Skipped on a draft, which can't merge and is gated when it is marked ready, and on the
@@ -28,6 +49,6 @@ jobs:
       # and so would a branch Develop into develop, since == ignores case. Tried a trigger filter,
       # but it can't read a PR's head or its draft state.
       skip: >-
-        ${{ github.event.pull_request.draft
+        ${{ needs.read-draft.outputs.draft == 'true'
         || (github.base_ref == 'staging' && github.head_ref == 'develop'
         && github.event.pull_request.head.repo.full_name == github.repository) }}
