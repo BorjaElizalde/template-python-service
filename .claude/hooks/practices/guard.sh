@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# PreToolUse(Edit|Write) coding-practice guard: one hook, one verdict per edit.
+# Coding-practice guard: one hook, one verdict per edit.
 # The stack layer supplies registry.jq beside this script, the one plug-in point:
 #   kind($path)              -> the file's kind, or null when no practice applies
 #   practices($ctx; $kind)   -> a stream of {level, text} from its practice modules
-# Each practice module exposes check($ctx) over the edit_context in lib.jq. The strongest level
-# wins:
-#   stop   -> exit 2, stderr to Claude, the edit is refused until fixed
-#   remind -> additionalContext: the edit goes on through the normal permission flow and Claude
-#             gets the short note next to its result
+# A level is stop, which refuses the edit, or remind, which adds a note to its result.
 # No practice asks the owner: an unattended session counts a permission prompt as a refusal.
-# Messages are short fixed text; the rules files are never loaded. jq only, no grep (ugrep shim,
-# see bash-guard.sh). Fails OPEN without a registry, for files of no kind, outside a git repo, for
-# git-ignored files, and on any jq error.
+# Messages are short fixed text. jq only, no grep: grep can be a ugrep shim.
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

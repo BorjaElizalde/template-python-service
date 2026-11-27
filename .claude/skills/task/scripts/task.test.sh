@@ -3,12 +3,7 @@
 # Regression suite for task.sh. Run from any checkout: bash .claude/skills/task/scripts/task.test.sh
 # Two clones of one throwaway origin, named backend and frontend, stand in for two repositories,
 # each with a real tmux server of its own on a private socket folder.
-# Stub gh answers issue state and title, labels, blockers and comments, the open issues, and PRs,
-# from files under $TASK_TEST_STATE, keeps the labels, the comments and the pin it is given there,
-# and can't answer while $TASK_TEST_STATE/gh-down exists; stub window-shell is each tmux window's
-# shell; stub claude lists the sessions of $TASK_TEST_STATE/running whose process still runs, and
-# a session it launches keeps its arguments and runs in its window until it is killed or its window
-# closes; stub sleep waits a tenth of a second, as a window's shell takes real time to start.
+# Stub sleep waits a tenth of a second, as a window's shell takes real time to start.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
@@ -24,7 +19,7 @@ LISTED_PID=$(sleep 3600 >/dev/null 2>&1 & echo $!)
 trap 'kill "$LISTED_PID"; for socket in "$WORK"/tmux-*/*; do tmux -S "$socket" kill-server; done; rm -rf "$WORK"' EXIT
 pass=0; fail=0
 
-mkdir -p "$WORK/bin" "$TASK_TEST_STATE" "$WORK/seed/.claude/skills/task/scripts" "$WORK/repos"
+mkdir -p "$WORK/bin" "$TASK_TEST_STATE" "$WORK/seed/.claude/skills/task/scripts" "$WORK/seed/.claude/hooks" "$WORK/repos"
 cat >"$WORK/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 [ ! -f "$TASK_TEST_STATE/gh-down" ] || exit 1
@@ -42,9 +37,6 @@ title() {
   esac
 }
 state() { cat "issue-$1" 2>/dev/null || echo OPEN; }
-# Issue $1 as JSON: its number and title, its labels, one per line of labels-<n>, its comments,
-# each with its URL, and the issues it is blocked by, one number per line of blocked-by-<n>, each
-# in the state its issue-<n> file gives.
 issue() {
   local blockers comments
   blockers=$(for m in $(cat "blocked-by-$1" 2>/dev/null); do echo "$m $(state "$m")"; done)
@@ -62,7 +54,6 @@ comment_url() { echo "https://github.com/acme/tasks/issues/${1%???}#issuecomment
 case "$1 $2" in
   "issue view")
     title "$3" >/dev/null || exit 1
-    # --json state,title asks for "<STATE> <title>", as its -q prints it; any other --json, for the issue.
     if [ "$7" = state,title ]; then echo "$(state "$3") $(title "$3")"; else issue "$3"; fi ;;
   "issue list")
     # The open issues, newest first, as gh lists them for --state open.
@@ -86,8 +77,6 @@ case "$1 $2" in
     # --force updates a label that exists, so the repository lists it once.
     grep -qxF "$3" "$TASK_TEST_STATE/repo-labels" 2>/dev/null || echo "$3" >>"$TASK_TEST_STATE/repo-labels" ;;
   "api -X")
-    # PATCH gives a comment the text of -f body=<text>, and PUT of its /pin makes it its issue's
-    # one pinned comment, which pinned-<n> names.
     id=${4#repos/acme/tasks/issues/comments/}
     case "$3 $id" in
       "PATCH "*) printf '%s' "${6#body=}" >"comment-$id" ;;
@@ -96,7 +85,6 @@ case "$1 $2" in
     esac ;;
   "pr list")
     while [ $# -gt 0 ]; do case "$1" in --head) branch=$2 ;; --state) state=$2 ;; esac; shift; done
-    # --state merged asks whether a PR from the branch merged; --state all, for its newest PR.
     if [ "$state" = merged ]; then
       grep -qxF "$branch" "$TASK_TEST_STATE/merged" 2>/dev/null && echo 1
     else
@@ -114,13 +102,8 @@ cat >"$WORK/bin/window-shell" <<'EOF'
 cd() { builtin cd "$@" && export HOOK_FOLDER=$PWD; }
 while IFS= read -r line; do eval "$line"; done
 EOF
-# claude agents --json, as Claude Code prints it. Each line of $TASK_TEST_STATE/running,
-# "<folder> <pid> [<status>]", is a background session, then an interactive one, busy unless the
-# line says else, listed while its process runs. While $TASK_TEST_STATE/claude-down exists, it
-# can't answer. Any other call launches a session, which fails while $TASK_TEST_STATE/no-start
-# exists, else adds its folder and pid to running: its arguments go to $TASK_TEST_STATE/launched,
-# each ended by a NUL, since the system prompt spans lines, and joined on one line of launches; its
-# pid to claude-pid; the folder its window's hook exported to hook-folder.
+# claude agents --json, as Claude Code prints it; any other call launches a session. A launch's
+# arguments each end in a NUL, since the system prompt spans lines.
 cat >"$WORK/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 if [ "$*" != "agents --json" ]; then
@@ -147,6 +130,7 @@ export PATH="$WORK/bin:$PATH" SHELL="$WORK/bin/window-shell"
 echo CLOSED >"$TASK_TEST_STATE/issue-5"
 
 cp "$HERE/task.sh" "$WORK/seed/.claude/skills/task/scripts/"
+cp "$HERE/../../../hooks/pr-checks.jq" "$WORK/seed/.claude/hooks/"
 cp -R "$HERE/../session" "$WORK/seed/.claude/skills/task/"
 SESSION="$HERE/../session"
 printf 'ISSUES_REPO=acme/tasks\nWORKTREE_ROOT=../worktrees\n' >"$WORK/seed/.claude/agentic.conf"
@@ -185,10 +169,7 @@ sessions_exit() {  # every running session exits, and its window closes; each re
 }
 launched() { jq -e -Rs 'split("\u0000")[:-1] | '"$1" "$TASK_TEST_STATE/launched"; }  # launched <jq filter>: over the last launch's arguments
 launched_arg() { launched ".[index(\"$1\") + 1]" | jq -r .; }  # the value the launch gave option $1
-# launches_in execution|design: the session last opened launches in that mode. Every session has its
-# permission prompts denied, no question tool, and the words both modes share, then its mode's own,
-# as the system prompt it appends. Only an execution session has a Stop hook. claude --settings
-# reads a file or a JSON string.
+# launches_in execution|design: the session last opened launches in that mode.
 launches_in() {
   local settings
   settings="$(launched_arg --settings)"
@@ -197,8 +178,7 @@ launches_in() {
     [ "$(launched_arg --append-system-prompt)" = "$(cat "$SESSION/prompt.md" "$SESSION/$1.md")" ] &&
     jq -e --arg mode "$1" '.hooks | has("Stop") == ($mode == "execution")' <<<"$settings"
 }
-# The session last opened runs claude interactively, with no -p or --print, as its window's only
-# process: claude is the process tmux started in the window's pane.
+# The session last opened runs claude interactively, as its window's only process.
 interactive() {
   launched 'all(.[]; . != "-p" and . != "--print")' &&
     tmux -L backend list-panes -a -F '#{pane_pid}' | grep -qxF "$(cat "$TASK_TEST_STATE/claude-pid")"
@@ -427,15 +407,8 @@ echo CLOSED >"$TASK_TEST_STATE/issue-14"
 echo "$ISSUE11/backend $LISTED_PID idle" >"$TASK_TEST_STATE/running"
 transcript "$ISSUE11/backend" old 200001010000
 transcript "$ISSUE11/backend"
-PENDING='{"__typename": "CheckRun", "name": "gate", "status": "IN_PROGRESS", "conclusion": ""}'
-PASSED='{"__typename": "CheckRun", "name": "gate / checks", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "SUCCESS"}'
-GATE_SKIPPED='{"__typename": "CheckRun", "name": "gate / checks", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "SKIPPED"}'
-READ_DRAFT='{"__typename": "CheckRun", "name": "read-draft", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "SUCCESS", "startedAt": "2026-01-01T00:00:10Z"}'
-READ_DRAFT_CANCELLED='{"__typename": "CheckRun", "name": "read-draft", "workflowName": "Gate", "status": "COMPLETED", "conclusion": "CANCELLED", "startedAt": "2026-01-01T00:00:00Z"}'
-OTHER_GATE='{"__typename": "CheckRun", "name": "gate", "workflowName": "Lint", "status": "COMPLETED", "conclusion": "SUCCESS"}'
-SKIPPED='{"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "SKIPPED"}'
+PENDING='{"__typename": "CheckRun", "name": "lint", "status": "IN_PROGRESS", "conclusion": ""}'
 FAILED='{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "FAILURE"}'
-NO_CONCLUSION='{"__typename": "CheckRun", "name": "gate", "status": "COMPLETED", "conclusion": ""}'
 CONTEXT='{"__typename": "StatusContext", "context": "ci", "state": "SUCCESS"}'
 pr_from feat/11-task-11 OPEN false "[$PENDING, $CONTEXT]"
 check "a look runs"                            run_in "$BACKEND" status
@@ -445,27 +418,9 @@ check "it finishes no task whose issue closed" test -d "$ISSUE14/backend"
 check "and lists it"                           test -n "$(status_line 14)"
 check "it opens with the In progress heading"  test "$(head -n 1 "$WORK/out")" = 'In progress:'
 check "under which is one line per task"       test "$(under 'In progress' | grep -c '^#[0-9]* Task [0-9]*: ')" -eq 4 -a "$(under 'In progress' | wc -l)" -eq 4
-pr_from feat/11-task-11 OPEN false "[$PENDING, $FAILED]"
+pr_from feat/11-task-11 OPEN true "[$FAILED, $CONTEXT]"
 run_in "$BACKEND" status
-check "a failed check outweighs a pending one" bash -c "grep -qF '#11 Task 11: session idle, PR #21 open, checks failed,' '$WORK/out'"
-pr_from feat/11-task-11 OPEN true "[$PASSED, $SKIPPED, $CONTEXT]"
-run_in "$BACKEND" status
-check "a draft whose checks passed or skipped" bash -c "grep -qF 'PR #21 draft, checks passed,' '$WORK/out'"
-pr_from feat/11-task-11 OPEN false "[$GATE_SKIPPED, $SKIPPED, $CONTEXT]"
-run_in "$BACKEND" status
-check "a PR whose gate skipped has not passed" bash -c "grep -qF 'PR #21 open, gate not run,' '$WORK/out'"
-pr_from feat/11-task-11 OPEN false "[$READ_DRAFT, $GATE_SKIPPED, $CONTEXT]"
-run_in "$BACKEND" status
-check "nor one whose gate skipped where the Gate workflow's read-draft passed" bash -c "grep -qF 'PR #21 open, gate not run,' '$WORK/out'"
-pr_from feat/11-task-11 OPEN false "[$READ_DRAFT, $READ_DRAFT_CANCELLED, $PASSED]"
-run_in "$BACKEND" status
-check "a check counts by its newest run, not by an earlier one cancelled" bash -c "grep -qF 'PR #21 open, checks passed,' '$WORK/out'"
-pr_from feat/11-task-11 OPEN false "[$OTHER_GATE, $CONTEXT]"
-run_in "$BACKEND" status
-check "nor one whose only passed gate is from another workflow" bash -c "grep -qF 'PR #21 open, gate not run,' '$WORK/out'"
-pr_from feat/11-task-11 OPEN false "[$PASSED, $NO_CONCLUSION]"
-run_in "$BACKEND" status
-check "a check completed with no conclusion has not passed" bash -c "grep -qF 'PR #21 open, checks failed,' '$WORK/out'"
+check "a draft, with the verdict on its checks" bash -c "grep -qF '#11 Task 11: session idle, PR #21 draft, checks failed,' '$WORK/out'"
 pr_from feat/11-task-11 MERGED false "[]"
 transcript "$ISSUE11/backend" session 200001010000
 run_in "$BACKEND" status

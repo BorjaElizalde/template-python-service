@@ -28,8 +28,6 @@ Others check the rest, so leave it out:
 
 - the gate, `make gate`: the stack's tests, lint, format and type checks. Run none of them.
 - the hooks in `.claude/hooks/`: what they stop or remind on each edit or command.
-- `plan-reviewer`: the design as a whole, which it judged before the build.
-- `readability-reviewer`: "Readable code" in `.claude/rules/conventions.md`.
 
 ## Lenses
 

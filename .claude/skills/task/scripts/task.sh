@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
-# The task lifecycle behind /task:start and /task:finish: one issue, one worktree, one session. And
-# the parking of an issue that must not start yet, and the plan a task's session posts on its issue.
+# The task lifecycle: one issue, one worktree, one session.
 set -euo pipefail
 
 usage="usage: task.sh start <issue> [type] | finish <issue> | park <issue> <reason> | plan <issue> <file> | cleanup | status | on-session-start | point-memory"
@@ -25,15 +24,10 @@ die() {
 	exit 1
 }
 
-# "<STATE> <title>" of an issue in the issues repository.
 issue_view() {
 	gh issue view "$1" -R "$ISSUES_REPO" --json state,title -q '.state + " " + .title'
 }
 
-# The jq definitions every view of an issue's holds shares, so each rule lives in one place. Over an
-# issue as gh gives it in JSON, blockers gives the open issues it is blocked by, and parked the
-# reason it is parked for, from the last comment that starts with "Parked:"; each gives nothing
-# where there is none.
 ISSUE_JQ='
 	def blockers: [.blockedBy.nodes[] | select(.state == "OPEN") | "#\(.number)"] | select(. != []) | join(", ");
 	def parked: select(any(.labels[]; .name == "backlog"))
@@ -80,7 +74,6 @@ plan() {
 	echo "✓ issue $1: plan posted and pinned"
 }
 
-# A title cut at a word boundary to 40 characters.
 short_title() {
 	awk 'length > 40 { $0 = substr($0, 1, 41); sub(/ [^ ]*$/, "") } 1' <<<"$1"
 }
@@ -98,9 +91,7 @@ issue_branch() {
 		awk 'NR == 1 { print } END { exit NR == 0 }'
 }
 
-# The mode of the task on branch $1, from its type: design, whose session works the task out with
-# the owner, else execution, whose session works alone. Nothing else stores the mode, so a task
-# keeps it for life.
+# Nothing else stores the mode, so a task keeps the mode of its branch's type for life.
 task_mode() {
 	case $1 in
 	design/*) echo design ;;
@@ -123,7 +114,6 @@ running_session() {
 	jq -ce --arg cwd "$1" 'first(.[] | select(.kind == "interactive" and .cwd == $cwd))' <<<"$SESSIONS"
 }
 
-# "session busy|idle|waiting" of the session running in folder $1, else "no session".
 session_line() {
 	running_session "$1" | jq -r '"session " + .status' || echo "no session"
 }
@@ -294,14 +284,12 @@ finish_task() {
 	echo "✓ issue $issue finished: session closed, worktree removed, branches removed: ${branches//$'\n'/ }"
 }
 
-# The issue of each task worktree of this checkout.
 task_issues() {
 	git worktree list --porcelain | sed -En 's|^branch refs/heads/[^/]+/([0-9]+)-.*|\1|p'
 }
 
 # Finishes every task worktree of this checkout whose issue is closed: a PR merged on GitHub closes
-# its issue, but nothing finishes its task. One line per task it finished or refused to finish;
-# open issues are skipped without a word.
+# its issue, but nothing finishes its task.
 cleanup() {
 	local issue view out
 	# A worktree whose folder was deleted by hand still holds its branch until git forgets it.
@@ -320,26 +308,14 @@ cleanup() {
 	done
 }
 
-# "PR #<n> <state>, <checks>" of the newest PR from branch $1, else "no PR". Its checks read as the
-# merge guard (.claude/hooks/bash-guard.sh) reads them. A failure outweighs a pending check, and a
-# pending check outweighs a gate not run, since it may be the gate running.
 pr_line() {
-	gh pr list --head "$1" --state all --json number,state,isDraft,statusCheckRollup | jq -r '
-		if length == 0 then "no PR" else .[0]
-		| [.statusCheckRollup // [] | group_by([.workflowName, .name, .context])[] | max_by(.startedAt)
-			| {gate: (.workflowName == "Gate" and (.name | startswith("gate / "))),
-				conclusion: (if .__typename == "StatusContext" then .state
-					elif .status == "COMPLETED" then .conclusion else "PENDING" end)}] as $c
-		| "PR #\(.number) \(if .isDraft then "draft" else .state | ascii_downcase end), "
-			+ if $c == [] then "no checks"
-			elif any($c[].conclusion; IN("SUCCESS", "NEUTRAL", "SKIPPED", "PENDING", "EXPECTED") | not) then "checks failed"
-			elif any($c[].conclusion; IN("PENDING", "EXPECTED")) then "checks pending"
-			elif any($c[]; .gate and .conclusion == "SUCCESS") then "checks passed"
-			else "gate not run" end
-		end'
+	gh pr list --head "$1" --state all --json number,state,isDraft,statusCheckRollup |
+		jq -r -L .claude/hooks 'import "pr-checks" as checks;
+			if length == 0 then "no PR" else .[0]
+			| "PR #\(.number) \(if .isDraft then "draft" else .state | ascii_downcase end), \(checks::verdict)"
+			end'
 }
 
-# The seconds since a session in folder $1 last wrote its transcript; nothing when none did.
 transcript_age() {
 	local transcript newest=
 	# Any file is newer than no file. In a folder with no transcript, the pattern stays as it is and
@@ -351,7 +327,6 @@ transcript_age() {
 	echo $(($(date +%s) - $(date -r "$newest" +%s)))
 }
 
-# "active <age> ago" from a transcript_age, else "no transcript".
 active_line() {
 	local age=$1
 	if [ -z "$age" ]; then
@@ -365,8 +340,6 @@ active_line() {
 	fi
 }
 
-# Every open issue, under the first heading that fits: In progress, one task line per task worktree
-# of this checkout, then the backlog. It only reads, and where there is no task it calls no claude.
 status() {
 	if [ -n "$(task_issues)" ]; then
 		echo "In progress:"
@@ -376,11 +349,8 @@ status() {
 	backlog_lines
 }
 
-# The open issues with no task worktree of this checkout, under Ready, Blocked and Parked, one line
-# each, lowest number first; a heading with no issue is left out. Each issue goes under the first
-# that fits: Parked, then Blocked, then Ready, so a parked line also names its open blockers. A line
-# keeps the whole title, so the reply can say what the issue is: the backlog never goes through the
-# hook, whose bound the task lines' cut is for. gh lists 30 issues unless told more.
+# A line keeps the whole title, so the reply can say what the issue is: the backlog never goes
+# through the hook, whose bound the task lines' cut is for. gh lists 30 issues unless told more.
 backlog_lines() {
 	gh issue list -R "$ISSUES_REPO" --state open --limit 1000 --json number,title,labels,blockedBy,comments |
 		jq -r --argjson tasks "[$(task_issues | paste -sd , -)]" "$ISSUE_JQ"'
@@ -396,8 +366,7 @@ backlog_lines() {
 # that ends its turn on a background check is woken when the check finishes.
 QUIET_MINUTES=10
 
-# needs_attention <session_line> <transcript_age>: a session waiting for an answer, or idle or
-# gone for QUIET_MINUTES. A busy one is working.
+# needs_attention <session_line> <transcript_age>
 needs_attention() {
 	case $1 in
 	"session busy") return 1 ;;
@@ -406,8 +375,6 @@ needs_attention() {
 	esac
 }
 
-# One line per task worktree of this checkout, with "design mode" for a design task, its session,
-# its PR and when its session last wrote, ending in "needs attention" when it does.
 task_lines() {
 	local issue worktree session age view branch pr mode mark
 	for issue in $(task_issues); do
@@ -425,10 +392,8 @@ task_lines() {
 	done
 }
 
-# The SessionStart hook: in the context of a session that starts or resumes in the main checkout,
-# the line that sends it to /task:status for its first reply, which runs the cleanup and the status.
 # A hook can't call a skill, only add to the context. It says nothing in a task worktree, so task
-# sessions start untouched, nor where there is no task.
+# sessions start untouched.
 on_session_start() {
 	[ "$(git -C "$CHECKOUT" rev-parse --absolute-git-dir)" = \
 		"$(git -C "$CHECKOUT" rev-parse --path-format=absolute --git-common-dir)" ] || return 0

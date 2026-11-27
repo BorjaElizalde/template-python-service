@@ -99,16 +99,20 @@ def makefile_findings($ctx):
 
 def reason_on_own_lines($ctx): [$ctx.added[].line | select(test("^\\s*#"))] | join("\n") | reason_form;
 
+# Where a project's own change goes in place of an edit to a file every Python service shares.
+def own_change_goes($rel):
+  if $rel | endswith(".jscpd.json") then
+    "A copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`, with its"
+    + " reason (in .claude/rules/)."
+  elif $rel | endswith("python.mk") then
+    "A check of this project's own goes in its Makefile, as one more prerequisite of gate."
+  else "Where this project's own settings go: the skipped-check rules in .claude/rules/." end;
+
 def check($ctx):
-  if $ctx.rel | test("(^|/)(ruff\\.base\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json)$") then
-    {level: "stop", text: ("Stopped by the practices hook: \($ctx.rel) holds the settings every"
-      + " Python service shares and comes from the python-service template. Every update rewrites"
-      + " it, so an edit here is lost or conflicts. Change the template instead"
-      + (if $ctx.rel | endswith(".jscpd.json") then
-           ". A copy that must stay goes between `# jscpd:ignore-start` and `# jscpd:ignore-end`,"
-           + " with its reason (in .claude/rules/)."
-         else ". Where this project's own settings go: the skipped-check rules in"
-           + " .claude/rules/." end))}
+  if $ctx.rel | test("(^|/)(ruff\\.base\\.toml|basedpyright\\.base\\.json|\\.jscpd\\.json|python\\.mk)$") then
+    {level: "stop", text: ("Stopped by the practices hook: \($ctx.rel) comes from the python-service"
+      + " template, and every Python service shares it. Every update rewrites it, so an edit here"
+      + " is lost or conflicts. Change the template instead. " + own_change_goes($ctx.rel))}
   elif $ctx.rel | test("(^|/)(\\.bandit|\\.?pytest\\.(ini|toml)|\\.?ruff\\.toml)$") then
     select(reason_on_own_lines($ctx) | not)
     | {level: "stop", text: ("Stopped by the practices hook, skipped-checks rule"

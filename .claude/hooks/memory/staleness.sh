@@ -2,10 +2,9 @@
 # From the agentic template: change the template, not this copy.
 # staleness.sh - deterministic memory-vs-code check.
 #
-# Scope is mechanical and exhaustive on purpose: does every cited path resolve, does every link
-# land, is anything untracked, are there secrets. Judging whether a memory is USEFUL - fluff,
+# Scope is mechanical and exhaustive on purpose. Judging whether a memory is USEFUL - fluff,
 # duplication, whether it earns its place - needs a reader: the memory rule in
-# .claude/rules/agentic.md states the test, and the owner reviews memory in the PR. A regex cannot.
+# .claude/rules/ states the test, and the owner reviews memory in the PR. A regex cannot.
 #
 # Usage: staleness.sh <store-dir> [<store-dir> ...]
 # Exit: 0 = no hard findings, 1 = hard findings, 2 = bad usage
@@ -225,7 +224,7 @@ Memory findings are mechanical: a path, link, index entry, or type declaration t
 - Every topic needs a metadata block with 'type: <t>', where <t> is user, feedback, project, or reference.
 - Re-run this checker after changes; hard findings mean the memory store is not clean.
 - Whether a memory is worth keeping at all - useful, not duplicated, true - is the test the memory
-  rule in .claude/rules/agentic.md states; the owner reviews memory in the PR.
+  rule in .claude/rules/ states; the owner reviews memory in the PR.
 EOF
 }
 

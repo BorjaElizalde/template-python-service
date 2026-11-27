@@ -38,7 +38,7 @@ def durability:
   + " change? Say what holds, not what changed: no versions it moved from, no past bugs, no"
   + " \"now\", \"no longer\", \"since\" or \"used to\".";
 
-# Whether a text holds a reason in the form .claude/rules/conventions.md gives: why this is right
+# Whether a text holds a reason in the form a rule in .claude/rules/ gives: why this is right
 # here, then one "Tried <alternative>, but <why it was discarded>." per alternative. A Tried
 # sentence starts the text or follows a full stop, a `#` or a line break.
 def reason_form:

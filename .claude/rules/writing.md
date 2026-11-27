@@ -39,7 +39,9 @@ what it holds; these rules say how to write it.
   "in the runs I read".
 - Leave out filler: no preamble, no summary of what the text already said, no praise of the
   change.
-- In instruction text, say each rule once, in the file that does its step, and name that file
-  from elsewhere. A file that loads in every session holds only what a session must do before any
-  skill loads.
+- In instruction text, say each rule once, in the file that does its step. Where a rule does not
+  already load, point to it by its subject and folder, as "the writing rule in `.claude/rules/`".
+  Name a specific file only in a command that runs it, and do not restate what it does. An
+  agent's definition names no specific file and no other agent.
+- A file that loads in every session holds only what a session must do before any skill loads.
 - In instruction text, read a script, a hook or a file before you state what it does.

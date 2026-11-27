@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # From the agentic template: change the template, not this copy.
 # Regression suite for run-gate.sh. Run from any checkout: bash .claude/skills/gate/scripts/run-gate.test.sh
-# A throwaway repository stands in for the project. Stub make is its gate: it prints "line 1" to
-# "line <GATE_TEST_LINES>", then "gate exit <GATE_TEST_EXIT>" on stderr, exits with that status,
-# and keeps the folder it ran in.
+# A throwaway repository stands in for the project, and stub make for its gate.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
@@ -36,8 +34,6 @@ check() {  # check <desc> <command...>
   if "${@:2}" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS $1"
   else fail=$((fail+1)); echo "FAIL $1"; fi
 }
-# run-gate.sh run from <folder>, its temporary files in $WORK/tmp; stdout in $WORK/out, stderr in
-# $WORK/err.
 run_gate() {  # run_gate <folder> [<args>...]
   (cd "$1" && TMPDIR="$WORK/tmp" bash "$HERE/run-gate.sh" "${@:2}") >"$WORK/out" 2>"$WORK/err"
 }

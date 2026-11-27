@@ -484,7 +484,7 @@ edit_in R "ruff extend removed, reason where it was" "$PY" "$EXT" $'extend = "ru
 edit_in 0 "ruff extend kept as its section grows" "$PY" "$EXT" $'[tool.ruff]\nextend = "ruff.base.toml"' \
   $'[tool.ruff]\nline-length = 100\nextend = "ruff.base.toml"'
 
-echo "-- config: the shared base files stop every edit, reason or not: each update rewrites them"
+echo "-- config: the shared base files and python.mk stop every edit, reason or not: each update rewrites them"
 RB="$REPO/ruff.base.toml"
 edit_in 2 "a rule dropped from ruff.base.toml" "$RB" $'[lint]\nselect = ["F", "E"]\n' 'select = ["F", "E"]' 'select = ["F"]'
 edit_in 2 "a rule added to ruff.base.toml" "$RB" $'[lint]\nselect = ["F"]\n' 'select = ["F"]' 'select = ["F", "E"]'
@@ -497,13 +497,15 @@ says yes "Change the template instead" "the base-file stop sends the change to t
 JS="$REPO/.jscpd.json"
 edit_in 2 "minLines raised in .jscpd.json" "$JS" $'{\n  "minLines": 9\n}\n' '"minLines": 9' '"minLines": 99'
 edit_in 2 "a path left out in .jscpd.json" "$JS" $'{\n  "ignore": ["tests/**"]\n}\n' '"tests/**"' '"tests/**", "app/**"'
-mkdir -p "$REPO/.github/gate-checks"
-edit_in 2 "CI's copy of .jscpd.json edited" "$REPO/.github/gate-checks/.jscpd.json" \
-  $'{\n  "minLines": 9\n}\n' '"minLines": 9' '"minLines": 99'
 says yes "goes between \`# jscpd:ignore-start\` and \`# jscpd:ignore-end\`" "the .jscpd.json stop points to the markers" \
   "$JS" $'{\n  "minLines": 9\n}\n' $'{\n  "minLines": 99\n}\n'
 says no "jscpd:ignore-start" "the ruff.base.toml stop names no jscpd marker" "$RB" \
   $'[lint]\nselect = ["F"]\n' $'[lint]\nselect = []\n'
+PYMK="$REPO/python.mk"
+edit_in 2 "a check dropped from python.mk's gate" "$PYMK" $'gate: lint-check typecheck\n' \
+  'gate: lint-check typecheck' 'gate: lint-check'
+says yes "goes in its Makefile, as one more prerequisite of gate" "the python.mk stop sends a check to the Makefile" \
+  "$PYMK" $'gate: lint-check\n' $'gate: lint-check own\n'
 PC="$REPO/.pre-commit-config.yaml"
 PCBASE=$'repos:\n  - repo: local\n    hooks:\n      - id: ruff\n      - id: bandit\n        args: ["-ll"]\n'
 edit_in 2 "pre-commit exclude added"      "$PC" "$PCBASE" '      - id: ruff' $'      - id: ruff\n        exclude: ^tests/'
