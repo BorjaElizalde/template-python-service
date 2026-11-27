@@ -1,0 +1,32 @@
+_min_copier_version: "9.14.0"
+_subdirectory: template
+_answers_file: .copier-answers.agentic.yaml
+
+# Seeded once, then project-owned: updates skip them, and a first copy keeps an existing file.
+_skip_if_exists:
+  - .claude/memory/MEMORY.md
+  - renovate.json
+
+issues_repo:
+  type: str
+  help: GitHub repository that holds the task issues, as owner/name
+
+worktree_root:
+  type: str
+  help: Folder for linked worktrees, relative to the main checkout
+  default: ../worktrees
+
+deploy_workflow:
+  type: str
+  help: GitHub Actions workflow the merge into main starts, which /release waits for; empty for none
+  default: ""
+
+agent_merges:
+  type: bool
+  help: Let the agent squash-merge its own PR into develop once every check on its head, gate among them, has passed
+  default: false
+
+gate_paths_ignore:
+  type: yaml
+  help: The files that no check reads, each GitHub paths-ignore pattern mapped to its reason. A PR that changes only these files gets no Gate run. Leave it empty where a ruleset requires the gate.
+  default: {}
