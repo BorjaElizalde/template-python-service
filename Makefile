@@ -9,7 +9,7 @@ export AGENTIC_REF := $(call answer,_commit)
 include .claude/agentic.mk
 
 .PHONY: gate release-tag
-gate: ## Copy the template the way a project gets it, then run every rendered suite.
+gate: ## Test this template.
 	@bash tests/render-and-test.sh
 
 release-tag: ## Push TAG, a release of this tree with template-agentic bundled in.

@@ -1,10 +1,7 @@
 # From the python-service template: change the template, not this copy.
 # STOP: a skipped check (a suppression such as `# noqa`) without its rule code, or without a reason
-# in the form the rules give, after the directive or on the comment lines above it. The
-# hook checks the form; review judges whether the reason holds. Reason places were checked against
-# each tool: ruff, basedpyright, bandit and jscpd honour text after the directive; `# fmt: skip`
-# only behind a second `#`; `# fmt: off` only standing alone, so its reason goes on the comment
-# lines above (same for `# pyright:` file directives).
+# in the form the rules give. The hook checks the form; review judges whether the reason holds.
+# Each form below puts the reason where its tool still reads the directive.
 include "lib";
 include "python";
 

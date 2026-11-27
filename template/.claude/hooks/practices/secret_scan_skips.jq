@@ -1,9 +1,8 @@
 # From the python-service template: change the template, not this copy.
-# STOP: a skip of the secret scan without a reason in the form the rules give. gitleaks skips
-# a finding whose line holds `gitleaks:allow`, in a file of any type; one whose fingerprint the
-# root .gitleaksignore lists; and one the root .gitleaks.toml allowlists or whose rule it disables.
-# A .gitleaks.toml without `useDefault = true` drops gitleaks's own rules. The hook checks the
-# form; review judges whether the reason holds.
+# STOP: a skip of the secret scan without a reason in the form the rules give. gitleaks skips a
+# finding whose line holds `gitleaks:allow`; one whose fingerprint the root .gitleaksignore lists;
+# and one the root .gitleaks.toml allowlists or whose rule it disables. The hook checks the form;
+# review judges whether the reason holds.
 include "lib";
 include "python";
 include "config_entries";

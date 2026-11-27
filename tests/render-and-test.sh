@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Releases this template the way Build does, template-agentic bundled in, copies it the way a
-# project gets it, and runs the rendered harness's suites. make gate runs it with AGENTIC_SRC and
-# AGENTIC_REF set. Needs uv, git and jq.
+# project gets it, and runs the rendered harness's suites. Needs uv, git and jq.
 # SC2329: each check below is a function passed to expect as its command, so expect prints the
 # check's result and counts its failure. Tried calling each check directly, but then nothing
 # reports or counts it. Tried a directive on each function, but that repeats this reason for

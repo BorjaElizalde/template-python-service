@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "The pre-commit manager is off by default; it bumps the gitleaks pin in the template's commit hooks, in pre-commit.base.yaml, which its default file pattern does not match.",
+  "description": "The pre-commit manager is off by default, and its default file pattern does not match pre-commit.base.yaml.",
   "extends": ["github>BorjaElizalde/template-agentic//renovate/base"],
   "pre-commit": {
     "enabled": true,
