@@ -1,0 +1,26 @@
+---
+paths:
+  - "**/*.py"
+---
+
+# Database conventions
+
+## Code Style
+- Strategic abstractions at infrastructure (DB, ORM, queries), direct business logic
+- The database's shared symbols have established owners: reusable database access in
+  `{{ package_name }}/queries/` and persistence/domain types in
+  `{{ package_name }}/models/types.py`
+
+## Database
+- ORM-first with SQLAlchemy, no raw SQL (except views)
+- Bulk operations (`bulk_insert`, `bulk_upsert`) for performance-critical paths
+- Load relationships explicitly: pass `resources=[...]` to the `CustomBase` helpers
+  (`{{ package_name }}/database.py`), which load a collection with `selectinload` and a single object with
+  `joinedload`. Declare every relationship `lazy="raise"`, so reading one you did not load fails
+  and names it. SQLAlchemy's default `select` raises an opaque `MissingGreenlet` under async, and
+  `noload` (deprecated in 2.1) silently returns `None`. A response that carries a relationship
+  loads it on every path (for example, an `ITEM_RESPONSE_RESOURCES` list in `api/v1/core/items.py`)
+- Guard `df.empty` before boolean masking or date arithmetic on a query result frame. Zero-row frames
+  from `query_to_pandas_async` have object-typed columns, so a boolean mask can be read as column
+  selection and return a zero-column frame, and date arithmetic can degrade the dtype and break a
+  later merge. Cast around the symptom and the bug moves rather than goes

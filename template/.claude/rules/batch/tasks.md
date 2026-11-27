@@ -1,0 +1,16 @@
+---
+paths:
+  - "**/*.py"
+---
+
+# Batch conventions
+
+## Logging
+- Batch tasks log nothing about their own run: `batch/main.py` logs start, finish and failure, and
+  a task's returned dict of counts rides on the finish line
+
+## Module Imports
+- `batch/main.py` is the batch tasks' composition root
+
+## Docstrings
+- The `batch/main.py` CLI command has an outside-facing docstring: `--help` shows it

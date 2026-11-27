@@ -26,7 +26,9 @@ select = [
     "PLC2701",  # private name imported from another module
     "B",  # flake8-bugbear
     "UP",  # pyupgrade
+{%- if 'api' in parts %}
     "FAST",  # FastAPI
+{%- endif %}
     "ASYNC",  # flake8-async
     "DTZ",  # flake8-datetimez
     "PGH003",  # blanket type: ignore

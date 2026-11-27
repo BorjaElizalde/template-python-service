@@ -94,14 +94,26 @@ commit "$OUT/agentic-next" next && git -C "$OUT/agentic-next" tag next
 build v2 AGENTIC_SRC="file://$OUT/agentic-next" AGENTIC_REF=next
 expect "a release is a commit off main whose second parent is the release before it" bash -c "cd '$V' &&
   [ \"\$(git rev-parse v2^1 v2^2)\" = \"\$(git rev-parse main v1)\" ] && [ -z \"\$(git branch --contains v1)\" ]"
+has_parts() {  # has_parts <project> [<part>...]: the project's rule folders and stack.json hold exactly these parts
+  local folders parts
+  folders="$(find "$1/.claude/rules" -mindepth 1 -type d -exec basename {} \; | sort | paste -sd ' ' -)"
+  parts="$(jq -r '.parts | sort | join(" ")' "$1/.claude/hooks/practices/stack.json")"
+  [ "$folders" = "${*:2}" ] && [ "$parts" = "${*:2}" ] ||
+    { echo "FAIL rule folders: '$folders', stack.json's parts: '$parts'"; return 1; }
+}
 git -C "$D" init -q
+# The answers of a project copied before the parts question hold none.
+ANSWERS="$D/.copier-answers.python-service.yaml"
+awk '/^parts:$/ { skip = 1; next } skip && /^- / { next } { skip = 0; print }' "$ANSWERS" >"$OUT/answers.yaml"
+mv "$OUT/answers.yaml" "$ANSWERS"
 commit "$D" copy
+# Renovate's update PR runs copier update with --skip-answered --defaults, as this one does.
 expect "copier update across a release that bundles an agentic change delivers it" bash -c "cd '$D' &&
   uvx --quiet copier update --quiet --skip-answered --defaults -a .copier-answers.python-service.yaml --vcs-ref v2 &&
   [ -f update-probe.txt ] && grep -qx '_commit: v2' .copier-answers.python-service.yaml"
+expect "an update gives a project whose answers hold no parts every part" has_parts "$D" api batch database
 
 expect "stack.json carries the test boundaries" bash -c "[ \"\$(jq -c .boundaries '$D/.claude/hooks/practices/stack.json')\" = '[\"release.run\"]' ]"
-expect "no Jinja left in rendered files" bash -c "! grep -rIl -E '(^|[^\$])\\{\\{|\\{%' --exclude-dir=.git '$D'"
 expect "stack.json names the package" bash -c "[ \"\$(jq -r .package '$D/.claude/hooks/practices/stack.json')\" = app ]"
 expect "the Makefile includes python.mk" grep -qx 'include python.mk' "$D/Makefile"
 expect "every script parses" bash -c "for f in \$(find '$D' -name '*.sh'); do bash -n \"\$f\" || exit 1; done"
@@ -116,8 +128,83 @@ rule_paths() {  # rule_paths <rule> <path...>: the rendered rule loads for exact
   [ "$got" = "$(printf '%s\n' "${@:2}")" ] || { echo "FAIL $1 loads for: ${got//$'\n'/, }"; return 1; }
 }
 expect "the Python rules load for every Python file" rule_paths python-conventions.md '**/*.py'
-expect "the service rules load only for a service's parts" rule_paths service-conventions.md \
-  'app/api/**' 'app/batch/**' 'app/database.py' 'app/models/**' 'app/queries/**' 'app/services.py' 'database/**'
+# A part's rule file is in a project only when it picked the part: copier.yaml decides that, so its paths need not.
+for rule in services.md api/endpoints.md api/mcp.md batch/tasks.md database/orm.md database/migrations.md; do
+  expect "the part rules of $rule load for every Python file" rule_paths "$rule" '**/*.py'
+done
+expect "no rule file holds a Jinja condition: copier.yaml picks the rule files" \
+  bash -c "! grep -rn '{%' '$ROOT/template/.claude/rules'"
+
+# A copy for each answer to the parts question: no part, each part alone, and all three (the project
+# above). Each gets the rules, hook checks and tool settings of its parts alone.
+part_copy() {  # part_copy <project> <parts>: the newest release, copied with this parts answer into a git repository
+  uvx --quiet copier copy --quiet --defaults "${AGENTIC_ANSWERS[@]}" --data package_name=app --data "parts=$2" \
+    "$V" "$1" && git -C "$1" init -q
+}
+NONE="$OUT/no-part" API="$OUT/api" BATCH="$OUT/batch" DATABASE="$OUT/database"
+part_copy "$NONE" '[]'
+part_copy "$API" '[api]'
+part_copy "$BATCH" '[batch]'
+part_copy "$DATABASE" '[database]'
+names_only_rules_it_has() {  # names_only_rules_it_has <project>: each rule file a file names by its path is there
+  local ref
+  while read -r ref; do
+    [ -f "$1/$ref" ] || { echo "FAIL a file names $ref, which the project does not have"; return 1; }
+  done < <(grep -rhoE '\.claude/rules/[A-Za-z0-9_/-]+\.md' --exclude-dir=.git "$1" | sort -u)
+}
+no_jinja_in() { ! grep -rIl -E '(^|[^$])\{\{|\{%' --exclude-dir=.git "$1"; }
+has_settings_of() {  # has_settings_of <project> [<part>...]: each part's tool settings are there exactly when it is picked
+  local pyright want="" got=""
+  # basedpyright's settings are JSON with comments, each on a line of its own.
+  pyright="$(sed '/^ *\/\//d' "$1/basedpyright.base.json")"
+  if ! jq -e . "$1/.jscpd.json" >/dev/null || ! jq -e . >/dev/null <<<"$pyright"; then
+    echo "FAIL a JSON settings file does not parse"
+    return 1
+  fi
+  [[ " ${*:2} " == *" api "* ]] && want+=" FAST"
+  [[ " ${*:2} " == *" database "* ]] && want+=" revisions jscpd"
+  grep -q '"FAST"' "$1/ruff.base.toml" && got+=" FAST"
+  jq -e 'has("executionEnvironments")' >/dev/null <<<"$pyright" && got+=" revisions"
+  jq -e 'any(.ignore[]; . == "database/**")' "$1/.jscpd.json" >/dev/null && got+=" jscpd"
+  [ "$got" = "$want" ] || { echo "FAIL settings:$got; want:$want"; return 1; }
+}
+has_services_rule() {  # has_services_rule <project> [<part>...]: services.md is there exactly with api or batch
+  local want=no got=no
+  [[ " ${*:2} " == *" api "* || " ${*:2} " == *" batch "* ]] && want=yes
+  [ -f "$1/.claude/rules/services.md" ] && got=yes
+  [ "$got" = "$want" ] || { echo "FAIL services.md is there: $got; want: $want"; return 1; }
+}
+# has_boundary_check <project> <boundary|no-boundary>: the guard stops a new direct test exactly
+# when the project has a boundary.
+has_boundary_check() {
+  local status=0 stops=no want=no
+  [ "$2" = boundary ] && want=yes
+  jq -n --arg p "$1/tests/test_new.py" --arg c $'def test_x():\n    assert double(2) == 4\n' \
+    '{tool_input: {file_path: $p, content: $c}}' | bash "$1/.claude/hooks/practices/guard.sh" >/dev/null 2>&1 ||
+    status=$?
+  [ "$status" -eq 2 ] && stops=yes
+  [ "$stops" = "$want" ] || { echo "FAIL the guard stops a new direct test: $stops; want: $want"; return 1; }
+}
+part_copy_holds() {  # part_copy_holds <project> <boundary|no-boundary> [<part>...]
+  has_parts "$1" "${@:3}" && has_services_rule "$1" "${@:3}" && names_only_rules_it_has "$1" && no_jinja_in "$1" &&
+    has_settings_of "$1" "${@:3}" && has_boundary_check "$1" "$2"
+}
+expect "a copy with no part gets the Python layer alone, and a new direct test goes through" \
+  part_copy_holds "$NONE" no-boundary
+expect "a copy with the API gets its rules, checks and settings alone" part_copy_holds "$API" boundary api
+expect "a copy with batch tasks gets their rules and checks alone" part_copy_holds "$BATCH" boundary batch
+expect "a copy with a database gets its rules, checks and settings alone, and no boundary" \
+  part_copy_holds "$DATABASE" no-boundary database
+expect "a copy with every part gets every part's rules, checks and settings" \
+  part_copy_holds "$D" boundary api batch database
+changes_parts() {
+  commit "$API" copy &&
+    (cd "$API" && uvx --quiet copier update --quiet --defaults -a .copier-answers.python-service.yaml \
+      --data 'parts=[database]') &&
+    has_parts "$API" database && has_services_rule "$API" database && has_settings_of "$API" database
+}
+expect "an update that changes the parts adds the files of the part added and deletes those of the part dropped" \
+  changes_parts
 expect "no .yml file in the template or the project" bash -c "[ -z \"\$(find '$ROOT' '$D' -name '*.yml' -not -path '*/.git/*')\" ]"
 
 no_hooks_fails_gate() {
