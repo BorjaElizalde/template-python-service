@@ -1,20 +1,9 @@
 # From the python-service template: change the template, not this copy.
-# STOP: an edit that switches a check off in the lint, type-check, duplication, test or pre-commit
-# setup without a reason in the form the rules give. An added line's reason sits in its
-# comment or on the comment lines above it; a removed line leaves no place, so the edit adds the
-# reason as a comment.
-# Tightening edits pass silently: a select entry is removed only if its code leaves the rule list,
-# a Makefile tool line only if no added line runs the same tool, and a commit hook the edit adds
-# may name its files or exclude. A select added to a ruff config that extends another counts as
-# switching checks off: ruff takes it as the whole rule list and drops the extended one; so does a
-# removed extend line. Every edit to the shared base files stops, reason or not: each update
-# rewrites them, so a change goes to the template. Every edit to .bandit, [.]pytest.ini,
-# [.]pytest.toml or [.]ruff.toml stops until it adds a reason on comment lines of their own: the
-# gate's tools can read their settings there, and the hook does not read these files' entries.
-# pre-commit.base.yaml is checked like
-# .pre-commit-config.yaml instead, as the place a project switches a template hook off; a changed
-# entry that runs pre-commit, such as template-hooks, can switch them off too. CI workflows are not
-# checked here: the owner reviews CI changes in the PR, which only the owner merges.
+# STOP: an edit that switches a check off in a project's config without a reason in the form the
+# rules give. pre-commit.base.yaml is checked like .pre-commit-config.yaml, as the place a project
+# switches a template hook off; a changed entry that runs pre-commit, such as template-hooks, can
+# switch them off too. CI workflows are not checked here: the owner reviews CI changes in the PR,
+# which only the owner merges.
 include "lib";
 include "python";
 include "config_entries";

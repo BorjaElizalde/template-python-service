@@ -1,7 +1,6 @@
 # From the python-service template: change the template, not this copy.
-# REMIND: a new log call outside tests/ (Logging in .claude/rules/). Where a log belongs is
-# judgment no linter makes, so the question comes at the moment one is written. A call is new when
-# its code, comment stripped, was not there before: moving or re-indenting one is not.
+# REMIND: a new log call. Where a log belongs is judgment no linter makes, so the question comes at
+# the moment one is written.
 include "lib";
 include "python";
 

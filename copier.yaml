@@ -40,7 +40,7 @@ parts:
 
 test_boundaries:
   type: yaml
-  help: Calls that also count as a test boundary, beyond those of the parts picked (e.g. a release step's entry point, as module.function)
+  help: Calls that also count as a test boundary (e.g. a release step's entry point, as module.function)
   default: []
   validator: >-
     {% if test_boundaries is string %}Give a list of calls{% endif %}

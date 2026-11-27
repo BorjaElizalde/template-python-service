@@ -2,12 +2,11 @@
 # From the python-service template: change the template, not this copy.
 # Table-driven regression suite for format.sh, the after-edit hook beside it. Run from any
 # checkout: bash .claude/hooks/stack/format.test.sh
-# Each case writes a file, then feeds the hook an edit of it. Expect F = formatted, U = left as
-# written. The hook must exit 0 in every case; a case where it does not fails.
+# Expect F = formatted, U = left as written.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-# The hook formats with the ruff of the project three levels above it. It runs from a copy in a
-# throwaway project whose only tool is ruff, so the cases never depend on this project.
+# The hook runs from a copy in a throwaway project whose only tool is ruff, so the cases never
+# depend on this project.
 PROJECT="$(mktemp -d)"; TREE="$(mktemp -d)"; OTHER="$(mktemp -d)"; NOGIT="$(mktemp -d)"
 trap 'rm -rf "$PROJECT" "$TREE" "$OTHER" "$NOGIT"' EXIT
 mkdir -p "$PROJECT/.claude/hooks/stack"
@@ -33,7 +32,7 @@ check() {  # check <want> <desc> <path> [content]: <content>, unformatted Python
   else fail=$((fail+1)); echo "FAIL (want $1, got $got) $2"; fi
 }
 
-echo "-- a Python file or stub of the project (formats it)"
+echo "-- a file the gate formats (formats it)"
 check F "in the project's checkout"        "$PROJECT/case.py"
 check F "in a linked worktree"             "$TREE/case.py"
 check F "a stub"                           "$PROJECT/case.pyi"

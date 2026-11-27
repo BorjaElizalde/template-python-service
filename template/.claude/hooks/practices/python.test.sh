@@ -2,8 +2,7 @@
 # From the python-service template: change the template, not this copy.
 # Table-driven regression suite for the python-service practices behind the agentic guard.sh (the
 # copies beside it). Run from any checkout: bash .claude/hooks/practices/python.test.sh
-# Each case writes the file's current content into a throwaway git repo, then feeds the guard the
-# edit. Expect 2 = stopped, R = goes on with a reminder, 0 = silent.
+# Expect 2 = stopped, R = goes on with a reminder, 0 = silent.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"

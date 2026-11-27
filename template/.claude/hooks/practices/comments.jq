@@ -1,9 +1,6 @@
 # From the python-service template: change the template, not this copy.
-# REMIND: every new prose comment in Python, TOML, YAML and the Makefile (.claude/rules/), with
-# one more line when it reads like history. A comment is new when its text was not in the file
-# before: moving or re-indenting an old one is not new.
-# Directives such as `# noqa` or `# fmt: off` are not prose, and neither is a `#` line inside a
-# triple-quoted string (the MCP guides hold markdown headings).
+# REMIND: every new prose comment, with one more line when it reads like history. A `#` line
+# inside a triple-quoted string is not a comment: the MCP guides hold markdown headings.
 include "lib";
 include "python";
 
@@ -38,16 +35,6 @@ def check($ctx):
   | {level: "remind", text: ("Practices hook, comment rule"
       + " (in .claude/rules/). This edit adds a comment: `\(.[0] | short)`"
       + (if length > 1 then " (and \(length - 1) more)" else "" end) + "."
-      + " This codebase keeps comments to a minimum: the code and its names should explain"
-      + " themselves. Before keeping it, ask whether a clearer name or a simpler structure would"
-      + " make it unnecessary, without hurting performance or the design; if so, change the code"
-      + " instead. " + durability
-      + " Keep a comment only if it tells the reader something they can't get from the"
-      + " code and the project context: why the obvious approach is wrong here, an outside"
-      + " constraint (how a provider, library or platform behaves), a safety, security or"
-      + " data-integrity rule, a contract callers must respect, or the reason for a skipped check"
-      + " or an except. If it restates the code, the history or the diff, delete it. Keep what"
-      + " stays to one line, except a skipped check's reason and the comment that opens a TOML,"
-      + " YAML or Makefile file, which take the forms the rules give."
+      + " Keep it only if that rule allows it. " + durability
       + ($history | map("\nIt reads like history (`\(.)`): say what holds and why, not what"
           + " changed.") | add // ""))};

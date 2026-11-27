@@ -1,12 +1,10 @@
 # From the python-service template: change the template, not this copy.
-# REMIND on every new docstring: on the outside surface to write for that reader, elsewhere to ask
-# whether better code would say it instead. STOP on a module docstring anywhere but in a migration
-# (Alembic shows it as the revision message), and on a docstring that lists parameters, return
-# values or exceptions (Docstrings in .claude/rules/). An MCP tool keeps its Args:
-# section: fastmcp writes it into the tool's input schema as the parameter descriptions, and once a
-# docstring has one it drops the Returns: and Raises: sections. Python makes a str literal a
-# docstring when it is the first statement of the module or of a def or class body; b- and
-# f-strings never are.
+# REMIND on every new docstring. STOP on a module docstring anywhere but in a migration (Alembic
+# shows it as the revision message), and on a docstring that lists parameters, return values or
+# exceptions. An MCP tool keeps its Args: section: fastmcp writes it into the tool's input schema
+# as the parameter descriptions, and once a docstring has one it drops the Returns: and Raises:
+# sections. Python makes a str literal a docstring when it is the first statement of the module or
+# of a def or class body; b- and f-strings never are.
 include "lib";
 include "python";
 import "stack" as $stack;

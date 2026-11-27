@@ -1,6 +1,6 @@
 # From the python-service template: change the template, not this copy.
 # Helpers for the modules that check a config's entries, which include it after lib.jq and
-# python.jq: what each TOML line sits under, and whether an entry's reason is in the form.
+# python.jq.
 include "lib";
 include "python";
 

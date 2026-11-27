@@ -67,8 +67,7 @@ task-tags = ["TODO", "FIXME", "XXX", "jscpd"]
 # reportMissingParameterType asks for in tests too.
 # Tried annotating the tests, but suppress-none-returning, which drops the `-> None` hits, would
 # stop requiring `-> None` in the package too.
-# Tried listing only the return-type codes, but the parameter codes add nothing to basedpyright's
-# check, so the list would be a longer ANN.
+# Tried listing only the return-type codes, but the list would be a longer ANN that checks no more.
 # Tried ignore-fully-untyped, but it leaves most test hits and exempts untyped package code.
 # Tried mypy-init-return, suppress-dummy-args and allow-star-arg-any, but they clear no test hit.
 "tests/**" = ["ANN"]
