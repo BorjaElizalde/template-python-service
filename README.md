@@ -2,8 +2,8 @@
 
 A [Copier](https://copier.readthedocs.io/) template that sets up agentic coding in a Python
 service. Each release bundles the Claude Code harness of `template-agentic` and adds the Python
-layer: the Python rules and practice checks, a ruff format hook, `make gate`, which CI runs on each
-PR, commit hooks, and the ruff, basedpyright and jscpd settings every Python service shares.
+layer: the Python rules and practice checks, a ruff format hook, `make gate`, which CI runs,
+commit hooks, and the ruff, basedpyright and jscpd settings every Python service shares.
 
 ## Set up the machine
 
@@ -125,7 +125,8 @@ template writes is the template's: change it there, not in the project.
 - **gitleaks**: a finding that holds no secret goes in `.gitleaksignore` as the fingerprint gitleaks
   prints, with the reason `.claude/rules/skipped-checks.md` asks for on the comment lines above it.
 - **The gate**, in the `Makefile`: add a check as one more prerequisite, `gate: my-check`, without
-  redefining `gate`.
+  redefining `gate`. When the check reads a file that a pattern of the `gate_paths_ignore` answer
+  matches, take that pattern off: answer the question again on `uvx copier update`.
 - **Commit hooks**, in `.pre-commit-config.yaml`: add the project's own hooks after
   `template-hooks`, which runs the template's hooks from `pre-commit.base.yaml`.
 - **Tests**: with no `tests/` folder, `make gate` skips pytest. An empty `tests/` fails it.

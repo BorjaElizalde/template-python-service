@@ -55,7 +55,9 @@ commit "$TWO" two-layers
 (cd "$TWO" && uvx --quiet copier update --quiet --defaults -a .copier-answers.agentic.yaml --vcs-ref HEAD)
 commit "$TWO" agentic
 D="$OUT/project"
-uvx --quiet copier copy --quiet --defaults "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" "$V" "$D"
+# The two-layer project's agentic layer records gate_paths_ignore as empty, so D answers the same.
+uvx --quiet copier copy --quiet --defaults "${AGENTIC_ANSWERS[@]}" "${PYTHON_ANSWERS[@]}" \
+  --data 'gate_paths_ignore={}' "$V" "$D"
 like_two_layers() {
   diff -rq --exclude .git --exclude '.copier-answers.*' --exclude renovate.json --exclude MEMORY.md "$TWO" "$D" &&
     [ "$(cd "$D" && ls -d .copier-answers.*)" = .copier-answers.python-service.yaml ] &&
@@ -73,6 +75,8 @@ branch_copy_fails() {
     grep -q 'Copy a release tag' <<<"$out"
 }
 expect "a copy of a branch fails and says to copy a release, even given the agentic answers" branch_copy_fails
+expect "this template's gate_paths_ignore has the type and help of template-agentic's" bash -c "
+  diff <(sed -n '/^gate_paths_ignore:/,/^  help:/p' '$OUT/agentic/copier.yaml') <(sed -n '/^gate_paths_ignore:/,/^  help:/p' '$ROOT/copier.yaml')"
 
 printf 'own:\n\t@echo own\n' >>"$TWO/Makefile"
 printf '{}\n' >"$TWO/renovate.json"
@@ -145,6 +149,8 @@ part_copy "$NONE" '[]'
 part_copy "$API" '[api]'
 part_copy "$BATCH" '[batch]'
 part_copy "$DATABASE" '[database]'
+expect "a new project's Gate workflow takes this template's gate_paths_ignore default, not template-agentic's empty one" \
+  uvx --quiet yq -e '.on.pull_request["paths-ignore"] | length > 0' "$NONE/.github/workflows/gate.yaml"
 names_only_rules_it_has() {  # names_only_rules_it_has <project>: each rule file a file names by its path is there
   local ref
   while read -r ref; do

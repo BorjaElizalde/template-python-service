@@ -44,3 +44,12 @@ test_boundaries:
   default: []
   validator: >-
     {% if test_boundaries is string %}Give a list of calls{% endif %}
+
+# Copier takes this question whole, so it repeats template-agentic's type and help.
+gate_paths_ignore:
+  type: yaml
+  help: The files that no check reads, each GitHub paths-ignore pattern mapped to its reason. A PR that changes only these files gets no Gate run. Leave it empty where a ruleset requires the gate.
+  default:
+    "**.md": no check reads Markdown
+    "**.ipynb": no check reads them. Tried notebooks/**, but it has .py files.
+    ".claude/*/**": no check reads them. Tried .claude/**, but make reads .claude/agentic.mk.
