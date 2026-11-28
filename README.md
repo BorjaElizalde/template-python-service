@@ -2,9 +2,8 @@
 
 A [Copier](https://copier.readthedocs.io/) template that sets up agentic coding in a Python
 service. Each release bundles the Claude Code harness of `template-agentic` and adds the Python
-layer: the Python rules and practice checks, a ruff format hook, `make gate`, which CI runs on each
-PR that changes a file a check reads, commit hooks, and the ruff, basedpyright and jscpd settings
-every Python service shares.
+layer: the Python rules and practice checks, a ruff format hook, `make gate`, which CI runs,
+commit hooks, and the ruff, basedpyright and jscpd settings every Python service shares.
 
 ## Set up the machine
 
